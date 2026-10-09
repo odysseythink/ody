@@ -3,6 +3,7 @@ mod parser;
 mod seek_sequence;
 mod standalone_executable;
 mod streaming_parser;
+mod text_file;
 
 use std::collections::HashMap;
 use std::io;
@@ -31,6 +32,8 @@ pub use invocation::verify_apply_patch_args;
 pub use standalone_executable::main;
 
 use crate::invocation::ExtractHeredocError;
+use crate::text_file::NewLine;
+use crate::text_file::SourceFile;
 
 /// Special argv[1] flag used when the Ody executable self-invokes to run the
 /// internal `apply_patch` path.
@@ -696,21 +699,14 @@ async fn derive_new_contents_from_chunks(
         })
     })?;
 
-    let use_crlf = original_contents.contains("\r\n");
     fn strip_trailing_cr(line: &str) -> String {
         line.strip_suffix('\r').unwrap_or(line).to_string()
     }
 
-    let mut original_lines: Vec<String> = original_contents
-        .split('\n')
-        .map(|line| strip_trailing_cr(line))
-        .collect();
-
-    // Drop the trailing empty element that results from the final newline so
-    // that line counts match the behaviour of standard `diff`.
-    if original_lines.last().is_some_and(String::is_empty) {
-        original_lines.pop();
-    }
+    // Split into logical lines while retaining each line's original ending, so
+    // that mixed LF/CRLF (or lone-CR) files are not rewritten wholesale.
+    let mut source_file = SourceFile::parse(&original_contents);
+    let original_lines = source_file.line_texts();
 
     let path_text = path.inferred_native_path_string();
 
@@ -739,12 +735,8 @@ async fn derive_new_contents_from_chunks(
         .collect();
 
     let replacements = compute_replacements(&original_lines, &path_text, &chunks)?;
-    let new_lines = apply_replacements(original_lines, &replacements);
-    let mut new_lines = new_lines;
-    if !new_lines.last().is_some_and(String::is_empty) {
-        new_lines.push(String::new());
-    }
-    let new_contents = new_lines.join(if use_crlf { "\r\n" } else { "\n" });
+    source_file.apply_replacements(&replacements);
+    let new_contents = source_file.into_contents();
     Ok(AppliedPatch {
         original_contents,
         new_contents,
@@ -758,8 +750,8 @@ fn compute_replacements(
     original_lines: &[String],
     path: &str,
     chunks: &[UpdateFileChunk],
-) -> std::result::Result<Vec<(usize, usize, Vec<String>)>, ApplyPatchError> {
-    let mut replacements: Vec<(usize, usize, Vec<String>)> = Vec::new();
+) -> std::result::Result<Vec<(usize, usize, Vec<NewLine>)>, ApplyPatchError> {
+    let mut replacements: Vec<(usize, usize, Vec<NewLine>)> = Vec::new();
     let mut line_index: usize = 0;
 
     for chunk in chunks {
@@ -781,14 +773,16 @@ fn compute_replacements(
         }
 
         if chunk.old_lines.is_empty() {
-            // Pure addition (no old lines). We'll add them at the end or just
-            // before the final empty line if one exists.
-            let insertion_idx = if original_lines.last().is_some_and(String::is_empty) {
-                original_lines.len() - 1
-            } else {
-                original_lines.len()
-            };
-            replacements.push((insertion_idx, 0, chunk.new_lines.clone()));
+            // Pure addition (no old lines): append at the end of the file.
+            replacements.push((
+                original_lines.len(),
+                0,
+                chunk
+                    .new_lines
+                    .iter()
+                    .map(|line| NewLine::added(line.clone()))
+                    .collect(),
+            ));
             continue;
         }
 
@@ -832,7 +826,10 @@ fn compute_replacements(
             // text verbatim.
             let replacement_new_lines = if chunk.new_line_sources.is_empty() {
                 // Fallback for chunks parsed without source information: use the new slice as-is.
-                new_slice.to_vec()
+                new_slice
+                    .iter()
+                    .map(|line| NewLine::added(line.clone()))
+                    .collect()
             } else {
                 let mut reconstructed = Vec::with_capacity(new_slice.len());
                 let mut old_idx = 0;
@@ -846,17 +843,19 @@ fn compute_replacements(
                                 old_idx += 1;
                             }
                             if old_idx < pattern.len() {
-                                reconstructed.push(original_lines[original_idx].clone());
+                                // Keep the original line (including its line
+                                // ending) untouched.
+                                reconstructed.push(NewLine::context(original_idx));
                                 original_idx += 1;
                                 old_idx += 1;
                             } else {
                                 // Should not happen if the patch is well-formed; fall back to the
                                 // patch text so we don't lose data.
-                                reconstructed.push(new_line.clone());
+                                reconstructed.push(NewLine::added(new_line.clone()));
                             }
                         }
                         LineSource::Added => {
-                            reconstructed.push(new_line.clone());
+                            reconstructed.push(NewLine::added(new_line.clone()));
                         }
                     }
                 }
@@ -876,34 +875,6 @@ fn compute_replacements(
     replacements.sort_by_key(|(index, _, _)| *index);
 
     Ok(replacements)
-}
-
-/// Apply the `(start_index, old_len, new_lines)` replacements to `original_lines`,
-/// returning the modified file contents as a vector of lines.
-fn apply_replacements(
-    mut lines: Vec<String>,
-    replacements: &[(usize, usize, Vec<String>)],
-) -> Vec<String> {
-    // We must apply replacements in descending order so that earlier replacements
-    // don't shift the positions of later ones.
-    for (start_idx, old_len, new_segment) in replacements.iter().rev() {
-        let start_idx = *start_idx;
-        let old_len = *old_len;
-
-        // Remove old lines.
-        for _ in 0..old_len {
-            if start_idx < lines.len() {
-                lines.remove(start_idx);
-            }
-        }
-
-        // Insert new lines.
-        for (offset, new_line) in new_segment.iter().enumerate() {
-            lines.insert(start_idx + offset, new_line.clone());
-        }
-    }
-
-    lines
 }
 
 /// Intended result of a file update for apply_patch.
@@ -1177,6 +1148,157 @@ mod tests {
         .unwrap();
         let contents = fs::read_to_string(&path).unwrap();
         assert_eq!(contents, "foo\r\nbaz\r\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_preserves_mixed_line_endings() {
+        // Unchanged lines keep their original endings; the rewritten line uses
+        // the file's preferred ending (the first ending seen in the file).
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mixed.txt");
+        fs::write(&path, "foo\nbar\r\nbaz\nqux\n").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ baz
+-qux
++QUX"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\nbar\r\nbaz\nQUX\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_mixed_endings_insert_at_eof_uses_preferred_ending() {
+        // The preferred ending is CRLF (first ending in the file); the inserted
+        // line uses it, while the unchanged LF line keeps its original ending.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mixed_eof.txt");
+        fs::write(&path, "foo\r\nbar\n").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
++baz
+*** End of File"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\r\nbar\nbaz\r\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_with_cr_only_file() {
+        // Lone-CR line endings (classic Mac style) are recognized and preserved.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cr_only.txt");
+        fs::write(&path, "foo\rbar\rbaz\r").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ foo
+-bar
++BAR"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\rBAR\rbaz\r");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_adds_trailing_newline_to_unterminated_file() {
+        // Historical behavior: updating a file without a trailing newline adds one.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("unterminated.txt");
+        fs::write(&path, "foo\nbar").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ foo
+-bar
++baz"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\nbaz\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_insert_at_eof_of_unterminated_file() {
+        // Inserting at the end of a file without a trailing newline terminates
+        // the previously unterminated last line and appends with the preferred ending.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("unterminated_eof.txt");
+        fs::write(&path, "foo\nbar").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
++baz
+*** End of File"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\nbar\nbaz\n");
     }
 
     #[tokio::test]

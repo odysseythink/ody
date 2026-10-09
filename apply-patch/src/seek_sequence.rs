@@ -77,10 +77,11 @@ pub(crate) fn seek_sequence(
     // file, fall back to a global search. Models frequently misuse
     // `*** End of File` for hunks that modify the middle of a file, so this
     // fallback preserves correctness while being lenient.
-    if eof && search_start != start {
-        if let Some(idx) = try_match(start) {
-            return Some(idx);
-        }
+    if eof
+        && search_start != start
+        && let Some(idx) = try_match(start)
+    {
+        return Some(idx);
     }
 
     // ------------------------------------------------------------------

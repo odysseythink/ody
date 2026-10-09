@@ -337,8 +337,7 @@ impl StreamingPatchParser {
                     // marker. Models frequently omit that marker, so when the line does not
                     // start with a diff marker we treat the raw line as verbatim content.
                     // This preserves indentation while still accepting strict diff-style hunks.
-                    if line.starts_with(' ') {
-                        let line_to_add = line.strip_prefix(' ').unwrap();
+                    if let Some(line_to_add) = line.strip_prefix(' ') {
                         if chunks.is_empty() {
                             chunks.push(UpdateFileChunk {
                                 change_context: None,
@@ -457,6 +456,63 @@ impl StreamingPatchParser {
             }
         }
     }
+}
+
+/// Strip a standard unified-diff hunk header prefix (e.g. `-275,6 +275,11 @@`)
+/// from an `@@` context line. Some models emit `@@ -a,b +c,d @@ context` even
+/// though our format only wants the optional context after `@@ `. This keeps the
+/// parser lenient without changing the tool's semantics.
+fn normalize_diff_header(context: &str) -> &str {
+    let trimmed = context.trim_start();
+    // Unified diff header: `-<n>[,<n>] +<n>[,<n>] @@` followed by optional context.
+    let bytes = trimmed.as_bytes();
+    let mut i = 0;
+
+    // Parse optional leading `-'` section
+    if i < bytes.len() && bytes[i] == b'-' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+    }
+
+    // Skip whitespace
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+
+    // Parse optional leading `+'` section
+    if i < bytes.len() && bytes[i] == b'+' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+    }
+
+    // Skip whitespace
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+
+    // Strip trailing `@@` if present
+    if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"@@" {
+        i += 2;
+    }
+
+    // Return whatever follows, trimmed of leading whitespace
+    trimmed.get(i..).unwrap_or("").trim_start()
 }
 
 #[cfg(test)]
@@ -1005,60 +1061,4 @@ mod tests {
             })
         );
     }
-}
-/// Strip a standard unified-diff hunk header prefix (e.g. `-275,6 +275,11 @@`)
-/// from an `@@` context line. Some models emit `@@ -a,b +c,d @@ context` even
-/// though our format only wants the optional context after `@@ `. This keeps the
-/// parser lenient without changing the tool's semantics.
-fn normalize_diff_header(context: &str) -> &str {
-    let trimmed = context.trim_start();
-    // Unified diff header: `-<n>[,<n>] +<n>[,<n>] @@` followed by optional context.
-    let bytes = trimmed.as_bytes();
-    let mut i = 0;
-
-    // Parse optional leading `-'` section
-    if i < bytes.len() && bytes[i] == b'-' {
-        i += 1;
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            i += 1;
-        }
-        if i < bytes.len() && bytes[i] == b',' {
-            i += 1;
-            while i < bytes.len() && bytes[i].is_ascii_digit() {
-                i += 1;
-            }
-        }
-    }
-
-    // Skip whitespace
-    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
-        i += 1;
-    }
-
-    // Parse optional leading `+'` section
-    if i < bytes.len() && bytes[i] == b'+' {
-        i += 1;
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            i += 1;
-        }
-        if i < bytes.len() && bytes[i] == b',' {
-            i += 1;
-            while i < bytes.len() && bytes[i].is_ascii_digit() {
-                i += 1;
-            }
-        }
-    }
-
-    // Skip whitespace
-    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
-        i += 1;
-    }
-
-    // Strip trailing `@@` if present
-    if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"@@" {
-        i += 2;
-    }
-
-    // Return whatever follows, trimmed of leading whitespace
-    trimmed.get(i..).unwrap_or("").trim_start()
 }
