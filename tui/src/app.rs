@@ -1256,6 +1256,9 @@ See the Ody keymap documentation for supported actions and examples."
                     let pasted = pasted.replace("\r", "\n");
                     self.chat_widget.handle_paste(pasted);
                 }
+                // Mouse capture is only enabled for alternate-screen overlays; any
+                // mouse event arriving without an overlay has no target.
+                TuiEvent::Mouse(_) => {}
                 TuiEvent::Draw | TuiEvent::Resize => {
                     if self.backtrack_render_pending {
                         self.rebuild_transcript_after_backtrack(tui)?;

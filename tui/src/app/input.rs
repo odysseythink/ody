@@ -170,6 +170,7 @@ impl App {
             self.overlay = Some(Overlay::new_transcript(
                 self.transcript_cells.clone(),
                 self.keymap.pager.clone(),
+                self.config.tui_mouse_scroll_speed.unwrap_or(1.0),
             ));
             tui.frame_requester().schedule_frame();
             return;

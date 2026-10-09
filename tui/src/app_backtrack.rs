@@ -160,6 +160,12 @@ impl App {
             ..
         }) = event
         {
+            // Give the overlay first dibs on Esc while it has an active text
+            // selection or copy-mode state to clear.
+            if self.overlay.as_ref().is_some_and(Overlay::wants_esc) {
+                self.overlay_forward_event(tui, event)?;
+                return Ok(true);
+            }
             // First Esc in transcript overlay: begin backtrack preview at latest user message.
             self.begin_overlay_backtrack_preview(tui);
             Ok(true)
@@ -277,6 +283,7 @@ impl App {
         self.overlay = Some(Overlay::new_transcript(
             self.transcript_cells.clone(),
             self.keymap.pager.clone(),
+            self.config.tui_mouse_scroll_speed.unwrap_or(1.0),
         ));
         tui.frame_requester().schedule_frame();
     }
@@ -450,12 +457,39 @@ impl App {
 
         if let Some(overlay) = &mut self.overlay {
             overlay.handle_event(tui, event)?;
-            if overlay.is_done() {
+            let done = overlay.is_done();
+            self.drain_overlay_actions();
+            if done {
                 self.close_transcript_overlay(tui);
                 tui.frame_requester().schedule_frame();
             }
         }
         Ok(())
+    }
+
+    /// Drain deferred actions the overlay queued while handling an event:
+    /// clipboard copies and link opens need `App`-level services (system
+    /// clipboard, browser) that the overlay cannot reach on its own.
+    fn drain_overlay_actions(&mut self) {
+        let Some(overlay) = &mut self.overlay else {
+            return;
+        };
+        if let Some(text) = overlay.take_pending_copy() {
+            match crate::clipboard_copy::copy_to_clipboard(&text) {
+                Ok(lease) => {
+                    self.chat_widget.store_clipboard_lease(lease);
+                    overlay.set_notice(Some("Copied selection to clipboard".to_string()));
+                }
+                Err(error) => {
+                    overlay.set_notice(Some(format!("Copy failed: {error}")));
+                }
+            }
+        }
+        if let Some(url) = overlay.take_pending_link_open() {
+            if let Err(err) = webbrowser::open(&url) {
+                overlay.set_notice(Some(format!("Failed to open link: {err}")));
+            }
+        }
     }
 
     /// Handle Enter in overlay backtrack preview: confirm selection and reset state.

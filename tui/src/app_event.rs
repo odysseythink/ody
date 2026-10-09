@@ -647,6 +647,10 @@ pub(crate) enum AppEvent {
     /// Open the most recent committed collapsible history cell in a full-screen overlay.
     OpenMostRecentCollapsibleCellOverlay,
 
+    /// Open the transcript overlay in `/copy` block-navigation mode (highlight
+    /// the latest agent message, move with Up/Down, copy with Enter).
+    OpenTranscriptCopyMode,
+
     /// Finish buffering initial resume replay after all replay events have been queued.
     EndInitialHistoryReplayBuffer,
 

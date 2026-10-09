@@ -1359,18 +1359,22 @@ async fn slash_copy_state_tracks_plan_item_completion() {
 }
 
 #[tokio::test]
-async fn slash_copy_reports_when_no_agent_response_exists() {
+async fn slash_copy_requests_transcript_copy_mode() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 
     chat.dispatch_command(SlashCommand::Copy);
 
-    let cells = drain_insert_history(&mut rx);
-    assert_eq!(cells.len(), 1, "expected one info message");
-    let rendered = lines_to_single_string(&cells[0]);
-    assert_chatwidget_snapshot!("slash_copy_no_output_info_message", rendered);
+    // `/copy` opens the transcript overlay in block-navigation copy mode; the
+    // empty-transcript fallback (and its error messaging) lives in the App
+    // layer, which owns the overlay.
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::OpenTranscriptCopyMode),
+        "expected /copy to request transcript copy mode"
+    );
     assert!(
-        rendered.contains("No agent response to copy"),
-        "expected no-output message, got {rendered:?}"
+        drain_insert_history(&mut rx).is_empty(),
+        "chatwidget should not insert history cells for /copy anymore"
     );
 }
 
@@ -1723,7 +1727,7 @@ async fn slash_copy_uses_latest_surviving_response_after_rollback() {
 }
 
 #[tokio::test]
-async fn slash_copy_reports_when_rewind_exceeds_retained_copy_history() {
+async fn copy_last_agent_markdown_reports_when_rewind_exceeds_retained_copy_history() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 
     replay_user_message_text(&mut chat, "user-1", "foo", ReplayKind::ThreadSnapshot);
@@ -1736,7 +1740,9 @@ async fn slash_copy_reports_when_rewind_exceeds_retained_copy_history() {
     let _ = drain_insert_history(&mut rx);
 
     chat.truncate_agent_copy_history_to_user_turn_count(/*user_turn_count*/ 0);
-    chat.dispatch_command(SlashCommand::Copy);
+    // The direct copy path (Ctrl+O and the empty-transcript /copy fallback)
+    // still reports eviction through copy_last_agent_markdown.
+    chat.copy_last_agent_markdown();
 
     let cells = drain_insert_history(&mut rx);
     let rendered = lines_to_single_string(&cells[0]);

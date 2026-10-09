@@ -289,6 +289,21 @@ impl App {
                     tui.frame_requester().schedule_frame();
                 }
             }
+            AppEvent::OpenTranscriptCopyMode => {
+                if self.transcript_cells.is_empty() {
+                    // No committed cells to navigate; keep the legacy direct
+                    // copy behavior (and its error/eviction messaging).
+                    self.chat_widget.copy_last_agent_markdown();
+                } else {
+                    if self.overlay.is_none() {
+                        self.open_transcript_overlay(tui);
+                    }
+                    if let Some(Overlay::Transcript(transcript)) = &mut self.overlay {
+                        transcript.enter_copy_mode();
+                        tui.frame_requester().schedule_frame();
+                    }
+                }
+            }
             AppEvent::EndInitialHistoryReplayBuffer => {
                 self.scrollback_has_older_history = self
                     .chat_widget

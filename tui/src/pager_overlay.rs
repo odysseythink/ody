@@ -15,6 +15,7 @@
 //! recomputed. `ChatWidget` is responsible for producing a key that changes when the active cell
 //! mutates in place or when its transcript output is time-dependent.
 
+use std::collections::HashMap;
 use std::io::Result;
 use std::sync::Arc;
 
@@ -32,14 +33,21 @@ use crate::render::renderable::Renderable;
 use crate::style::user_message_style;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::mark_buffer_hyperlinks;
+use crate::terminal_hyperlinks::strip_osc8;
 use crate::terminal_hyperlinks::visible_lines;
 use crate::tui;
 use crate::tui::TuiEvent;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ratatui::buffer::Buffer;
 use ratatui::buffer::Cell;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -57,8 +65,12 @@ pub(crate) enum Overlay {
 }
 
 impl Overlay {
-    pub(crate) fn new_transcript(cells: Vec<Arc<dyn HistoryCell>>, keymap: PagerKeymap) -> Self {
-        Self::Transcript(TranscriptOverlay::new(cells, keymap))
+    pub(crate) fn new_transcript(
+        cells: Vec<Arc<dyn HistoryCell>>,
+        keymap: PagerKeymap,
+        mouse_scroll_speed: f64,
+    ) -> Self {
+        Self::Transcript(TranscriptOverlay::new(cells, keymap, mouse_scroll_speed))
     }
 
     pub(crate) fn new_static_with_lines(
@@ -106,10 +118,64 @@ impl Overlay {
             Overlay::Static(o) => o.is_done(),
         }
     }
+
+    /// Whether the overlay wants to consume Esc itself (e.g. to clear an active
+    /// text selection or exit copy mode) instead of letting `App` start the
+    /// backtrack preview.
+    pub(crate) fn wants_esc(&self) -> bool {
+        match self {
+            Overlay::Transcript(o) => o.wants_esc(),
+            Overlay::Static(o) => o.wants_esc(),
+        }
+    }
+
+    pub(crate) fn take_pending_copy(&mut self) -> Option<String> {
+        match self {
+            Overlay::Transcript(o) => o.view.take_pending_copy(),
+            Overlay::Static(o) => o.view.take_pending_copy(),
+        }
+    }
+
+    pub(crate) fn take_pending_link_open(&mut self) -> Option<String> {
+        match self {
+            Overlay::Transcript(o) => o.view.take_pending_link_open(),
+            Overlay::Static(o) => o.view.take_pending_link_open(),
+        }
+    }
+
+    pub(crate) fn set_notice(&mut self, notice: Option<String>) {
+        match self {
+            Overlay::Transcript(o) => o.view.notice = notice,
+            Overlay::Static(o) => o.view.notice = notice,
+        }
+    }
 }
 
 fn first_or_empty(bindings: &[KeyBinding]) -> Vec<KeyBinding> {
     bindings.first().copied().into_iter().collect()
+}
+
+/// Whether the key event is a "copy selection" chord: Ctrl+C, Ctrl+Shift+C,
+/// Super+C, or Ctrl+Insert (key releases excluded).
+fn is_copy_key(key: KeyEvent) -> bool {
+    if key.kind == KeyEventKind::Release {
+        return false;
+    }
+    let (code, modifiers) = key_hint::normalize_key_parts(key.code, key.modifiers);
+    match code {
+        KeyCode::Char('c') => modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::SUPER),
+        KeyCode::Insert => modifiers.contains(KeyModifiers::CONTROL),
+        _ => false,
+    }
+}
+
+/// Extract the destination from an OSC 8 hyperlink escape sequence embedded in
+/// a buffer cell symbol (`\x1b]8;;<destination>\x07<text>...`).
+fn osc8_destination(symbol: &str) -> Option<&str> {
+    let rest = symbol.strip_prefix("\x1b]8;;")?;
+    let end = rest.find('\x07')?;
+    let destination = &rest[..end];
+    (!destination.is_empty()).then_some(destination)
 }
 
 // Render a single line of key hints from (key(s), description) pairs.
@@ -143,6 +209,45 @@ struct PagerView {
     last_rendered_height: Option<usize>,
     /// If set, on next render ensure this chunk is visible.
     pending_scroll_chunk: Option<usize>,
+    /// Mouse wheel speed multiplier; one wheel event is one row at `1.0`.
+    mouse_scroll_speed: f64,
+    /// Fractional wheel remainder carried between events; reset on direction change.
+    pending_mouse_scroll: f64,
+    /// Active mouse-drag text selection in content coordinates.
+    selection: Option<PagerSelection>,
+    /// Content area of the last render, used to translate screen to content
+    /// coordinates for mouse events.
+    last_content_area: Option<Rect>,
+    /// Text queued for the `App` layer to copy to the system clipboard.
+    pending_copy: Option<String>,
+    /// Link destination queued for the `App` layer to open in a browser.
+    pending_link_open: Option<String>,
+    /// Transient status message rendered in the bottom bar.
+    notice: Option<String>,
+    /// Hyperlink destinations by screen cell, rebuilt on every render from
+    /// OSC 8 sequences embedded in buffer symbols.
+    last_links: HashMap<(u16, u16), String>,
+}
+
+/// A mouse text selection in content coordinates: `(content_row, column)`.
+/// `content_row` is absolute (already includes the scroll offset); `column` is
+/// relative to the content area's left edge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PagerSelection {
+    anchor: (usize, u16),
+    pointer: (usize, u16),
+    dragging: bool,
+}
+
+impl PagerSelection {
+    /// Ordered `(start, end)` bounds so `start <= end` in row-major order.
+    fn ordered_bounds(&self) -> ((usize, u16), (usize, u16)) {
+        if self.anchor <= self.pointer {
+            (self.anchor, self.pointer)
+        } else {
+            (self.pointer, self.anchor)
+        }
+    }
 }
 
 impl PagerView {
@@ -160,6 +265,14 @@ impl PagerView {
             last_content_height: None,
             last_rendered_height: None,
             pending_scroll_chunk: None,
+            mouse_scroll_speed: 1.0,
+            pending_mouse_scroll: 0.0,
+            selection: None,
+            last_content_area: None,
+            pending_copy: None,
+            pending_link_open: None,
+            notice: None,
+            last_links: HashMap::new(),
         }
     }
 
@@ -174,6 +287,7 @@ impl PagerView {
         Clear.render(area, buf);
         self.render_header(area, buf);
         let content_area = self.content_area(area);
+        self.last_content_area = Some(content_area);
         self.update_last_content_height(content_area.height);
         let content_height = self.content_height(content_area.width);
         self.last_rendered_height = Some(content_height);
@@ -187,8 +301,56 @@ impl PagerView {
             .min(content_height.saturating_sub(content_area.height as usize));
 
         self.render_content(content_area, buf);
+        self.apply_selection_highlight(content_area, buf);
+        self.rescan_links(content_area, buf);
 
         self.render_bottom_bar(area, content_area, buf, content_height);
+    }
+
+    /// Rebuild the screen-cell -> link destination map by scanning the buffer
+    /// for OSC 8 hyperlink sequences embedded in cell symbols.
+    fn rescan_links(&mut self, content_area: Rect, buf: &Buffer) {
+        self.last_links.clear();
+        for y in content_area.y..content_area.bottom() {
+            for x in content_area.x..content_area.right() {
+                if let Some(destination) = osc8_destination(buf[(x, y)].symbol()) {
+                    self.last_links.insert((x, y), destination.to_string());
+                }
+            }
+        }
+    }
+
+    /// Apply reverse-video styling to the selected cell range. Selection
+    /// coordinates are content coordinates; only visible rows are touched.
+    fn apply_selection_highlight(&self, content_area: Rect, buf: &mut Buffer) {
+        let Some(selection) = self.selection else {
+            return;
+        };
+        let ((start_row, start_col), (end_row, end_col)) = selection.ordered_bounds();
+        let scroll = self.clamped_scroll_offset();
+        for content_row in start_row..=end_row {
+            if content_row < scroll {
+                continue;
+            }
+            let screen_row = content_area.y + (content_row - scroll) as u16;
+            if screen_row >= content_area.bottom() {
+                break;
+            }
+            let col_start = if content_row == start_row {
+                start_col
+            } else {
+                0
+            };
+            let col_end = if content_row == end_row {
+                end_col.min(content_area.width.saturating_sub(1))
+            } else {
+                content_area.width.saturating_sub(1)
+            };
+            for col in col_start..=col_end {
+                let x = content_area.x + col;
+                buf[(x, screen_row)].set_style(Style::default().add_modifier(Modifier::REVERSED));
+            }
+        }
     }
 
     fn render_header(&self, area: Rect, buf: &mut Buffer) {
@@ -265,10 +427,24 @@ impl PagerView {
         Span::from(pct_text)
             .dim()
             .render_ref(Rect::new(pct_x, sep_rect.y, pct_w, 1), buf);
+        if let Some(notice) = &self.notice {
+            let notice_text = format!(" {notice} ");
+            let notice_w = (notice_text.chars().count() as u16).min(sep_rect.width);
+            Span::from(notice_text)
+                .dim()
+                .render_ref(Rect::new(sep_rect.x, sep_rect.y, notice_w, 1), buf);
+        }
     }
 
     fn handle_key_event(&mut self, tui: &mut tui::Tui, key_event: KeyEvent) -> Result<()> {
         match key_event {
+            KeyEvent {
+                code: KeyCode::Esc,
+                kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                ..
+            } if self.selection.is_some() => {
+                self.clear_selection();
+            }
             e if self.keymap.scroll_up.is_pressed(e) => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
             }
@@ -306,6 +482,233 @@ impl PagerView {
         tui.frame_requester()
             .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
         Ok(())
+    }
+
+    /// Handle a mouse event; returns `true` when the view changed and needs a redraw.
+    ///
+    /// Wheel events scroll (scaled by `mouse_scroll_speed`). Left-drag within the
+    /// content area selects text; a right click with an active selection queues
+    /// the selection for clipboard copy; a left click (press+release without
+    /// dragging) on a hyperlink queues it to be opened and clears any selection.
+    fn handle_mouse_event(&mut self, event: MouseEvent) -> bool {
+        match event.kind {
+            MouseEventKind::ScrollUp => {
+                self.apply_wheel_scroll(-1.0);
+                true
+            }
+            MouseEventKind::ScrollDown => {
+                self.apply_wheel_scroll(1.0);
+                true
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                let Some(coords) = self.screen_to_content(event.column, event.row) else {
+                    return false;
+                };
+                self.selection = Some(PagerSelection {
+                    anchor: coords,
+                    pointer: coords,
+                    dragging: true,
+                });
+                true
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                let Some(selection) = self.selection else {
+                    return false;
+                };
+                if !selection.dragging {
+                    return false;
+                }
+                let Some(coords) = self.screen_to_content_clamped(event.column, event.row) else {
+                    return false;
+                };
+                self.selection = Some(PagerSelection {
+                    pointer: coords,
+                    ..selection
+                });
+                true
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                let Some(selection) = &mut self.selection else {
+                    return false;
+                };
+                if !selection.dragging {
+                    return false;
+                }
+                selection.dragging = false;
+                if selection.anchor == selection.pointer {
+                    // Plain click: open a link if there is one under the cursor,
+                    // and never leave a zero-width selection behind.
+                    if let Some(destination) = self.last_links.get(&(event.column, event.row)) {
+                        self.pending_link_open = Some(destination.clone());
+                    }
+                    self.selection = None;
+                }
+                true
+            }
+            MouseEventKind::Down(MouseButton::Right) => {
+                if self.screen_to_content(event.column, event.row).is_none() {
+                    return false;
+                }
+                self.queue_copy_selection()
+            }
+            _ => false,
+        }
+    }
+
+    /// Translate screen coordinates to content coordinates, returning `None`
+    /// when the point lies outside the last rendered content area.
+    fn screen_to_content(&self, column: u16, row: u16) -> Option<(usize, u16)> {
+        let area = self.last_content_area?;
+        if column < area.x || column >= area.right() || row < area.y || row >= area.bottom() {
+            return None;
+        }
+        Some((
+            self.clamped_scroll_offset() + (row - area.y) as usize,
+            column - area.x,
+        ))
+    }
+
+    /// Like `screen_to_content`, but clamps points outside the content area to
+    /// its nearest edge so drags past the top/bottom keep extending the
+    /// selection.
+    fn screen_to_content_clamped(&self, column: u16, row: u16) -> Option<(usize, u16)> {
+        let area = self.last_content_area?;
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
+        let column = column.clamp(area.x, area.right() - 1);
+        let row = row.clamp(area.y, area.bottom() - 1);
+        Some((
+            self.clamped_scroll_offset() + (row - area.y) as usize,
+            column - area.x,
+        ))
+    }
+
+    /// The effective scroll offset; `usize::MAX` means "pinned to bottom" and
+    /// is only resolved during render, so fall back to the last rendered max.
+    fn clamped_scroll_offset(&self) -> usize {
+        if self.scroll_offset == usize::MAX {
+            let total = self.last_rendered_height.unwrap_or(0);
+            let height = self.last_content_height.unwrap_or(0);
+            total.saturating_sub(height)
+        } else {
+            self.scroll_offset
+        }
+    }
+
+    /// Extract the currently selected text, or `None` when there is no
+    /// selection (or it selects only whitespace).
+    fn selected_text(&self) -> Option<String> {
+        let selection = self.selection?;
+        let area = self.last_content_area?;
+        if area.width == 0 {
+            return None;
+        }
+        let ((start_row, start_col), (end_row, end_col)) = selection.ordered_bounds();
+        let row_count = end_row - start_row + 1;
+        let buf = self.render_rows(start_row, row_count, area.width);
+
+        let mut lines = Vec::with_capacity(row_count);
+        for (row_idx, content_row) in (start_row..=end_row).enumerate() {
+            let col_start = if content_row == start_row {
+                start_col as usize
+            } else {
+                0
+            };
+            let col_end = if content_row == end_row {
+                end_col as usize
+            } else {
+                area.width as usize - 1
+            };
+            let mut line = String::new();
+            for col in col_start..=col_end.min(area.width as usize - 1) {
+                let cell = &buf[(col as u16, row_idx as u16)];
+                if !cell.skip {
+                    line.push_str(&strip_osc8(cell.symbol()));
+                }
+            }
+            lines.push(line.trim_end().to_string());
+        }
+        while lines.first().is_some_and(|line| line.is_empty()) {
+            lines.remove(0);
+        }
+        while lines.last().is_some_and(|line| line.is_empty()) {
+            lines.pop();
+        }
+        if lines.is_empty() {
+            None
+        } else {
+            Some(lines.join("\n"))
+        }
+    }
+
+    /// Render `row_count` content rows starting at `first_row` into an
+    /// off-screen buffer, skipping chunks that do not intersect the range.
+    fn render_rows(&self, first_row: usize, row_count: usize, width: u16) -> Buffer {
+        let mut buf = Buffer::empty(Rect::new(0, 0, width, row_count as u16));
+        let mut top = 0usize;
+        for renderable in &self.renderables {
+            let height = renderable.desired_height(width) as usize;
+            let bottom = top + height;
+            if bottom <= first_row || top >= first_row + row_count {
+                top = bottom;
+                continue;
+            }
+            let skip = first_row.saturating_sub(top) as u16;
+            let dest_y = top.saturating_sub(first_row) as u16;
+            let avail = row_count.saturating_sub(dest_y as usize) as u16;
+            let area = Rect::new(0, dest_y, width, avail);
+            render_offset_content(area, &mut buf, &**renderable, skip);
+            top = bottom;
+        }
+        buf
+    }
+
+    /// Move the current selection into `pending_copy` for the `App` layer to
+    /// write to the system clipboard. Returns `false` when there is nothing to
+    /// copy.
+    fn queue_copy_selection(&mut self) -> bool {
+        let Some(text) = self.selected_text() else {
+            return false;
+        };
+        self.pending_copy = Some(text);
+        self.selection = None;
+        self.notice = Some("Copied selection to clipboard".to_string());
+        true
+    }
+
+    /// Clear the active selection; returns `true` when there was one.
+    fn clear_selection(&mut self) -> bool {
+        self.selection.take().is_some()
+    }
+
+    fn take_pending_copy(&mut self) -> Option<String> {
+        self.pending_copy.take()
+    }
+
+    fn take_pending_link_open(&mut self) -> Option<String> {
+        self.pending_link_open.take()
+    }
+
+    /// Apply one wheel notch in `direction` (`-1.0` up, `1.0` down), scaling by
+    /// `mouse_scroll_speed` and carrying fractional rows between events.
+    fn apply_wheel_scroll(&mut self, direction: f64) {
+        if self.pending_mouse_scroll.signum() != direction {
+            self.pending_mouse_scroll = 0.0;
+        }
+        self.pending_mouse_scroll += direction * self.mouse_scroll_speed;
+        // Decimal speeds can land just short of a whole row after repeated addition.
+        let rounded = self.pending_mouse_scroll.round();
+        if rounded != 0.0 && (self.pending_mouse_scroll - rounded).abs() < 1e-9 {
+            self.pending_mouse_scroll = rounded;
+        }
+        let rows = self.pending_mouse_scroll as isize;
+        self.pending_mouse_scroll = self.pending_mouse_scroll.fract();
+        if rows > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_add(rows as usize);
+        } else if rows < 0 {
+            self.scroll_offset = self.scroll_offset.saturating_sub(rows.unsigned_abs());
+        }
     }
 
     /// Returns the height of one page in content rows.
@@ -474,6 +877,10 @@ pub(crate) struct TranscriptOverlay {
     /// Committed transcript cells (does not include the live tail).
     cells: Vec<Arc<dyn HistoryCell>>,
     highlight_cell: Option<usize>,
+    /// `/copy` block-navigation mode: a cell is highlighted and can be moved
+    /// with Up/Down (or k/j); Enter (or a copy chord) copies its transcript
+    /// text; Esc exits the mode.
+    copy_mode: bool,
     /// Cache key for the render-only live tail appended after committed cells.
     live_tail_key: Option<LiveTailKey>,
     is_done: bool,
@@ -499,16 +906,23 @@ impl TranscriptOverlay {
     ///
     /// This overlay does not own the "active cell"; callers may optionally append a live tail via
     /// `sync_live_tail` during draws to reflect in-flight activity.
-    pub(crate) fn new(transcript_cells: Vec<Arc<dyn HistoryCell>>, keymap: PagerKeymap) -> Self {
+    pub(crate) fn new(
+        transcript_cells: Vec<Arc<dyn HistoryCell>>,
+        keymap: PagerKeymap,
+        mouse_scroll_speed: f64,
+    ) -> Self {
+        let mut view = PagerView::new(
+            Self::render_cells(&transcript_cells, /*highlight_cell*/ None),
+            "T R A N S C R I P T".to_string(),
+            usize::MAX,
+            keymap,
+        );
+        view.mouse_scroll_speed = mouse_scroll_speed;
         Self {
-            view: PagerView::new(
-                Self::render_cells(&transcript_cells, /*highlight_cell*/ None),
-                "T R A N S C R I P T".to_string(),
-                usize::MAX,
-                keymap,
-            ),
+            view,
             cells: transcript_cells,
             highlight_cell: None,
+            copy_mode: false,
             live_tail_key: None,
             is_done: false,
         }
@@ -536,7 +950,11 @@ impl TranscriptOverlay {
                 } else {
                     Box::new(CachedRenderable::new(CellRenderable {
                         cell: c.clone(),
-                        style: Style::default(),
+                        style: if highlight_cell == Some(i) {
+                            Style::default().reversed()
+                        } else {
+                            Style::default()
+                        },
                         mode: CellRenderableMode::Transcript,
                     })) as Box<dyn Renderable>
                 };
@@ -713,6 +1131,105 @@ impl TranscriptOverlay {
         }
     }
 
+    /// Enter `/copy` block-navigation mode: highlight the most recent agent
+    /// markdown cell (falling back to the last cell) so the user can move the
+    /// highlight and copy a block with Enter.
+    pub(crate) fn enter_copy_mode(&mut self) {
+        if self.cells.is_empty() {
+            return;
+        }
+        self.copy_mode = true;
+        let idx = self
+            .cells
+            .iter()
+            .rposition(|c| c.as_any().is::<crate::history_cell::AgentMarkdownCell>())
+            .unwrap_or(self.cells.len() - 1);
+        self.set_highlight_cell(Some(idx));
+    }
+
+    /// Handle a key while copy mode is active; returns `true` when the key was
+    /// consumed. Unrelated keys fall through to normal overlay handling.
+    fn copy_mode_handle_key(&mut self, key: KeyEvent) -> bool {
+        if !self.copy_mode {
+            return false;
+        }
+        if matches!(key.kind, KeyEventKind::Release) {
+            return false;
+        }
+        match key.code {
+            KeyCode::Esc => {
+                self.exit_copy_mode();
+                true
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.copy_mode_move(-1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.copy_mode_move(1);
+                true
+            }
+            KeyCode::Enter => self.copy_mode_commit(),
+            _ if is_copy_key(key) => self.copy_mode_commit(),
+            _ => false,
+        }
+    }
+
+    fn copy_mode_move(&mut self, delta: isize) {
+        let Some(current) = self.highlight_cell else {
+            return;
+        };
+        let next = current
+            .saturating_add_signed(delta)
+            .min(self.cells.len().saturating_sub(1));
+        if next != current {
+            self.set_highlight_cell(Some(next));
+        }
+    }
+
+    /// Copy the highlighted cell's transcript text into the view's pending
+    /// copy slot, exit copy mode, and jump back to the bottom.
+    fn copy_mode_commit(&mut self) -> bool {
+        let Some(idx) = self.highlight_cell else {
+            return false;
+        };
+        let Some(cell) = self.cells.get(idx) else {
+            return false;
+        };
+        let width = self
+            .view
+            .last_content_area
+            .map(|area| area.width)
+            .unwrap_or(80)
+            .max(1);
+        let text = cell
+            .transcript_lines(width)
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim_end()
+            .to_string();
+        if text.is_empty() {
+            return false;
+        }
+        self.view.pending_copy = Some(text);
+        self.exit_copy_mode();
+        self.view.scroll_offset = usize::MAX;
+        self.view.notice = Some("Copied message to clipboard".to_string());
+        true
+    }
+
+    fn exit_copy_mode(&mut self) {
+        self.copy_mode = false;
+        self.set_highlight_cell(None);
+    }
+
     /// Returns whether the underlying pager view is currently pinned to the bottom.
     ///
     /// The `App` draw loop uses this to decide whether to schedule animation frames for the live
@@ -789,7 +1306,14 @@ impl TranscriptOverlay {
 
         let mut pairs: Vec<(Vec<KeyBinding>, &str)> =
             vec![(first_or_empty(&self.view.keymap.close), "to quit")];
-        if self.highlight_cell.is_some() {
+        if self.copy_mode {
+            pairs.push((
+                vec![key_hint::plain(KeyCode::Up), key_hint::plain(KeyCode::Down)],
+                "to select block",
+            ));
+            pairs.push((vec![key_hint::plain(KeyCode::Enter)], "to copy"));
+            pairs.push((vec![key_hint::plain(KeyCode::Esc)], "to cancel"));
+        } else if self.highlight_cell.is_some() {
             pairs.push((
                 vec![
                     key_hint::plain(KeyCode::Esc),
@@ -818,6 +1342,21 @@ impl TranscriptOverlay {
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         match event {
             TuiEvent::Key(key_event) => match key_event {
+                // Copy mode gets first dibs on navigation/copy/Esc keys.
+                e if self.copy_mode_handle_key(e) => {
+                    tui.frame_requester()
+                        .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
+                    Ok(())
+                }
+                // Copy chords take precedence over the close keymap (which
+                // includes Ctrl+C) while a selection is active.
+                e if self.view.selection.is_some() && is_copy_key(e) => {
+                    if self.view.queue_copy_selection() {
+                        tui.frame_requester()
+                            .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
+                    }
+                    Ok(())
+                }
                 e if self.view.keymap.close.is_pressed(e)
                     || self.view.keymap.close_transcript.is_pressed(e) =>
                 {
@@ -826,6 +1365,13 @@ impl TranscriptOverlay {
                 }
                 other => self.view.handle_key_event(tui, other),
             },
+            TuiEvent::Mouse(mouse_event) => {
+                if self.view.handle_mouse_event(mouse_event) {
+                    tui.frame_requester()
+                        .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
+                }
+                Ok(())
+            }
             TuiEvent::Draw | TuiEvent::Resize => {
                 tui.draw(u16::MAX, |frame| {
                     self.render(frame.area(), frame.buffer);
@@ -837,6 +1383,10 @@ impl TranscriptOverlay {
     }
     pub(crate) fn is_done(&self) -> bool {
         self.is_done
+    }
+
+    pub(crate) fn wants_esc(&self) -> bool {
+        self.copy_mode || self.view.selection.is_some()
     }
 
     #[cfg(test)]
@@ -923,12 +1473,26 @@ impl StaticOverlay {
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
         match event {
             TuiEvent::Key(key_event) => match key_event {
+                e if self.view.selection.is_some() && is_copy_key(e) => {
+                    if self.view.queue_copy_selection() {
+                        tui.frame_requester()
+                            .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
+                    }
+                    Ok(())
+                }
                 e if self.view.keymap.close.is_pressed(e) => {
                     self.is_done = true;
                     Ok(())
                 }
                 other => self.view.handle_key_event(tui, other),
             },
+            TuiEvent::Mouse(mouse_event) => {
+                if self.view.handle_mouse_event(mouse_event) {
+                    tui.frame_requester()
+                        .schedule_frame_in(crate::tui::TARGET_FRAME_INTERVAL);
+                }
+                Ok(())
+            }
             TuiEvent::Draw | TuiEvent::Resize => {
                 tui.draw(u16::MAX, |frame| {
                     self.render(frame.area(), frame.buffer);
@@ -940,6 +1504,10 @@ impl StaticOverlay {
     }
     pub(crate) fn is_done(&self) -> bool {
         self.is_done
+    }
+
+    pub(crate) fn wants_esc(&self) -> bool {
+        self.view.selection.is_some()
     }
 }
 
@@ -1025,7 +1593,11 @@ mod tests {
     }
 
     fn transcript_overlay(cells: Vec<Arc<dyn HistoryCell>>) -> TranscriptOverlay {
-        TranscriptOverlay::new(cells, default_pager_keymap())
+        TranscriptOverlay::new(
+            cells,
+            default_pager_keymap(),
+            /*mouse_scroll_speed*/ 1.0,
+        )
     }
 
     fn static_overlay(lines: Vec<Line<'static>>, title: &str) -> StaticOverlay {
@@ -1601,5 +2173,480 @@ mod tests {
             pv.is_scrolled_to_bottom(),
             "expected view to report at bottom after scrolling to end"
         );
+    }
+
+    #[test]
+    fn wheel_scroll_scales_rows_with_mouse_scroll_speed() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 10)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        pv.mouse_scroll_speed = 2.0;
+
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 2);
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 4);
+        pv.apply_wheel_scroll(-1.0);
+        assert_eq!(pv.scroll_offset, 2);
+    }
+
+    #[test]
+    fn fractional_wheel_scroll_accumulates_until_whole_row() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 10)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        pv.mouse_scroll_speed = 0.5;
+
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 0);
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 1);
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 1);
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 2);
+    }
+
+    #[test]
+    fn wheel_direction_change_discards_fractional_remainder() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 10)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        pv.mouse_scroll_speed = 0.5;
+
+        pv.apply_wheel_scroll(1.0);
+        pv.apply_wheel_scroll(-1.0);
+        assert_eq!(pv.scroll_offset, 0);
+        pv.apply_wheel_scroll(-1.0);
+        assert_eq!(pv.scroll_offset, 0);
+
+        pv.scroll_offset = 5;
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 5);
+        pv.apply_wheel_scroll(1.0);
+        assert_eq!(pv.scroll_offset, 6);
+    }
+
+    use crossterm::event::KeyEventKind;
+    use crossterm::event::KeyModifiers;
+    use crossterm::event::MouseButton;
+    use ratatui::style::Modifier;
+
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// Render once so the view records its content area, then drag the left
+    /// button from (`from_col`, `from_row`) to (`to_col`, `to_row`) in screen
+    /// coordinates and release.
+    fn drag_select(pv: &mut PagerView, area: Rect, from: (u16, u16), to: (u16, u16)) {
+        let mut buf = Buffer::empty(area);
+        pv.render(area, &mut buf);
+        pv.handle_mouse_event(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            from.0,
+            from.1,
+        ));
+        pv.handle_mouse_event(mouse(MouseEventKind::Drag(MouseButton::Left), to.0, to.1));
+        pv.handle_mouse_event(mouse(MouseEventKind::Up(MouseButton::Left), to.0, to.1));
+    }
+
+    #[test]
+    fn mouse_drag_selects_and_highlights_reversed() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 4)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        // Content area starts at y=1 (below the header). Select from content
+        // (row 0, col 0) through (row 1, col 1).
+        let area = Rect::new(0, 0, 20, 10);
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 2));
+
+        let mut buf = Buffer::empty(area);
+        pv.render(area, &mut buf);
+
+        // First selected row: from the anchor column to the end of the row.
+        assert!(buf[(0, 1)].modifier.contains(Modifier::REVERSED));
+        assert!(buf[(1, 1)].modifier.contains(Modifier::REVERSED));
+        // Last selected row: columns up to and including the pointer column.
+        assert!(buf[(0, 2)].modifier.contains(Modifier::REVERSED));
+        assert!(buf[(1, 2)].modifier.contains(Modifier::REVERSED));
+        assert!(!buf[(2, 2)].modifier.contains(Modifier::REVERSED));
+        // Rows past the selection are untouched.
+        assert!(!buf[(0, 3)].modifier.contains(Modifier::REVERSED));
+    }
+
+    #[test]
+    fn mouse_selection_extracts_text_across_blocks() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", 2), paragraph_block("b", 2)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        // Anchor on "a0" (content row 0), drag down to "b0" (content row 2).
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 3));
+
+        assert_eq!(pv.selected_text().as_deref(), Some("a0\na1\nb0"));
+    }
+
+    #[test]
+    fn mouse_selection_respects_scroll_offset() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 10)],
+            "T",
+            /*scroll_offset*/ 3,
+        );
+        let area = Rect::new(0, 0, 20, 6);
+        // Screen row 1 shows content row 3 ("a3") with scroll_offset = 3.
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 2));
+
+        assert_eq!(pv.selected_text().as_deref(), Some("a3\na4"));
+    }
+
+    #[test]
+    fn right_click_with_active_selection_queues_copy() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", 2), paragraph_block("b", 2)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 3));
+
+        assert!(pv.handle_mouse_event(mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            /*column*/ 0,
+            /*row*/ 1,
+        )));
+        assert_eq!(pv.take_pending_copy().as_deref(), Some("a0\na1\nb0"));
+        assert!(pv.take_pending_copy().is_none());
+    }
+
+    #[test]
+    fn right_click_without_selection_does_not_queue_copy() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 2)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        let mut buf = Buffer::empty(area);
+        pv.render(area, &mut buf);
+
+        pv.handle_mouse_event(mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            /*column*/ 0,
+            /*row*/ 1,
+        ));
+        assert!(pv.take_pending_copy().is_none());
+    }
+
+    #[test]
+    fn click_without_drag_on_link_queues_link_open() {
+        let destination = "https://example.com/some/path";
+        let mut pv = pager_view(
+            vec![Box::new(crate::terminal_hyperlinks::HyperlinkText::new(
+                vec![Line::from(format!("visit {destination} now"))],
+            ))],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 60, 10);
+        let mut buf = Buffer::empty(area);
+        pv.render(area, &mut buf);
+
+        // "visit " is 6 columns wide; the URL starts at column 6 of row 1.
+        let url_col = 6u16;
+        assert!(buf[(url_col, 1)].symbol().contains("\x1b]8;;"));
+        pv.handle_mouse_event(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            url_col,
+            /*row*/ 1,
+        ));
+        pv.handle_mouse_event(mouse(MouseEventKind::Up(MouseButton::Left), url_col, 1));
+
+        assert_eq!(pv.take_pending_link_open().as_deref(), Some(destination));
+        // A plain click does not leave a selection behind.
+        assert!(pv.selection.is_none());
+        assert!(pv.take_pending_copy().is_none());
+    }
+
+    #[test]
+    fn click_without_drag_off_link_clears_selection() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 4)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 2));
+        assert!(pv.selection.is_some());
+
+        pv.handle_mouse_event(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            /*column*/ 0,
+            /*row*/ 4,
+        ));
+        pv.handle_mouse_event(mouse(MouseEventKind::Up(MouseButton::Left), 0, 4));
+
+        assert!(pv.selection.is_none());
+        assert!(pv.take_pending_link_open().is_none());
+    }
+
+    #[test]
+    fn is_copy_key_matches_expected_chords() {
+        assert!(is_copy_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL
+        )));
+        assert!(is_copy_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT
+        )));
+        assert!(is_copy_key(KeyEvent::new(
+            KeyCode::Char('C'),
+            KeyModifiers::CONTROL
+        )));
+        assert!(is_copy_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::SUPER
+        )));
+        assert!(is_copy_key(KeyEvent::new(
+            KeyCode::Insert,
+            KeyModifiers::CONTROL
+        )));
+
+        assert!(!is_copy_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::NONE
+        )));
+        assert!(!is_copy_key(KeyEvent::new(
+            KeyCode::Insert,
+            KeyModifiers::NONE
+        )));
+        assert!(!is_copy_key(KeyEvent::new_with_kind(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL,
+            KeyEventKind::Release,
+        )));
+    }
+
+    #[test]
+    fn queue_copy_selection_moves_selection_to_pending_copy() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", 2), paragraph_block("b", 2)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 3));
+
+        assert!(pv.queue_copy_selection());
+        assert_eq!(pv.take_pending_copy().as_deref(), Some("a0\na1\nb0"));
+        assert!(pv.selection.is_none());
+        // Nothing left to copy once the selection was consumed.
+        assert!(!pv.queue_copy_selection());
+    }
+
+    #[test]
+    fn esc_clears_selection_before_anything_else() {
+        let mut pv = pager_view(
+            vec![paragraph_block("a", /*lines*/ 4)],
+            "T",
+            /*scroll_offset*/ 0,
+        );
+        let area = Rect::new(0, 0, 20, 10);
+        drag_select(&mut pv, area, /*from*/ (0, 1), /*to*/ (1, 2));
+        assert!(pv.selection.is_some());
+
+        assert!(pv.clear_selection());
+        assert!(pv.selection.is_none());
+        // Clearing again reports there was nothing to clear.
+        assert!(!pv.clear_selection());
+    }
+
+    fn plain_key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn enter_copy_mode_highlights_last_agent_markdown_cell() {
+        let mut overlay = transcript_overlay(vec![
+            Arc::new(TestCell {
+                lines: vec![Line::from("user question")],
+            }),
+            Arc::new(history_cell::AgentMarkdownCell::new(
+                "agent answer".to_string(),
+                std::path::Path::new("/tmp"),
+            )),
+            Arc::new(TestCell {
+                lines: vec![Line::from("follow-up question")],
+            }),
+        ]);
+
+        overlay.enter_copy_mode();
+
+        assert!(overlay.copy_mode);
+        assert_eq!(overlay.highlight_cell, Some(1));
+        // Copy mode keeps Esc for itself instead of starting backtrack preview.
+        assert!(overlay.wants_esc());
+    }
+
+    #[test]
+    fn enter_copy_mode_without_agent_cell_falls_back_to_last_cell() {
+        let mut overlay = transcript_overlay(vec![
+            Arc::new(TestCell {
+                lines: vec![Line::from("alpha")],
+            }),
+            Arc::new(TestCell {
+                lines: vec![Line::from("beta")],
+            }),
+        ]);
+
+        overlay.enter_copy_mode();
+
+        assert_eq!(overlay.highlight_cell, Some(1));
+    }
+
+    #[test]
+    fn enter_copy_mode_with_empty_transcript_is_noop() {
+        let mut overlay = transcript_overlay(Vec::new());
+
+        overlay.enter_copy_mode();
+
+        assert!(!overlay.copy_mode);
+        assert_eq!(overlay.highlight_cell, None);
+        assert!(!overlay.wants_esc());
+    }
+
+    #[test]
+    fn copy_mode_arrow_keys_move_highlight_with_clamping() {
+        let cells: Vec<Arc<dyn HistoryCell>> = (0..3)
+            .map(|i| {
+                Arc::new(TestCell {
+                    lines: vec![Line::from(format!("cell{i}"))],
+                }) as Arc<dyn HistoryCell>
+            })
+            .collect();
+        let mut overlay = transcript_overlay(cells);
+        overlay.enter_copy_mode();
+        assert_eq!(overlay.highlight_cell, Some(2));
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
+        assert_eq!(overlay.highlight_cell, Some(1));
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('k'))));
+        assert_eq!(overlay.highlight_cell, Some(0));
+        // Clamp at the top.
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
+        assert_eq!(overlay.highlight_cell, Some(0));
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
+        assert_eq!(overlay.highlight_cell, Some(1));
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('j'))));
+        assert_eq!(overlay.highlight_cell, Some(2));
+        // Clamp at the bottom.
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
+        assert_eq!(overlay.highlight_cell, Some(2));
+    }
+
+    #[test]
+    fn copy_mode_enter_copies_highlighted_cell_and_exits() {
+        let mut overlay = transcript_overlay(vec![
+            Arc::new(TestCell {
+                lines: vec![Line::from("alpha")],
+            }),
+            Arc::new(TestCell {
+                lines: vec![Line::from("beta0"), Line::from("beta1")],
+            }),
+        ]);
+        overlay.enter_copy_mode();
+        assert_eq!(overlay.highlight_cell, Some(1));
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
+
+        assert_eq!(
+            overlay.view.take_pending_copy().as_deref(),
+            Some("beta0\nbeta1")
+        );
+        assert!(!overlay.copy_mode);
+        assert_eq!(overlay.highlight_cell, None);
+        // After copying, the view jumps back to the bottom.
+        assert_eq!(overlay.view.scroll_offset, usize::MAX);
+    }
+
+    #[test]
+    fn copy_mode_ctrl_insert_copies_highlighted_cell() {
+        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
+            lines: vec![Line::from("alpha")],
+        })]);
+        overlay.enter_copy_mode();
+
+        assert!(
+            overlay.copy_mode_handle_key(KeyEvent::new(KeyCode::Insert, KeyModifiers::CONTROL))
+        );
+        assert_eq!(overlay.view.take_pending_copy().as_deref(), Some("alpha"));
+        assert!(!overlay.copy_mode);
+    }
+
+    #[test]
+    fn copy_mode_esc_exits_without_copying() {
+        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
+            lines: vec![Line::from("alpha")],
+        })]);
+        overlay.enter_copy_mode();
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Esc)));
+
+        assert!(!overlay.copy_mode);
+        assert_eq!(overlay.highlight_cell, None);
+        assert!(overlay.view.take_pending_copy().is_none());
+        assert!(!overlay.wants_esc());
+    }
+
+    #[test]
+    fn copy_mode_ignores_unrelated_keys() {
+        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
+            lines: vec![Line::from("alpha")],
+        })]);
+        overlay.enter_copy_mode();
+
+        assert!(!overlay.copy_mode_handle_key(plain_key(KeyCode::Char('x'))));
+        assert!(overlay.copy_mode);
+    }
+
+    #[test]
+    fn copy_mode_highlight_renders_non_user_cell_reversed() {
+        let mut overlay = transcript_overlay(vec![
+            Arc::new(TestCell {
+                lines: vec![Line::from("alpha")],
+            }),
+            Arc::new(TestCell {
+                lines: vec![Line::from("beta0"), Line::from("beta1")],
+            }),
+        ]);
+        overlay.enter_copy_mode();
+
+        let area = Rect::new(0, 0, 40, 12);
+        let mut buf = Buffer::empty(area);
+        overlay.render(area, &mut buf);
+
+        // Layout: row 1 = "alpha" (cell 0), row 2 = inset blank, rows 3-4 =
+        // "beta0"/"beta1" (cell 1, highlighted).
+        assert!(!buf[(0, 1)].modifier.contains(Modifier::REVERSED));
+        assert!(buf[(0, 3)].modifier.contains(Modifier::REVERSED));
+        assert!(buf[(0, 4)].modifier.contains(Modifier::REVERSED));
     }
 }

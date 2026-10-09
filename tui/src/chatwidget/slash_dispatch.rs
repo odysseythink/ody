@@ -465,7 +465,7 @@ impl ChatWidget {
                 self.show_logout_provider_picker();
             }
             SlashCommand::Copy => {
-                self.copy_last_agent_markdown();
+                self.app_event_tx.send(AppEvent::OpenTranscriptCopyMode);
             }
             SlashCommand::Raw => {
                 let enabled = self.toggle_raw_output_mode_and_notify();

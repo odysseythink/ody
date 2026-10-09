@@ -283,6 +283,7 @@ struct SessionPickerRunOptions {
     view_persistence: Option<SessionPickerViewPersistence>,
     pager_keymap: PagerKeymap,
     list_keymap: ListKeymap,
+    mouse_scroll_speed: f64,
 }
 
 /// Interactive session picker that lists app-server threads with simple search,
@@ -369,6 +370,7 @@ async fn run_resume_picker_with_launch_context(
         }),
         pager_keymap: runtime_keymap.pager,
         list_keymap: runtime_keymap.list,
+        mouse_scroll_speed: config.tui_mouse_scroll_speed.unwrap_or(1.0),
     };
     run_session_picker_with_loader(
         tui,
@@ -414,6 +416,7 @@ pub async fn run_fork_picker_with_app_server(
         }),
         pager_keymap: runtime_keymap.pager,
         list_keymap: runtime_keymap.list,
+        mouse_scroll_speed: config.tui_mouse_scroll_speed.unwrap_or(1.0),
     };
     run_session_picker_with_loader(
         tui,
@@ -449,6 +452,7 @@ async fn run_session_picker_with_loader(
     state.view_persistence = options.view_persistence;
     state.pager_keymap = options.pager_keymap;
     state.list_keymap = options.list_keymap;
+    state.mouse_scroll_speed = options.mouse_scroll_speed;
     state.launch_context = options.launch_context;
     state.start_initial_load();
     state.request_frame();
@@ -475,6 +479,9 @@ async fn run_session_picker_with_loader(
                     TuiEvent::Paste(pasted) => {
                         state.handle_paste(pasted);
                     }
+                    // The picker list itself has no mouse support; overlay events
+                    // are forwarded above before this match.
+                    TuiEvent::Mouse(_) => {}
                     TuiEvent::Draw | TuiEvent::Resize => {
                         if let Ok(size) = alt.tui.terminal.size() {
                             let list_height =
@@ -667,6 +674,7 @@ struct PickerState {
     overlay: Option<Overlay>,
     pager_keymap: PagerKeymap,
     list_keymap: ListKeymap,
+    mouse_scroll_speed: f64,
 }
 
 struct PaginationState {
@@ -941,6 +949,7 @@ impl PickerState {
             overlay: None,
             pager_keymap: RuntimeKeymap::defaults().pager,
             list_keymap: RuntimeKeymap::defaults().list,
+            mouse_scroll_speed: 1.0,
         }
     }
 
@@ -975,6 +984,7 @@ impl PickerState {
         self.overlay = Some(Overlay::new_transcript(
             cells.clone(),
             self.pager_keymap.clone(),
+            self.mouse_scroll_speed,
         ));
         self.pending_transcript_open = None;
         self.transcript_loading_frame_shown = false;

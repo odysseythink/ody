@@ -282,6 +282,16 @@ impl ChatWidget {
         self.copy_last_agent_markdown_with(crate::clipboard_copy::copy_to_clipboard);
     }
 
+    /// Store a clipboard lease obtained outside the widget (e.g. by the
+    /// transcript overlay's copy path) so the clipboard stays alive on
+    /// platforms that require the handle to remain open.
+    pub(crate) fn store_clipboard_lease(
+        &mut self,
+        lease: Option<crate::clipboard_copy::ClipboardLease>,
+    ) {
+        self.clipboard_lease = lease;
+    }
+
     pub(crate) fn truncate_agent_copy_history_to_user_turn_count(
         &mut self,
         user_turn_count: usize,
