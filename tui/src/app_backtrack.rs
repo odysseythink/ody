@@ -470,7 +470,7 @@ impl App {
     /// Drain deferred actions the overlay queued while handling an event:
     /// clipboard copies and link opens need `App`-level services (system
     /// clipboard, browser) that the overlay cannot reach on its own.
-    fn drain_overlay_actions(&mut self) {
+    pub(crate) fn drain_overlay_actions(&mut self) {
         let Some(overlay) = &mut self.overlay else {
             return;
         };
@@ -478,7 +478,9 @@ impl App {
             match crate::clipboard_copy::copy_to_clipboard(&text) {
                 Ok(lease) => {
                     self.chat_widget.store_clipboard_lease(lease);
-                    overlay.set_notice(Some("Copied selection to clipboard".to_string()));
+                    // Success notices are set by the producers (`queue_copy_selection`,
+                    // `copy_mode_commit`) so the message can name what was copied;
+                    // only failures are reported here.
                 }
                 Err(error) => {
                     overlay.set_notice(Some(format!("Copy failed: {error}")));

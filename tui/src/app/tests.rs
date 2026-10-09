@@ -6379,3 +6379,34 @@ async fn older_history_page_error_clears_loading_guard() -> Result<()> {
     let _ = app.request_older_history_page(&mut app_server, thread_id);
     Ok(())
 }
+
+#[tokio::test]
+async fn drain_overlay_copy_keeps_copy_mode_target_notice() {
+    let mut app = make_test_app().await;
+    app.transcript_cells = vec![Arc::new(AgentMarkdownCell::new(
+        "answer\n\n```rust\nfn main() {}\n```\n".to_string(),
+        Path::new("/tmp"),
+    )) as Arc<dyn HistoryCell>];
+    app.overlay = Some(Overlay::new_transcript(
+        app.transcript_cells.clone(),
+        crate::keymap::RuntimeKeymap::defaults().pager,
+        /*mouse_scroll_speed*/ 1.0,
+    ));
+    let Some(Overlay::Transcript(overlay)) = app.overlay.as_mut() else {
+        panic!("expected transcript overlay");
+    };
+    overlay.enter_copy_mode();
+    // Move Whole response -> Code block, then commit the copy.
+    assert!(overlay.copy_mode_handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)));
+    assert!(overlay.copy_mode_handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)));
+
+    app.drain_overlay_actions();
+
+    let notice = match app.overlay.as_ref() {
+        Some(Overlay::Transcript(overlay)) => overlay.notice_text(),
+        _ => panic!("expected transcript overlay"),
+    };
+    // The copy-mode commit notice names the copied target; the drain layer
+    // must not flatten it into the generic selection message.
+    assert_eq!(notice, Some("Copied code block to clipboard"));
+}

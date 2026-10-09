@@ -65,8 +65,6 @@ use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
-use ratatui::widgets::Wrap;
 
 /// Request coming from the agent that needs user approval.
 #[derive(Clone, Debug)]
@@ -774,13 +772,10 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
                 if !header.is_empty() {
                     header.push(Box::new(Line::from("")));
                 }
-                header.push(Box::new(
-                    Paragraph::new(Line::from_iter([
-                        "Reason: ".into(),
-                        reason.clone().italic(),
-                    ]))
-                    .wrap(Wrap { trim: false }),
-                ));
+                header.push(Box::new(HyperlinkText::new(vec![Line::from_iter([
+                    "Reason: ".into(),
+                    reason.clone().italic(),
+                ])])));
             }
             Box::new(ColumnRenderable::with(header))
         }
@@ -1279,6 +1274,46 @@ mod tests {
             unreachable!("exec request");
         };
         *reason = Some("see https://example.com/policy".to_string());
+        let view = make_overlay(request, tx, Features::with_defaults());
+
+        let width = 60u16;
+        let height = view.desired_height(width);
+        let area = Rect::new(0, 0, width, height);
+        let mut buf = Buffer::empty(area);
+        view.render(area, &mut buf);
+
+        let osc8 = "\x1b]8;;https://example.com/policy\x07";
+        let linked_text = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(osc8)
+                    .then(|| crate::terminal_hyperlinks::strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, "https://example.com/policy");
+    }
+
+    #[test]
+    fn apply_patch_reason_urls_render_as_clickable_hyperlinks() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut changes = HashMap::new();
+        changes.insert(
+            PathBuf::from("bug1.txt"),
+            FileChange::Add {
+                content: "one\n".to_string(),
+            },
+        );
+        let request = ApprovalRequest::ApplyPatch {
+            thread_id: ThreadId::new(),
+            thread_label: None,
+            id: "test".to_string(),
+            reason: Some("see https://example.com/policy".to_string()),
+            cwd: absolute_path("/tmp"),
+            changes,
+        };
         let view = make_overlay(request, tx, Features::with_defaults());
 
         let width = 60u16;

@@ -427,6 +427,12 @@ impl AgentMarkdownCell {
         }
     }
 
+    /// The raw Markdown payload, exposed for `/copy` semantic targets so
+    /// copying never goes through width-dependent rendered lines.
+    pub(crate) fn markdown_source(&self) -> &str {
+        &self.markdown_source
+    }
+
     fn full_display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         let Some(wrap_width) =
             crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2)

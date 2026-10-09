@@ -170,6 +170,13 @@ pub(crate) struct ProposedPlanStreamCell {
     is_stream_continuation: bool,
 }
 
+impl ProposedPlanCell {
+    /// The raw Markdown payload, exposed for `/copy` semantic targets.
+    pub(crate) fn plan_markdown(&self) -> &str {
+        &self.plan_markdown
+    }
+}
+
 impl HistoryCell for ProposedPlanCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         visible_lines(self.display_hyperlink_lines(width))

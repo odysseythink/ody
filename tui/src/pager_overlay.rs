@@ -20,6 +20,7 @@ use std::io::Result;
 use std::sync::Arc;
 
 use crate::chatwidget::ActiveCellTranscriptKey;
+use crate::copy_targets;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::HistoryRenderMode;
 use crate::history_cell::UserHistoryCell;
@@ -868,6 +869,16 @@ impl Renderable for HyperlinkLinesRenderable {
     }
 }
 
+/// `/copy` navigation state: every semantic copy target in display order
+/// plus the current selection. Targets are computed on entry and reference
+/// cell indices, which are stable because committed cells are append-only
+/// while the overlay is open.
+#[derive(Debug)]
+struct CopyModeState {
+    targets: Vec<copy_targets::CopyTarget>,
+    selected: usize,
+}
+
 pub(crate) struct TranscriptOverlay {
     /// Pager UI state and the renderables currently displayed.
     ///
@@ -877,10 +888,11 @@ pub(crate) struct TranscriptOverlay {
     /// Committed transcript cells (does not include the live tail).
     cells: Vec<Arc<dyn HistoryCell>>,
     highlight_cell: Option<usize>,
-    /// `/copy` block-navigation mode: a cell is highlighted and can be moved
-    /// with Up/Down (or k/j); Enter (or a copy chord) copies its transcript
-    /// text; Esc exits the mode.
-    copy_mode: bool,
+    /// `/copy` semantic-navigation mode: the flattened copy targets (whole
+    /// responses, user messages, code blocks, blockquotes) are walked with
+    /// Up/Down (or k/j); Enter (or a copy chord) copies the selected target's
+    /// original Markdown payload; Esc exits the mode.
+    copy_mode: Option<CopyModeState>,
     /// Cache key for the render-only live tail appended after committed cells.
     live_tail_key: Option<LiveTailKey>,
     is_done: bool,
@@ -922,7 +934,7 @@ impl TranscriptOverlay {
             view,
             cells: transcript_cells,
             highlight_cell: None,
-            copy_mode: false,
+            copy_mode: None,
             live_tail_key: None,
             is_done: false,
         }
@@ -1131,26 +1143,28 @@ impl TranscriptOverlay {
         }
     }
 
-    /// Enter `/copy` block-navigation mode: highlight the most recent agent
-    /// markdown cell (falling back to the last cell) so the user can move the
-    /// highlight and copy a block with Enter.
+    /// Enter `/copy` semantic-navigation mode: flatten the transcript's copy
+    /// targets (whole responses, user messages, code blocks, blockquotes) and
+    /// select the most recent response, so Up/Down walks semantic blocks and
+    /// Enter copies the target's original Markdown payload.
     pub(crate) fn enter_copy_mode(&mut self) {
-        if self.cells.is_empty() {
+        let targets = copy_targets::copy_targets(&self.cells);
+        if targets.is_empty() {
             return;
         }
-        self.copy_mode = true;
-        let idx = self
-            .cells
+        let selected = targets
             .iter()
-            .rposition(|c| c.as_any().is::<crate::history_cell::AgentMarkdownCell>())
-            .unwrap_or(self.cells.len() - 1);
-        self.set_highlight_cell(Some(idx));
+            .rposition(|target| target.kind == copy_targets::CopyTargetKind::WholeResponse)
+            .unwrap_or(targets.len() - 1);
+        let cell_index = targets[selected].cell_index;
+        self.copy_mode = Some(CopyModeState { targets, selected });
+        self.set_highlight_cell(Some(cell_index));
     }
 
     /// Handle a key while copy mode is active; returns `true` when the key was
     /// consumed. Unrelated keys fall through to normal overlay handling.
-    fn copy_mode_handle_key(&mut self, key: KeyEvent) -> bool {
-        if !self.copy_mode {
+    pub(crate) fn copy_mode_handle_key(&mut self, key: KeyEvent) -> bool {
+        if self.copy_mode.is_none() {
             return false;
         }
         if matches!(key.kind, KeyEventKind::Release) {
@@ -1161,72 +1175,61 @@ impl TranscriptOverlay {
                 self.exit_copy_mode();
                 true
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.copy_mode_move(-1);
-                true
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.copy_mode_move(1);
-                true
-            }
+            KeyCode::Up | KeyCode::Char('k') => self.copy_mode_move(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.copy_mode_move(1),
+            KeyCode::Home | KeyCode::Char('g') => self.copy_mode_jump(0),
+            KeyCode::End | KeyCode::Char('G') => self.copy_mode_jump(usize::MAX),
             KeyCode::Enter => self.copy_mode_commit(),
             _ if is_copy_key(key) => self.copy_mode_commit(),
             _ => false,
         }
     }
 
-    fn copy_mode_move(&mut self, delta: isize) {
-        let Some(current) = self.highlight_cell else {
-            return;
+    fn copy_mode_move(&mut self, delta: isize) -> bool {
+        let Some(state) = self.copy_mode.as_mut() else {
+            return false;
         };
-        let next = current
+        let next = state
+            .selected
             .saturating_add_signed(delta)
-            .min(self.cells.len().saturating_sub(1));
-        if next != current {
-            self.set_highlight_cell(Some(next));
-        }
+            .min(state.targets.len().saturating_sub(1));
+        state.selected = next;
+        let cell_index = state.targets[next].cell_index;
+        self.set_highlight_cell(Some(cell_index));
+        true
     }
 
-    /// Copy the highlighted cell's transcript text into the view's pending
-    /// copy slot, exit copy mode, and jump back to the bottom.
+    fn copy_mode_jump(&mut self, selected: usize) -> bool {
+        let Some(state) = self.copy_mode.as_mut() else {
+            return false;
+        };
+        state.selected = selected.min(state.targets.len().saturating_sub(1));
+        let cell_index = state.targets[state.selected].cell_index;
+        self.set_highlight_cell(Some(cell_index));
+        true
+    }
+
+    /// Copy the selected target's original Markdown payload into the view's
+    /// pending copy slot, exit copy mode, and jump back to the bottom.
     fn copy_mode_commit(&mut self) -> bool {
-        let Some(idx) = self.highlight_cell else {
+        let Some(state) = &self.copy_mode else {
             return false;
         };
-        let Some(cell) = self.cells.get(idx) else {
-            return false;
-        };
-        let width = self
-            .view
-            .last_content_area
-            .map(|area| area.width)
-            .unwrap_or(80)
-            .max(1);
-        let text = cell
-            .transcript_lines(width)
-            .iter()
-            .map(|line| {
-                line.spans
-                    .iter()
-                    .map(|span| span.content.as_ref())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            .trim_end()
-            .to_string();
+        let target = &state.targets[state.selected];
+        let text = target.source.trim_end().to_string();
         if text.is_empty() {
             return false;
         }
+        let label = target.kind.label().to_lowercase();
         self.view.pending_copy = Some(text);
         self.exit_copy_mode();
         self.view.scroll_offset = usize::MAX;
-        self.view.notice = Some("Copied message to clipboard".to_string());
+        self.view.notice = Some(format!("Copied {label} to clipboard"));
         true
     }
 
     fn exit_copy_mode(&mut self) {
-        self.copy_mode = false;
+        self.copy_mode = None;
         self.set_highlight_cell(None);
     }
 
@@ -1304,12 +1307,20 @@ impl TranscriptOverlay {
             ],
         );
 
+        let select_hint;
         let mut pairs: Vec<(Vec<KeyBinding>, &str)> =
             vec![(first_or_empty(&self.view.keymap.close), "to quit")];
-        if self.copy_mode {
+        if let Some(state) = &self.copy_mode {
+            let target = &state.targets[state.selected];
+            select_hint = format!(
+                "to select — {} ({}/{})",
+                target.kind.label(),
+                state.selected + 1,
+                state.targets.len()
+            );
             pairs.push((
                 vec![key_hint::plain(KeyCode::Up), key_hint::plain(KeyCode::Down)],
-                "to select block",
+                &select_hint,
             ));
             pairs.push((vec![key_hint::plain(KeyCode::Enter)], "to copy"));
             pairs.push((vec![key_hint::plain(KeyCode::Esc)], "to cancel"));
@@ -1386,12 +1397,17 @@ impl TranscriptOverlay {
     }
 
     pub(crate) fn wants_esc(&self) -> bool {
-        self.copy_mode || self.view.selection.is_some()
+        self.copy_mode.is_some() || self.view.selection.is_some()
     }
 
     #[cfg(test)]
     pub(crate) fn committed_cell_count(&self) -> usize {
         self.cells.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn notice_text(&self) -> Option<&str> {
+        self.view.notice.as_deref()
     }
 }
 
@@ -2482,31 +2498,53 @@ mod tests {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
+    fn user_cell(message: &str) -> Arc<dyn HistoryCell> {
+        Arc::new(history_cell::UserHistoryCell {
+            message: message.to_string(),
+            text_elements: Vec::new(),
+            local_image_paths: Vec::new(),
+            remote_image_urls: Vec::new(),
+        })
+    }
+
+    fn agent_cell(source: &str) -> Arc<dyn HistoryCell> {
+        Arc::new(history_cell::AgentMarkdownCell::new(
+            source.to_string(),
+            std::path::Path::new("/tmp"),
+        ))
+    }
+
+    fn copy_mode_state(overlay: &TranscriptOverlay) -> &CopyModeState {
+        overlay.copy_mode.as_ref().expect("copy mode active")
+    }
+
+    fn selected_kind(overlay: &TranscriptOverlay) -> copy_targets::CopyTargetKind {
+        let state = copy_mode_state(overlay);
+        state.targets[state.selected].kind
+    }
+
     #[test]
-    fn enter_copy_mode_highlights_last_agent_markdown_cell() {
+    fn enter_copy_mode_selects_whole_response_of_latest_agent_cell() {
         let mut overlay = transcript_overlay(vec![
-            Arc::new(TestCell {
-                lines: vec![Line::from("user question")],
-            }),
-            Arc::new(history_cell::AgentMarkdownCell::new(
-                "agent answer".to_string(),
-                std::path::Path::new("/tmp"),
-            )),
-            Arc::new(TestCell {
-                lines: vec![Line::from("follow-up question")],
-            }),
+            user_cell("first question"),
+            agent_cell("agent answer"),
+            user_cell("follow-up question"),
         ]);
 
         overlay.enter_copy_mode();
 
-        assert!(overlay.copy_mode);
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::WholeResponse
+        );
+        assert_eq!(copy_mode_state(&overlay).targets[copy_mode_state(&overlay).selected].cell_index, 1);
         assert_eq!(overlay.highlight_cell, Some(1));
         // Copy mode keeps Esc for itself instead of starting backtrack preview.
         assert!(overlay.wants_esc());
     }
 
     #[test]
-    fn enter_copy_mode_without_agent_cell_falls_back_to_last_cell() {
+    fn enter_copy_mode_without_source_cells_is_noop() {
         let mut overlay = transcript_overlay(vec![
             Arc::new(TestCell {
                 lines: vec![Line::from("alpha")],
@@ -2518,6 +2556,23 @@ mod tests {
 
         overlay.enter_copy_mode();
 
+        assert!(overlay.copy_mode.is_none());
+        assert_eq!(overlay.highlight_cell, None);
+        assert!(!overlay.wants_esc());
+    }
+
+    #[test]
+    fn enter_copy_mode_without_agent_cell_selects_most_recent_target() {
+        let mut overlay = transcript_overlay(vec![user_cell("first"), user_cell("second")]);
+
+        overlay.enter_copy_mode();
+
+        let state = copy_mode_state(&overlay);
+        assert_eq!(state.selected, state.targets.len() - 1);
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::UserMessage
+        );
         assert_eq!(overlay.highlight_cell, Some(1));
     }
 
@@ -2527,90 +2582,149 @@ mod tests {
 
         overlay.enter_copy_mode();
 
-        assert!(!overlay.copy_mode);
+        assert!(overlay.copy_mode.is_none());
         assert_eq!(overlay.highlight_cell, None);
         assert!(!overlay.wants_esc());
     }
 
     #[test]
-    fn copy_mode_arrow_keys_move_highlight_with_clamping() {
-        let cells: Vec<Arc<dyn HistoryCell>> = (0..3)
-            .map(|i| {
-                Arc::new(TestCell {
-                    lines: vec![Line::from(format!("cell{i}"))],
-                }) as Arc<dyn HistoryCell>
-            })
-            .collect();
-        let mut overlay = transcript_overlay(cells);
+    fn copy_mode_navigation_walks_semantic_targets_with_clamping() {
+        let mut overlay = transcript_overlay(vec![
+            user_cell("question"),
+            agent_cell("answer\n\n```\ncode line\n```\n"),
+        ]);
         overlay.enter_copy_mode();
-        assert_eq!(overlay.highlight_cell, Some(2));
-
-        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
-        assert_eq!(overlay.highlight_cell, Some(1));
-        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('k'))));
-        assert_eq!(overlay.highlight_cell, Some(0));
-        // Clamp at the top.
-        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
-        assert_eq!(overlay.highlight_cell, Some(0));
+        // Targets: [UserMessage(cell 0), WholeResponse(cell 1), CodeBlock(cell 1)].
+        assert_eq!(copy_mode_state(&overlay).selected, 1);
 
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::CodeBlock
+        );
         assert_eq!(overlay.highlight_cell, Some(1));
+        // Clamp at the newest target.
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('j'))));
-        assert_eq!(overlay.highlight_cell, Some(2));
-        // Clamp at the bottom.
-        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
-        assert_eq!(overlay.highlight_cell, Some(2));
+        assert_eq!(copy_mode_state(&overlay).selected, 2);
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
+        assert_eq!(copy_mode_state(&overlay).selected, 1);
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('k'))));
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::UserMessage
+        );
+        assert_eq!(overlay.highlight_cell, Some(0));
+        // Clamp at the oldest target.
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Up)));
+        assert_eq!(copy_mode_state(&overlay).selected, 0);
     }
 
     #[test]
-    fn copy_mode_enter_copies_highlighted_cell_and_exits() {
+    fn copy_mode_home_end_and_g_keys_jump_to_edges() {
         let mut overlay = transcript_overlay(vec![
-            Arc::new(TestCell {
-                lines: vec![Line::from("alpha")],
-            }),
-            Arc::new(TestCell {
-                lines: vec![Line::from("beta0"), Line::from("beta1")],
-            }),
+            user_cell("question"),
+            agent_cell("answer\n\n```\ncode line\n```\n"),
         ]);
         overlay.enter_copy_mode();
-        assert_eq!(overlay.highlight_cell, Some(1));
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('g'))));
+        assert_eq!(copy_mode_state(&overlay).selected, 0);
+        assert!(overlay.copy_mode_handle_key(KeyEvent::new(
+            KeyCode::Char('G'),
+            KeyModifiers::SHIFT
+        )));
+        assert_eq!(copy_mode_state(&overlay).selected, 2);
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Home)));
+        assert_eq!(copy_mode_state(&overlay).selected, 0);
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::End)));
+        assert_eq!(copy_mode_state(&overlay).selected, 2);
+    }
+
+    #[test]
+    fn copy_mode_enter_copies_markdown_source_and_exits() {
+        let source = "# Title\n\n```rust\nfn main() {}\n```";
+        let mut overlay = transcript_overlay(vec![agent_cell(source)]);
+        overlay.enter_copy_mode();
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
+
+        // The whole-response copy is the untouched Markdown source: no
+        // rendered bullet prefix and no width-dependent rewrapping.
+        assert_eq!(overlay.view.take_pending_copy().as_deref(), Some(source));
+        assert!(overlay.copy_mode.is_none());
+        assert_eq!(overlay.highlight_cell, None);
+        // After copying, the view jumps back to the bottom.
+        assert_eq!(overlay.view.scroll_offset, usize::MAX);
+        assert_eq!(
+            overlay.view.notice.as_deref(),
+            Some("Copied whole response to clipboard")
+        );
+    }
+
+    #[test]
+    fn copy_mode_commit_code_block_copies_content_only() {
+        let mut overlay =
+            transcript_overlay(vec![agent_cell("answer\n\n```rust\nfn main() {}\n```\n")]);
+        overlay.enter_copy_mode();
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::CodeBlock
+        );
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
+
+        // The fence and info string are stripped; only the code is copied.
+        assert_eq!(
+            overlay.view.take_pending_copy().as_deref(),
+            Some("fn main() {}")
+        );
+        assert_eq!(
+            overlay.view.notice.as_deref(),
+            Some("Copied code block to clipboard")
+        );
+    }
+
+    #[test]
+    fn copy_mode_commit_blockquote_copies_text_without_markers() {
+        let mut overlay =
+            transcript_overlay(vec![agent_cell("intro\n\n> line one\n> line two\n")]);
+        overlay.enter_copy_mode();
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
+        assert_eq!(
+            selected_kind(&overlay),
+            copy_targets::CopyTargetKind::Blockquote
+        );
 
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
 
         assert_eq!(
             overlay.view.take_pending_copy().as_deref(),
-            Some("beta0\nbeta1")
+            Some("line one\nline two")
         );
-        assert!(!overlay.copy_mode);
-        assert_eq!(overlay.highlight_cell, None);
-        // After copying, the view jumps back to the bottom.
-        assert_eq!(overlay.view.scroll_offset, usize::MAX);
     }
 
     #[test]
-    fn copy_mode_ctrl_insert_copies_highlighted_cell() {
-        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
-            lines: vec![Line::from("alpha")],
-        })]);
+    fn copy_mode_ctrl_insert_copies_current_target() {
+        let mut overlay = transcript_overlay(vec![user_cell("alpha")]);
         overlay.enter_copy_mode();
 
         assert!(
             overlay.copy_mode_handle_key(KeyEvent::new(KeyCode::Insert, KeyModifiers::CONTROL))
         );
         assert_eq!(overlay.view.take_pending_copy().as_deref(), Some("alpha"));
-        assert!(!overlay.copy_mode);
+        assert!(overlay.copy_mode.is_none());
     }
 
     #[test]
     fn copy_mode_esc_exits_without_copying() {
-        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
-            lines: vec![Line::from("alpha")],
-        })]);
+        let mut overlay = transcript_overlay(vec![user_cell("alpha")]);
         overlay.enter_copy_mode();
 
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Esc)));
 
-        assert!(!overlay.copy_mode);
+        assert!(overlay.copy_mode.is_none());
         assert_eq!(overlay.highlight_cell, None);
         assert!(overlay.view.take_pending_copy().is_none());
         assert!(!overlay.wants_esc());
@@ -2618,13 +2732,35 @@ mod tests {
 
     #[test]
     fn copy_mode_ignores_unrelated_keys() {
-        let mut overlay = transcript_overlay(vec![Arc::new(TestCell {
-            lines: vec![Line::from("alpha")],
-        })]);
+        let mut overlay = transcript_overlay(vec![user_cell("alpha")]);
         overlay.enter_copy_mode();
 
         assert!(!overlay.copy_mode_handle_key(plain_key(KeyCode::Char('x'))));
-        assert!(overlay.copy_mode);
+        assert!(overlay.copy_mode.is_some());
+    }
+
+    #[test]
+    fn copy_mode_hints_show_current_target_label_and_position() {
+        let mut overlay = transcript_overlay(vec![
+            user_cell("question"),
+            agent_cell("answer\n\n```\ncode line\n```\n"),
+        ]);
+        overlay.enter_copy_mode();
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::End)));
+
+        let area = Rect::new(0, 0, 80, 12);
+        let mut buf = Buffer::empty(area);
+        overlay.render(area, &mut buf);
+        let rendered: String = (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect();
+
+        assert!(rendered.contains("Code block"));
+        assert!(rendered.contains("3/3"));
     }
 
     #[test]
@@ -2633,9 +2769,7 @@ mod tests {
             Arc::new(TestCell {
                 lines: vec![Line::from("alpha")],
             }),
-            Arc::new(TestCell {
-                lines: vec![Line::from("beta0"), Line::from("beta1")],
-            }),
+            agent_cell("beta"),
         ]);
         overlay.enter_copy_mode();
 
@@ -2643,10 +2777,17 @@ mod tests {
         let mut buf = Buffer::empty(area);
         overlay.render(area, &mut buf);
 
-        // Layout: row 1 = "alpha" (cell 0), row 2 = inset blank, rows 3-4 =
-        // "beta0"/"beta1" (cell 1, highlighted).
-        assert!(!buf[(0, 1)].modifier.contains(Modifier::REVERSED));
-        assert!(buf[(0, 3)].modifier.contains(Modifier::REVERSED));
-        assert!(buf[(0, 4)].modifier.contains(Modifier::REVERSED));
+        let find_row = |needle: &str| {
+            (0..area.height).find(|&y| {
+                (0..area.width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains(needle)
+            })
+        };
+        let alpha_row = find_row("alpha").expect("alpha row");
+        let beta_row = find_row("beta").expect("beta row");
+        assert!(!buf[(0, alpha_row)].modifier.contains(Modifier::REVERSED));
+        assert!(buf[(0, beta_row)].modifier.contains(Modifier::REVERSED));
     }
 }
