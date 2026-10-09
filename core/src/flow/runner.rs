@@ -105,11 +105,12 @@ impl FlowRunner for SessionFlowRunner {
         args: serde_json::Map<String, serde_json::Value>,
     ) -> FlowRunFuture<'a> {
         Box::pin(async move {
-            let turn_context = self.router.lookup(turn_id).ok_or_else(|| {
-                FlowRunError::InactiveTurn {
-                    turn_id: turn_id.to_string(),
-                }
-            })?;
+            let turn_context =
+                self.router
+                    .lookup(turn_id)
+                    .ok_or_else(|| FlowRunError::InactiveTurn {
+                        turn_id: turn_id.to_string(),
+                    })?;
             let session = {
                 let session = lock(&self.session);
                 session.as_ref().and_then(|weak| weak.upgrade())

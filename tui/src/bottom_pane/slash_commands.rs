@@ -180,14 +180,15 @@ pub(crate) fn find_slash_command(
     }
 
     let tiers_enabled = flags.service_tier_commands_enabled;
-    if let Some(command) = tiers_enabled.then(|| {
-        service_tier_commands
-            .iter()
-            .find(|command| command.name == name)
-            .cloned()
-            .map(SlashCommandItem::ServiceTier)
-    })
-    .flatten()
+    if let Some(command) = tiers_enabled
+        .then(|| {
+            service_tier_commands
+                .iter()
+                .find(|command| command.name == name)
+                .cloned()
+                .map(SlashCommandItem::ServiceTier)
+        })
+        .flatten()
     {
         return Some(command);
     }

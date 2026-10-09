@@ -338,8 +338,8 @@ mod goal_status;
 use self::goal_status::GoalStatusState;
 #[cfg(test)]
 use self::goal_status::goal_status_indicator_from_app_goal;
-mod goal_menu;
 mod flows;
+mod goal_menu;
 use self::flows::FlowRuns;
 mod input_queue;
 use self::input_queue::InputQueueState;
@@ -1494,7 +1494,10 @@ impl ChatWidget {
     /// M4 `/flows`: render the per-session flow run registry (read-only).
     pub(crate) fn add_flows_output(&mut self) {
         if self.flow_runs.is_empty() {
-            self.add_info_message("No flow runs in this session.".to_string(), /*hint*/ None);
+            self.add_info_message(
+                "No flow runs in this session.".to_string(),
+                /*hint*/ None,
+            );
             return;
         }
         let mut lines = vec![ratatui::text::Line::from(format!(

@@ -210,7 +210,10 @@ impl DatabaseConnectionsView {
     }
 
     fn build_delete_confirmation_rows(&self, name: &str) -> Vec<GenericDisplayRow> {
-        let selected = self.delete_confirmation.as_ref().and_then(|d| d.state.selected_idx);
+        let selected = self
+            .delete_confirmation
+            .as_ref()
+            .and_then(|d| d.state.selected_idx);
         [format!("Delete '{name}'"), "Go back".to_string()]
             .into_iter()
             .enumerate()
@@ -245,9 +248,7 @@ impl DatabaseConnectionsView {
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Database Connections".bold()));
         if self.delete_confirmation.is_some() {
-            header.push(Line::from(
-                "Confirm deletion. This cannot be undone.".dim(),
-            ));
+            header.push(Line::from("Confirm deletion. This cannot be undone.".dim()));
         } else {
             header.push(Line::from(
                 "←→ switch provider tab · ↑↓ navigate · Enter primary · Tab edit · a add · d/Del delete · Esc cancel."
@@ -599,12 +600,14 @@ fn provider_label(provider: DatabaseProviderName) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ody_database::config::{DatabaseConnectionConfig, DatabaseProviderName};
-    use tokio::sync::mpsc;
     use crate::keymap::RuntimeKeymap;
+    use ody_database::config::{DatabaseConnectionConfig, DatabaseProviderName};
     use std::collections::HashMap;
+    use tokio::sync::mpsc;
 
-    fn make_view(config: DatabaseConfig) -> (DatabaseConnectionsView, mpsc::UnboundedReceiver<AppEvent>) {
+    fn make_view(
+        config: DatabaseConfig,
+    ) -> (DatabaseConnectionsView, mpsc::UnboundedReceiver<AppEvent>) {
         let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
         let view = DatabaseConnectionsView::new(
             config,

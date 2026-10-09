@@ -140,10 +140,16 @@ async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
             let page = Box::pin(app_server.thread_turns_page(thread_id, cursor.take()))
                 .await
                 .expect("probe page");
-            eprintln!("DEBUG pre-resume probe page len={} next={:?}", page.data.len(), page.next_cursor);
+            eprintln!(
+                "DEBUG pre-resume probe page len={} next={:?}",
+                page.data.len(),
+                page.next_cursor
+            );
             total += page.data.len();
             cursor = page.next_cursor;
-            if cursor.is_none() { break; }
+            if cursor.is_none() {
+                break;
+            }
         }
         eprintln!("DEBUG pre-resume probe total={total}");
     }
@@ -151,9 +157,16 @@ async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
     let started = Box::pin(app_server.resume_thread(config, thread_id))
         .await
         .expect("resume synthetic rollout");
-    eprintln!("DEBUG turns={} ids={:?} pag={:?}", started.turns.len(),
-        started.turns.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
-        app_server.history_pagination.get(&thread_id));
+    eprintln!(
+        "DEBUG turns={} ids={:?} pag={:?}",
+        started.turns.len(),
+        started
+            .turns
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+        app_server.history_pagination.get(&thread_id)
+    );
     assert_eq!(started.turns.len(), 5, "initial page is capped at 5 turns");
     assert!(
         app_server.has_older_history(thread_id),
@@ -233,10 +246,7 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
     assert_eq!(store.turns.len(), 30);
     let ids: Vec<&str> = store.turns.iter().map(|turn| turn.id.as_str()).collect();
     let expected: Vec<String> = (0..30).map(|i| format!("turn-{i:03}")).collect();
-    assert_eq!(
-        ids,
-        expected.iter().map(String::as_str).collect::<Vec<_>>()
-    );
+    assert_eq!(ids, expected.iter().map(String::as_str).collect::<Vec<_>>());
     Ok(())
 }
 

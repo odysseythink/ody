@@ -14,10 +14,10 @@ use super::slash_commands::ServiceTierCommand;
 use super::slash_commands::SkillSlashCommand;
 use super::slash_commands::SlashCommandItem;
 use super::slash_commands::commands_for_input;
-use ody_core_skills::model::SkillMetadata;
 use crate::render::Insets;
 use crate::render::RectExt;
 use crate::slash_command::SlashCommand;
+use ody_core_skills::model::SkillMetadata;
 
 // Hide alias commands in the default popup list so each unique action appears once.
 // `quit` is an alias of `exit`, and `btw` is an alias of `side`, so we skip

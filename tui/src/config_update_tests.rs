@@ -270,7 +270,10 @@ fn build_web_search_provider_config_edits_clears_optional_fields() {
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].key_path, "services.webSearch.providers.duckduckgo");
     let value = edits[0].value.as_object().expect("preset object");
-    assert_eq!(value.get("provider"), Some(&serde_json::Value::String("duckduckgo".to_string())));
+    assert_eq!(
+        value.get("provider"),
+        Some(&serde_json::Value::String("duckduckgo".to_string()))
+    );
     assert_eq!(value.get("api_key"), None);
     assert_eq!(value.get("timeout_ms"), None);
     assert_eq!(value.get("options"), None);

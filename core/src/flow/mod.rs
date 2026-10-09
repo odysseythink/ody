@@ -85,12 +85,12 @@ pub(crate) use runner::SessionFlowRunner;
 pub(crate) use host::SessionFlowAgentHost;
 #[cfg(feature = "flow-starlark")]
 pub(crate) use star::StarlarkFlowRuntime;
-#[cfg(feature = "flow-v8")]
-pub(crate) use v8::V8FlowRuntime;
 pub(crate) use trigger::flow_args_from_input;
 pub(crate) use trigger::partition_flow_skills;
 pub(crate) use trigger::run_flow_skills_in_turn;
 pub(crate) use trigger::run_one_flow_skill;
+#[cfg(feature = "flow-v8")]
+pub(crate) use v8::V8FlowRuntime;
 
 #[cfg(test)]
 #[path = "flow_tests.rs"]
@@ -126,11 +126,19 @@ pub(crate) enum FlowError {
     /// A template had an unterminated `${{` or `${`.
     UnterminatedTemplate { step: String },
     /// A dotted path segment did not resolve inside the bound JSON value.
-    MissingPath { name: String, path: String, step: String },
+    MissingPath {
+        name: String,
+        path: String,
+        step: String,
+    },
     /// A pipeline expression evaluated to a non-array value.
     NotAnArray { expr: String, step: String },
     /// A single batch exceeded [`FLOW_BATCH_LIMIT`].
-    LimitExceeded { limit: usize, actual: usize, step: String },
+    LimitExceeded {
+        limit: usize,
+        actual: usize,
+        step: String,
+    },
     /// An `output` name was bound twice.
     DuplicateBinding { name: String, step: String },
     /// An `output` name collided with a reserved root (`args` / `item`).
@@ -150,25 +158,44 @@ impl fmt::Display for FlowError {
                 write!(f, "flow step '{step}': unknown binding '{name}'")
             }
             FlowError::InvalidExpression { expr, step } => {
-                write!(f, "flow step '{step}': invalid template expression '{expr}'")
+                write!(
+                    f,
+                    "flow step '{step}': invalid template expression '{expr}'"
+                )
             }
             FlowError::UnterminatedTemplate { step } => {
                 write!(f, "flow step '{step}': unterminated template expression")
             }
             FlowError::MissingPath { name, path, step } => {
-                write!(f, "flow step '{step}': '{path}' not found in binding '{name}'")
+                write!(
+                    f,
+                    "flow step '{step}': '{path}' not found in binding '{name}'"
+                )
             }
             FlowError::NotAnArray { expr, step } => {
-                write!(f, "flow step '{step}': pipeline expression '{expr}' is not an array")
+                write!(
+                    f,
+                    "flow step '{step}': pipeline expression '{expr}' is not an array"
+                )
             }
-            FlowError::LimitExceeded { limit, actual, step } => {
-                write!(f, "flow step '{step}': batch of {actual} exceeds the limit of {limit}")
+            FlowError::LimitExceeded {
+                limit,
+                actual,
+                step,
+            } => {
+                write!(
+                    f,
+                    "flow step '{step}': batch of {actual} exceeds the limit of {limit}"
+                )
             }
             FlowError::DuplicateBinding { name, step } => {
                 write!(f, "flow step '{step}': output '{name}' is already bound")
             }
             FlowError::ReservedBinding { name, step } => {
-                write!(f, "flow step '{step}': output '{name}' uses a reserved name")
+                write!(
+                    f,
+                    "flow step '{step}': output '{name}' uses a reserved name"
+                )
             }
             FlowError::Agent { step, source } => {
                 write!(f, "flow step '{step}': agent failed: {source}")
@@ -207,9 +234,17 @@ pub(crate) enum FlowProgress {
     /// A phase started; `total_steps` is its top-level step count.
     PhaseBegin { phase_id: String, total_steps: u32 },
     /// Step `step_index` (1-based) of `phase_id` completed.
-    StepCompleted { phase_id: String, step_index: u32, total_steps: u32 },
+    StepCompleted {
+        phase_id: String,
+        step_index: u32,
+        total_steps: u32,
+    },
     /// A phase ended; on failure `completed_steps` < `total_steps`.
-    PhaseEnd { phase_id: String, completed_steps: u32, total_steps: u32 },
+    PhaseEnd {
+        phase_id: String,
+        completed_steps: u32,
+        total_steps: u32,
+    },
     /// Free-form progress line from a script runtime (M3: `flow.star`
     /// `log()`; `workflow.js` in M3.2). Script `phase(title)` calls surface
     /// as `PhaseBegin`/`PhaseEnd` pairs instead (see the module docs).

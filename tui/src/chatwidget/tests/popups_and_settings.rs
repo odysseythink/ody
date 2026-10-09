@@ -3467,7 +3467,10 @@ async fn websearch_provider_enter_switches_provider() {
 
     match rx.try_recv() {
         Ok(AppEvent::SwitchWebSearchProvider { provider }) => {
-            assert_eq!(provider, ody_web_search::config::WebSearchProviderName::Duckduckgo);
+            assert_eq!(
+                provider,
+                ody_web_search::config::WebSearchProviderName::Duckduckgo
+            );
         }
         other => panic!("expected SwitchWebSearchProvider, got {other:?}"),
     }
@@ -3495,7 +3498,10 @@ async fn websearch_provider_tab_opens_config_form() {
 
     match rx.try_recv() {
         Ok(AppEvent::WebSearchProviderSelected { provider }) => {
-            assert_eq!(provider, ody_web_search::config::WebSearchProviderName::Duckduckgo);
+            assert_eq!(
+                provider,
+                ody_web_search::config::WebSearchProviderName::Duckduckgo
+            );
         }
         other => panic!("expected WebSearchProviderSelected, got {other:?}"),
     }

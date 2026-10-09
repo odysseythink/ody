@@ -105,9 +105,10 @@ fn prefill_existing_config_for_matching_provider() {
         rows.iter().map(|r| r.name.clone()).collect::<Vec<_>>()
     );
     assert!(rows.iter().any(|r| r.name.contains("Timeout (ms): 12345")));
-    assert!(rows
-        .iter()
-        .any(|r| r.name.contains("Base URL: https://bing.example")));
+    assert!(
+        rows.iter()
+            .any(|r| r.name.contains("Base URL: https://bing.example"))
+    );
 }
 
 #[test]
@@ -136,7 +137,8 @@ fn saving_valid_config_emits_persist_event() {
         "base_url".to_string(),
         "https://searx.example/search".to_string(),
     );
-    view.values.insert("timeout_ms".to_string(), "5000".to_string());
+    view.values
+        .insert("timeout_ms".to_string(), "5000".to_string());
     // Selected row starts at timeout_ms (0). Move to base_url (1), then save (2).
     view.move_down();
     view.move_down();
@@ -201,7 +203,8 @@ fn invalid_timeout_format_shows_error() {
 #[test]
 fn invalid_timeout_range_shows_error() {
     let (mut view, mut rx) = make_view(WebSearchProviderName::Bing, None);
-    view.values.insert("timeout_ms".to_string(), "500".to_string());
+    view.values
+        .insert("timeout_ms".to_string(), "500".to_string());
     for _ in 0..3 {
         view.move_down();
     }
@@ -252,7 +255,8 @@ fn cancel_closes_form_without_event() {
 #[test]
 fn empty_api_key_is_not_persisted() {
     let (mut view, mut rx) = make_view(WebSearchProviderName::Bing, None);
-    view.values.insert("timeout_ms".to_string(), "10000".to_string());
+    view.values
+        .insert("timeout_ms".to_string(), "10000".to_string());
     // Bing rows: api_key (0), timeout_ms (1), base_url (2), save (3).
     for _ in 0..3 {
         view.move_down();

@@ -29,9 +29,9 @@ use std::sync::mpsc;
 use std::thread;
 
 use anyhow::Context as _;
+use futures::StreamExt;
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use starlark::any::ProvidesStaticType;
 use starlark::environment::GlobalsBuilder;
 use starlark::environment::Module;
@@ -184,7 +184,14 @@ fn fan_out_via_bridge(
     let mut replies = Vec::with_capacity(prompts.len());
     for prompt in prompts {
         let (reply, rx) = oneshot::channel();
-        send_request(bridge, BridgeRequest::Agent { prompt, schema: None, reply })?;
+        send_request(
+            bridge,
+            BridgeRequest::Agent {
+                prompt,
+                schema: None,
+                reply,
+            },
+        )?;
         replies.push(rx);
     }
     replies.into_iter().map(await_reply).collect()
@@ -251,7 +258,14 @@ fn flow_builtins(builder: &mut GlobalsBuilder) {
         let bridge = bridge(eval)?;
         let schema = schema.map(schema_to_json).transpose()?;
         let (reply, rx) = oneshot::channel();
-        send_request(bridge, BridgeRequest::Agent { prompt: prompt.to_string(), schema, reply })?;
+        send_request(
+            bridge,
+            BridgeRequest::Agent {
+                prompt: prompt.to_string(),
+                schema,
+                reply,
+            },
+        )?;
         await_reply(rx)
     }
 
@@ -291,7 +305,9 @@ fn flow_builtins(builder: &mut GlobalsBuilder) {
     fn phase(title: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
         let bridge = bridge(eval)?;
         // Fire-and-forget; a closed bridge means the run was aborted.
-        let _ = bridge.tx.send(BridgeRequest::Phase { title: title.to_string() });
+        let _ = bridge.tx.send(BridgeRequest::Phase {
+            title: title.to_string(),
+        });
         Ok(NoneType)
     }
 
@@ -299,7 +315,9 @@ fn flow_builtins(builder: &mut GlobalsBuilder) {
     fn log(msg: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
         let bridge = bridge(eval)?;
         // Fire-and-forget; a closed bridge means the run was aborted.
-        let _ = bridge.tx.send(BridgeRequest::Log { message: msg.to_string() });
+        let _ = bridge.tx.send(BridgeRequest::Log {
+            message: msg.to_string(),
+        });
         Ok(NoneType)
     }
 }
@@ -321,8 +339,10 @@ fn json_to_starlark<'v>(heap: Heap<'v>, value: &serde_json::Value) -> anyhow::Re
         }
         serde_json::Value::String(s) => heap.alloc(s.as_str()),
         serde_json::Value::Array(items) => {
-            let values: anyhow::Result<Vec<Value<'v>>> =
-                items.iter().map(|item| json_to_starlark(heap, item)).collect();
+            let values: anyhow::Result<Vec<Value<'v>>> = items
+                .iter()
+                .map(|item| json_to_starlark(heap, item))
+                .collect();
             values?.alloc_value(heap)
         }
         serde_json::Value::Object(map) => {
@@ -520,7 +540,8 @@ fn eval_module_with_bridge(
         json_to_starlark(module.heap(), args).map_err(|e| format!("args conversion: {e}"))?;
     module.set("args", args_value);
     eval.extra = Some(&bridge);
-    eval.eval_module(ast, globals).map_err(|e| format!("flow.star eval: {e}"))?;
+    eval.eval_module(ast, globals)
+        .map_err(|e| format!("flow.star eval: {e}"))?;
     module
         .get("result")
         .map(|value| value.to_json_value())

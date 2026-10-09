@@ -30,10 +30,10 @@ use uuid::Uuid;
 use crate::legacy_core::config::Config;
 use ody_config::config_toml::DesignReviewToml;
 use ody_config::config_toml::UsabilityLensToml;
-use ody_web_search::config::WebSearchProviderConfig;
-use ody_web_search::config::WebSearchProviderName;
 use ody_database::config::DatabaseConfig;
 use ody_database::config::DatabaseConnectionConfig;
+use ody_web_search::config::WebSearchProviderConfig;
+use ody_web_search::config::WebSearchProviderName;
 
 pub(crate) fn replace_config_value(key_path: impl Into<String>, value: JsonValue) -> ConfigEdit {
     ConfigEdit {
@@ -141,21 +141,21 @@ pub(crate) fn build_database_delete_edits(
     current_config: Option<&DatabaseConfig>,
 ) -> Vec<ConfigEdit> {
     let Some(current) = current_config else {
-        return vec![clear_config_value(format!("services.database.connections.{name}"))];
+        return vec![clear_config_value(format!(
+            "services.database.connections.{name}"
+        ))];
     };
 
-    let mut remaining: Vec<&String> = current
-        .connections
-        .keys()
-        .filter(|k| *k != name)
-        .collect();
+    let mut remaining: Vec<&String> = current.connections.keys().filter(|k| *k != name).collect();
 
     if remaining.is_empty() {
         // No connections left; drop the whole [services.database] table.
         return vec![clear_config_value("services.database")];
     }
 
-    let mut edits = vec![clear_config_value(format!("services.database.connections.{name}"))];
+    let mut edits = vec![clear_config_value(format!(
+        "services.database.connections.{name}"
+    ))];
     if current.primary == name {
         remaining.sort();
         edits.push(replace_config_value(

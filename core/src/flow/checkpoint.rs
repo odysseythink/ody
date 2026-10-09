@@ -52,14 +52,21 @@ pub(crate) fn prompt_key(prompt: &str) -> String {
 
 fn sanitize_skill_name(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
 fn checkpoint_path(ody_home: &Path, skill_name: &str, fingerprint: &str) -> PathBuf {
-    ody_home
-        .join("flow-checkpoints")
-        .join(format!("{}-{fingerprint}.json", sanitize_skill_name(skill_name)))
+    ody_home.join("flow-checkpoints").join(format!(
+        "{}-{fingerprint}.json",
+        sanitize_skill_name(skill_name)
+    ))
 }
 
 /// Write-through checkpoint store for one (skill, plan) run file.
@@ -103,8 +110,10 @@ impl CheckpointStore {
     pub(crate) async fn record(&self, prompt: &str, output: &str) {
         let rendered = {
             let mut file = self.file.lock().await;
-            file.entries
-                .insert(prompt_key(prompt), serde_json::Value::String(output.to_string()));
+            file.entries.insert(
+                prompt_key(prompt),
+                serde_json::Value::String(output.to_string()),
+            );
             serde_json::to_string(&*file).expect("checkpoint file serializes")
         };
         let tmp = self.path.with_extension("json.tmp");

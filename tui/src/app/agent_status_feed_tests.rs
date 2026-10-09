@@ -66,21 +66,19 @@ fn agent_status_uses_bounded_buffered_activity() {
 #[test]
 fn agent_status_summarizes_flow_phase_progress() {
     let mut store = ThreadEventStore::new(/*capacity*/ 8);
-    store.push_notification(ServerNotification::ItemStarted(
-        ItemStartedNotification {
-            item: ThreadItem::FlowPhase {
-                id: "flow-run-0:design".to_string(),
-                flow_name: Some("make-game".to_string()),
-                phase_id: "design".to_string(),
-                total_steps: 2,
-                completed_steps: 0,
-                finished: false,
-            },
-            thread_id: "thread-child".to_string(),
-            turn_id: "turn-1".to_string(),
-            started_at_ms: 1,
+    store.push_notification(ServerNotification::ItemStarted(ItemStartedNotification {
+        item: ThreadItem::FlowPhase {
+            id: "flow-run-0:design".to_string(),
+            flow_name: Some("make-game".to_string()),
+            phase_id: "design".to_string(),
+            total_steps: 2,
+            completed_steps: 0,
+            finished: false,
         },
-    ));
+        thread_id: "thread-child".to_string(),
+        turn_id: "turn-1".to_string(),
+        started_at_ms: 1,
+    }));
     store.push_notification(ServerNotification::ItemCompleted(
         ItemCompletedNotification {
             item: ThreadItem::FlowPhase {

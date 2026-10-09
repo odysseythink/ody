@@ -16,11 +16,11 @@ use crate::terminal_visualization_instructions::with_terminal_visualization_inst
 use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
-use history::ThreadHistoryPagination;
-use history::seed_history_pagination;
 pub(crate) use history::INITIAL_HISTORY_TURN_LIMIT;
+use history::ThreadHistoryPagination;
 #[cfg(test)]
 pub(crate) use history::history_test_support;
+use history::seed_history_pagination;
 use ody_app_server_client::AppServerClient;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_client::AppServerPath;
@@ -46,8 +46,8 @@ use ody_app_server_protocol::ReviewStartParams;
 use ody_app_server_protocol::ReviewStartResponse;
 use ody_app_server_protocol::ReviewTarget;
 use ody_app_server_protocol::SkillsListParams;
-use ody_app_server_protocol::SortDirection;
 use ody_app_server_protocol::SkillsListResponse;
+use ody_app_server_protocol::SortDirection;
 use ody_app_server_protocol::Thread;
 use ody_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
 use ody_app_server_protocol::ThreadApproveGuardianDeniedActionResponse;
@@ -103,8 +103,8 @@ use ody_app_server_protocol::ThreadUnsubscribeParams;
 use ody_app_server_protocol::ThreadUnsubscribeResponse;
 use ody_app_server_protocol::Turn;
 use ody_app_server_protocol::TurnInterruptParams;
-use ody_app_server_protocol::TurnItemsView;
 use ody_app_server_protocol::TurnInterruptResponse;
+use ody_app_server_protocol::TurnItemsView;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::TurnSteerParams;
@@ -2510,11 +2510,7 @@ mod tests {
     #[test]
     fn history_pagination_unsupported_detects_legacy_servers() {
         let cases = [
-            (
-                JSONRPC_METHOD_NOT_FOUND,
-                "method not found",
-                true,
-            ),
+            (JSONRPC_METHOD_NOT_FOUND, "method not found", true),
             (
                 JSONRPC_INVALID_PARAMS,
                 "thread/resume.excludeTurns requires experimentalApi capability",
@@ -2645,9 +2641,10 @@ mod tests {
         assert_eq!(ids, vec!["turn-old", "turn-new"]);
 
         response.initial_turns_page = None;
-        let started = started_thread_from_resume_response(response, &config, ThreadParamsMode::Remote)
-            .await
-            .expect("legacy resume response should map");
+        let started =
+            started_thread_from_resume_response(response, &config, ThreadParamsMode::Remote)
+                .await
+                .expect("legacy resume response should map");
         let ids: Vec<&str> = started.turns.iter().map(|turn| turn.id.as_str()).collect();
         assert_eq!(ids, vec!["turn-full"]);
     }

@@ -170,8 +170,13 @@ impl DatabaseConnectionFormView {
         let prefix = if selected == Some(idx) { '›' } else { ' ' };
         let name_value = self.values.get(CONNECTION_KEY).cloned().unwrap_or_default();
         rows.push(GenericDisplayRow {
-            name: format!("{prefix} Name: {}", Self::display_or_placeholder(&name_value)),
-            description: Some("Connection preset name used in /database and DatabaseQuery.".to_string()),
+            name: format!(
+                "{prefix} Name: {}",
+                Self::display_or_placeholder(&name_value)
+            ),
+            description: Some(
+                "Connection preset name used in /database and DatabaseQuery.".to_string(),
+            ),
             ..Default::default()
         });
 
@@ -189,7 +194,11 @@ impl DatabaseConnectionFormView {
 
         // Save row.
         let save_idx = self.fields.len() + 2;
-        let prefix = if selected == Some(save_idx) { '›' } else { ' ' };
+        let prefix = if selected == Some(save_idx) {
+            '›'
+        } else {
+            ' '
+        };
         rows.push(GenericDisplayRow {
             name: format!("{prefix} {SAVE_LABEL}"),
             description: Some(SAVE_DESCRIPTION.to_string()),
@@ -300,7 +309,11 @@ impl DatabaseConnectionFormView {
             return;
         };
         let trimmed = text.trim().to_string();
-        let value = if trimmed.is_empty() { String::new() } else { trimmed };
+        let value = if trimmed.is_empty() {
+            String::new()
+        } else {
+            trimmed
+        };
         self.values.insert(key, value);
     }
 
@@ -328,7 +341,9 @@ impl DatabaseConnectionFormView {
 
         if let Some(existing) = &self.existing_name {
             if *existing != connection {
-                return Err("Cannot rename an existing connection; delete and recreate it.".to_string());
+                return Err(
+                    "Cannot rename an existing connection; delete and recreate it.".to_string(),
+                );
             }
         }
 
@@ -354,7 +369,11 @@ impl DatabaseConnectionFormView {
 
         let database = self.values.get("database").cloned().unwrap_or_default();
         let username = self.values.get("username").cloned().unwrap_or_default();
-        let password = self.values.get("password").filter(|v| !v.is_empty()).cloned();
+        let password = self
+            .values
+            .get("password")
+            .filter(|v| !v.is_empty())
+            .cloned();
 
         let mut options = HashMap::new();
         for field in &self.fields {
@@ -609,15 +628,18 @@ impl Renderable for DatabaseConnectionFormView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keymap::RuntimeKeymap;
     use ody_database::config::DatabaseProviderName;
     use tokio::sync::mpsc;
-    use crate::keymap::RuntimeKeymap;
 
     fn make_view(
         provider: DatabaseProviderName,
         existing_name: Option<&str>,
         current: Option<DatabaseConnectionConfig>,
-    ) -> (DatabaseConnectionFormView, mpsc::UnboundedReceiver<AppEvent>) {
+    ) -> (
+        DatabaseConnectionFormView,
+        mpsc::UnboundedReceiver<AppEvent>,
+    ) {
         let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
         let view = DatabaseConnectionFormView::new(
             provider,
@@ -652,14 +674,21 @@ mod tests {
         view.scroll_state.selected_idx = Some(view.total_rows() - 1);
         press_enter(&mut view);
         assert!(!view.is_complete());
-        assert!(view.error_message.as_ref().unwrap().contains("Connection name"));
+        assert!(
+            view.error_message
+                .as_ref()
+                .unwrap()
+                .contains("Connection name")
+        );
     }
 
     #[test]
     fn saving_valid_connection_sends_persist_event() {
         let (mut view, mut rx) = make_view(DatabaseProviderName::Sqlite, None, None);
-        view.values.insert(CONNECTION_KEY.to_string(), "local".to_string());
-        view.values.insert("host".to_string(), "/tmp/test.db".to_string());
+        view.values
+            .insert(CONNECTION_KEY.to_string(), "local".to_string());
+        view.values
+            .insert("host".to_string(), "/tmp/test.db".to_string());
         view.scroll_state.selected_idx = Some(view.total_rows() - 1);
         press_enter(&mut view);
         assert!(view.is_complete());

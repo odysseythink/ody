@@ -164,7 +164,11 @@ impl super::AppServerSession {
             scanned_turns = scanned_turns.saturating_add(page.data.len());
             let older: Vec<Turn> = page.data.into_iter().rev().collect();
             rendered_rows = rendered_rows.saturating_add(rendered_turns_rows(
-                cwd, &older, visibility, render_mode, width,
+                cwd,
+                &older,
+                visibility,
+                render_mode,
+                width,
             ));
             turns.splice(0..0, older);
         }

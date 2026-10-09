@@ -82,11 +82,7 @@ mod tests {
     fn all_variants_have_expected_frame_count() {
         assert_eq!(ALL_VARIANTS.len(), 12);
         for (idx, variant) in ALL_VARIANTS.iter().enumerate() {
-            assert_eq!(
-                variant.len(),
-                36,
-                "variant {idx} must have 36 frames"
-            );
+            assert_eq!(variant.len(), 36, "variant {idx} must have 36 frames");
         }
     }
 

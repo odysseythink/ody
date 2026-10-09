@@ -422,11 +422,7 @@ mod tests {
     }
 
     impl crate::tools::staged_write::StagedWriteSink for RecordingSink {
-        fn staged_write(
-            &self,
-            _session_id: &str,
-            write: crate::tools::staged_write::StagedWrite,
-        ) {
+        fn staged_write(&self, _session_id: &str, write: crate::tools::staged_write::StagedWrite) {
             self.writes.lock().expect("lock").push(write);
         }
     }

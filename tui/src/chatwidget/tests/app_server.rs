@@ -1080,7 +1080,9 @@ async fn streamed_agent_deltas_are_coalesced_until_throttled_flush() {
     assert!(chat.stream_delta_buffer.is_empty());
     assert!(chat.stream_delta_flush_after.is_none());
     assert!(
-        chat.stream_controller.as_ref().is_some_and(|c| c.queued_lines() > 0),
+        chat.stream_controller
+            .as_ref()
+            .is_some_and(|c| c.queued_lines() > 0),
         "the coalesced source should have produced queued lines after flush"
     );
 

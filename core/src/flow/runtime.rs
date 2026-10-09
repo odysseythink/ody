@@ -43,7 +43,9 @@ impl FlowRuntime for YamlFlowRuntime {
     fn validate(&self, source: &str) -> Result<FlowPlanSource, FlowError> {
         ody_core_skills::parse_flow_plan(source)
             .map(FlowPlanSource::Yaml)
-            .map_err(|err| FlowError::Parse { reason: err.to_string() })
+            .map_err(|err| FlowError::Parse {
+                reason: err.to_string(),
+            })
     }
 
     async fn run<H: FlowAgentHost>(
@@ -151,104 +153,126 @@ fn run_step<'a, H: FlowAgentHost>(
 ) -> BoxFuture<'a, Result<Value, FlowError>> {
     Box::pin(async move {
         match step {
-        FlowStep::Agent { agent, output, schema } => {
-            let rendered = render_template(agent, &TemplateContext { bindings, item: None }, label)?;
-            // M2.4/M4.1: schema instruction injection lives inside the
-            // shared run_agent_text; the schema participates in the
-            // checkpoint key through the rendered prompt.
-            let value = run_one_agent(host, rendered, label, schema.as_ref()).await?;
-            if let Some(name) = output {
-                bind_output(bindings, name, value.clone(), label)?;
-            }
-            Ok(value)
-        }
-        FlowStep::Pipeline { pipeline, each, output } => {
-            let items = evaluate_pipeline_items(pipeline, bindings, label)?;
-            if items.len() > FLOW_BATCH_LIMIT {
-                return Err(FlowError::LimitExceeded {
-                    limit: FLOW_BATCH_LIMIT,
-                    actual: items.len(),
-                    step: label.to_string(),
-                });
-            }
-            // Render every item prompt upfront against the shared snapshot so
-            // all items observe identical bindings regardless of completion order.
-            let mut prompts = Vec::with_capacity(items.len());
-            for item in &items {
-                prompts.push(render_template(
-                    each,
-                    &TemplateContext { bindings, item: Some(item) },
-                    label,
-                )?);
-            }
-            let results = run_agent_batch(prompts, host, label).await?;
-            let value = Value::Array(results);
-            if let Some(name) = output {
-                bind_output(bindings, name, value.clone(), label)?;
-            }
-            Ok(value)
-        }
-        FlowStep::Parallel { parallel, output } => {
-            if parallel.len() > FLOW_BATCH_LIMIT {
-                return Err(FlowError::LimitExceeded {
-                    limit: FLOW_BATCH_LIMIT,
-                    actual: parallel.len(),
-                    step: label.to_string(),
-                });
-            }
-            // Children observe the binding snapshot taken before the group
-            // starts; their `output`s merge only after all children succeed.
-            let snapshot = bindings.clone();
-            let mut merged: Vec<Option<(Value, serde_json::Map<String, Value>)>> =
-                vec![None; parallel.len()];
-            let mut pending: Vec<
-                BoxFuture<'_, Result<(usize, Value, serde_json::Map<String, Value>), FlowError>>,
-            > = Vec::with_capacity(parallel.len());
-            for (index, child) in parallel.iter().enumerate() {
-                let child_label = format!("{label} child {}", index + 1);
-                let child_snapshot = snapshot.clone();
-                pending.push(Box::pin(async move {
-                    let mut child_bindings = child_snapshot;
-                    let value = run_step(child, &mut child_bindings, host, &child_label).await?;
-                    Ok((index, value, child_bindings))
-                }));
-            }
-            while !pending.is_empty() {
-                let (result, _, remaining) = select_all(pending).await;
-                pending = remaining;
-                // On error the remaining futures are dropped here, which
-                // cancels in-flight children (short-circuit).
-                let (index, value, child_bindings) = result?;
-                merged[index] = Some((value, child_bindings));
-            }
-            let mut results = Vec::with_capacity(merged.len());
-            for (index, slot) in merged.into_iter().enumerate() {
-                let (value, child_bindings) =
-                    slot.expect("parallel child results are complete once all futures resolve");
-                for (name, bound) in child_bindings {
-                    // Merge only bindings the child added on top of the
-                    // pre-group snapshot; inherited names (including `args`
-                    // and earlier step outputs like `gdd`) are not child
-                    // outputs and must not be re-bound into the parent.
-                    if snapshot.contains_key(&name) {
-                        continue;
-                    }
-                    bind_output(
+            FlowStep::Agent {
+                agent,
+                output,
+                schema,
+            } => {
+                let rendered = render_template(
+                    agent,
+                    &TemplateContext {
                         bindings,
-                        &name,
-                        bound,
-                        &format!("{label} child {}", index + 1),
-                    )?;
+                        item: None,
+                    },
+                    label,
+                )?;
+                // M2.4/M4.1: schema instruction injection lives inside the
+                // shared run_agent_text; the schema participates in the
+                // checkpoint key through the rendered prompt.
+                let value = run_one_agent(host, rendered, label, schema.as_ref()).await?;
+                if let Some(name) = output {
+                    bind_output(bindings, name, value.clone(), label)?;
                 }
-                results.push(value);
+                Ok(value)
             }
-            let value = Value::Array(results);
-            if let Some(name) = output {
-                bind_output(bindings, name, value.clone(), label)?;
+            FlowStep::Pipeline {
+                pipeline,
+                each,
+                output,
+            } => {
+                let items = evaluate_pipeline_items(pipeline, bindings, label)?;
+                if items.len() > FLOW_BATCH_LIMIT {
+                    return Err(FlowError::LimitExceeded {
+                        limit: FLOW_BATCH_LIMIT,
+                        actual: items.len(),
+                        step: label.to_string(),
+                    });
+                }
+                // Render every item prompt upfront against the shared snapshot so
+                // all items observe identical bindings regardless of completion order.
+                let mut prompts = Vec::with_capacity(items.len());
+                for item in &items {
+                    prompts.push(render_template(
+                        each,
+                        &TemplateContext {
+                            bindings,
+                            item: Some(item),
+                        },
+                        label,
+                    )?);
+                }
+                let results = run_agent_batch(prompts, host, label).await?;
+                let value = Value::Array(results);
+                if let Some(name) = output {
+                    bind_output(bindings, name, value.clone(), label)?;
+                }
+                Ok(value)
             }
-            Ok(value)
+            FlowStep::Parallel { parallel, output } => {
+                if parallel.len() > FLOW_BATCH_LIMIT {
+                    return Err(FlowError::LimitExceeded {
+                        limit: FLOW_BATCH_LIMIT,
+                        actual: parallel.len(),
+                        step: label.to_string(),
+                    });
+                }
+                // Children observe the binding snapshot taken before the group
+                // starts; their `output`s merge only after all children succeed.
+                let snapshot = bindings.clone();
+                let mut merged: Vec<Option<(Value, serde_json::Map<String, Value>)>> =
+                    vec![None; parallel.len()];
+                let mut pending: Vec<
+                    BoxFuture<
+                        '_,
+                        Result<(usize, Value, serde_json::Map<String, Value>), FlowError>,
+                    >,
+                > = Vec::with_capacity(parallel.len());
+                for (index, child) in parallel.iter().enumerate() {
+                    let child_label = format!("{label} child {}", index + 1);
+                    let child_snapshot = snapshot.clone();
+                    pending.push(Box::pin(async move {
+                        let mut child_bindings = child_snapshot;
+                        let value =
+                            run_step(child, &mut child_bindings, host, &child_label).await?;
+                        Ok((index, value, child_bindings))
+                    }));
+                }
+                while !pending.is_empty() {
+                    let (result, _, remaining) = select_all(pending).await;
+                    pending = remaining;
+                    // On error the remaining futures are dropped here, which
+                    // cancels in-flight children (short-circuit).
+                    let (index, value, child_bindings) = result?;
+                    merged[index] = Some((value, child_bindings));
+                }
+                let mut results = Vec::with_capacity(merged.len());
+                for (index, slot) in merged.into_iter().enumerate() {
+                    let (value, child_bindings) =
+                        slot.expect("parallel child results are complete once all futures resolve");
+                    for (name, bound) in child_bindings {
+                        // Merge only bindings the child added on top of the
+                        // pre-group snapshot; inherited names (including `args`
+                        // and earlier step outputs like `gdd`) are not child
+                        // outputs and must not be re-bound into the parent.
+                        if snapshot.contains_key(&name) {
+                            continue;
+                        }
+                        bind_output(
+                            bindings,
+                            &name,
+                            bound,
+                            &format!("{label} child {}", index + 1),
+                        )?;
+                    }
+                    results.push(value);
+                }
+                let value = Value::Array(results);
+                if let Some(name) = output {
+                    bind_output(bindings, name, value.clone(), label)?;
+                }
+                Ok(value)
+            }
         }
-    }
     })
 }
 
@@ -260,16 +284,26 @@ fn evaluate_pipeline_items(
     bindings: &serde_json::Map<String, Value>,
     label: &str,
 ) -> Result<Vec<Value>, FlowError> {
-    let rendered = render_template(pipeline, &TemplateContext { bindings, item: None }, label)?;
+    let rendered = render_template(
+        pipeline,
+        &TemplateContext {
+            bindings,
+            item: None,
+        },
+        label,
+    )?;
     let value: Value =
         serde_json::from_str(rendered.trim()).map_err(|_| FlowError::NotAnArray {
             expr: pipeline.to_string(),
             step: label.to_string(),
         })?;
-    value.as_array().cloned().ok_or_else(|| FlowError::NotAnArray {
-        expr: pipeline.to_string(),
-        step: label.to_string(),
-    })
+    value
+        .as_array()
+        .cloned()
+        .ok_or_else(|| FlowError::NotAnArray {
+            expr: pipeline.to_string(),
+            step: label.to_string(),
+        })
 }
 
 /// Run one agent per prompt concurrently. Results are returned in prompt
@@ -396,10 +430,7 @@ fn validate_agent_output(
 
 /// Render the JSON-schema requirements appended to a schema-constrained
 /// agent's prompt.
-fn append_schema_instruction(
-    rendered: String,
-    schema: &serde_json::Map<String, Value>,
-) -> String {
+fn append_schema_instruction(rendered: String, schema: &serde_json::Map<String, Value>) -> String {
     let schema_text = serde_json::to_string_pretty(&Value::Object(schema.clone()))
         .unwrap_or_else(|_| "<unprintable schema>".to_string());
     format!(
@@ -419,10 +450,16 @@ fn bind_output(
     label: &str,
 ) -> Result<(), FlowError> {
     if name == "args" || name == "item" {
-        return Err(FlowError::ReservedBinding { name: name.to_string(), step: label.to_string() });
+        return Err(FlowError::ReservedBinding {
+            name: name.to_string(),
+            step: label.to_string(),
+        });
     }
     if bindings.contains_key(name) {
-        return Err(FlowError::DuplicateBinding { name: name.to_string(), step: label.to_string() });
+        return Err(FlowError::DuplicateBinding {
+            name: name.to_string(),
+            step: label.to_string(),
+        });
     }
     bindings.insert(name.to_string(), value);
     Ok(())

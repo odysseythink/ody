@@ -1381,8 +1381,8 @@ mod tests {
     use crate::app::test_support::make_test_app;
     use crate::app_server_session::AppServerSession;
     use crate::app_server_session::ThreadParamsMode;
-    use crate::config_update::build_design_review_edits;
     use crate::config_update::DesignReviewEditState;
+    use crate::config_update::build_design_review_edits;
     use crate::legacy_core::config::edit::ConfigEdit;
     use crate::test_support::PathBufExt;
     use ody_app_server_client::AppServerClient;

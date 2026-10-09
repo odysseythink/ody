@@ -61,7 +61,11 @@ impl FlowRuns {
                 finished,
             } => {
                 let run = self.run_mut(id, flow_name.as_deref());
-                match run.phases.iter_mut().find(|phase| phase.phase_id == *phase_id) {
+                match run
+                    .phases
+                    .iter_mut()
+                    .find(|phase| phase.phase_id == *phase_id)
+                {
                     Some(phase) => {
                         phase.completed_steps = *completed_steps;
                         phase.total_steps = *total_steps;
@@ -75,8 +79,14 @@ impl FlowRuns {
                     }),
                 }
             }
-            ThreadItem::FlowLog { id, flow_name, message } => {
-                self.run_mut(id, flow_name.as_deref()).logs.push(message.clone());
+            ThreadItem::FlowLog {
+                id,
+                flow_name,
+                message,
+            } => {
+                self.run_mut(id, flow_name.as_deref())
+                    .logs
+                    .push(message.clone());
             }
             _ => {}
         }
@@ -108,10 +118,7 @@ impl FlowRuns {
             } else {
                 format!(" · {}", run.flow_name)
             };
-            lines.push(Line::from(format!(
-                "● {call_id}{name} · {}",
-                run.status()
-            )));
+            lines.push(Line::from(format!("● {call_id}{name} · {}", run.status())));
             for phase in &run.phases {
                 let marker = if phase.finished { "✓" } else { "·" };
                 lines.push(Line::from(format!(
@@ -179,7 +186,10 @@ mod tests {
         runs.record_item(&log_item("run-3", 10, "planning"));
         runs.record_item(&log_item("run-3", 20, "reviewing"));
         let run = runs.0.get("run-3").expect("run registered");
-        assert_eq!(run.logs, vec!["planning".to_string(), "reviewing".to_string()]);
+        assert_eq!(
+            run.logs,
+            vec!["planning".to_string(), "reviewing".to_string()]
+        );
         assert_eq!(run.status(), "running");
     }
 
@@ -213,7 +223,9 @@ mod tests {
     #[test]
     fn unrelated_items_are_ignored() {
         let mut runs = FlowRuns::default();
-        runs.record_item(&ThreadItem::ContextCompaction { id: "compact-1".to_string() });
+        runs.record_item(&ThreadItem::ContextCompaction {
+            id: "compact-1".to_string(),
+        });
         assert!(runs.is_empty());
     }
 }

@@ -163,9 +163,7 @@ impl PlanArtifact {
         if let Ok(entries) = std::fs::read_dir(&products_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_file()
-                    || path.extension().and_then(|ext| ext.to_str()) != Some("md")
-                {
+                if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
@@ -525,14 +523,8 @@ impl PlanArtifact {
                 .plan_mode_turn_count
                 .lock()
                 .expect("plan_mode_turn_count poisoned"),
-            *self
-                .last_full_turn
-                .lock()
-                .expect("last_full_turn poisoned"),
-            *self
-                .last_any_turn
-                .lock()
-                .expect("last_any_turn poisoned"),
+            *self.last_full_turn.lock().expect("last_full_turn poisoned"),
+            *self.last_any_turn.lock().expect("last_any_turn poisoned"),
         )
     }
 
@@ -543,14 +535,8 @@ impl PlanArtifact {
             .plan_mode_turn_count
             .lock()
             .expect("plan_mode_turn_count poisoned") = turns.0;
-        *self
-            .last_full_turn
-            .lock()
-            .expect("last_full_turn poisoned") = turns.1;
-        *self
-            .last_any_turn
-            .lock()
-            .expect("last_any_turn poisoned") = turns.2;
+        *self.last_full_turn.lock().expect("last_full_turn poisoned") = turns.1;
+        *self.last_any_turn.lock().expect("last_any_turn poisoned") = turns.2;
     }
 
     /// Returns `(last_full_turn, last_any_turn)` for reminder-cadence selection.

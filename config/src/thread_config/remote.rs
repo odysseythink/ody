@@ -554,7 +554,10 @@ mod tests {
                     }),
                     env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                     custom_headers: HashMap::from([("X-Test".to_string(), "enabled".to_string())]),
-                    query_params: HashMap::from([("api-version".to_string(), "2025-03-01".to_string())]),
+                    query_params: HashMap::from([(
+                        "api-version".to_string(),
+                        "2025-03-01".to_string(),
+                    )]),
                     aws: Some(OdyCodeAwsConfig {
                         access_key_id: "AKIAEXAMPLE".to_string(),
                         secret_access_key: "secret".to_string(),

@@ -32,9 +32,8 @@ fn validate_inner(value: &Value, schema: &Map<String, Value>, path: &str) -> Res
         let expected = expected
             .as_str()
             .ok_or_else(|| "schema keyword 'type' must be a string".to_string())?;
-        check_type(value, expected).map_err(|kind| {
-            format!("expected {expected} at {path}, found {kind}")
-        })?;
+        check_type(value, expected)
+            .map_err(|kind| format!("expected {expected} at {path}, found {kind}"))?;
     }
 
     if let Some(variants) = schema.get("enum") {
@@ -55,14 +54,8 @@ fn validate_inner(value: &Value, schema: &Map<String, Value>, path: &str) -> Res
                 if let Some(property_value) = object.get(name) {
                     let property_schema = property_schema
                         .as_object()
-                        .ok_or_else(|| {
-                            format!("schema for property '{name}' must be an object")
-                        })?;
-                    validate_inner(
-                        property_value,
-                        property_schema,
-                        &format!("{path}.{name}"),
-                    )?;
+                        .ok_or_else(|| format!("schema for property '{name}' must be an object"))?;
+                    validate_inner(property_value, property_schema, &format!("{path}.{name}"))?;
                 }
             }
         }
@@ -126,7 +119,10 @@ mod schema_tests {
     use serde_json::json;
 
     fn object(schema: Value) -> Map<String, Value> {
-        schema.as_object().expect("schema should be an object").clone()
+        schema
+            .as_object()
+            .expect("schema should be an object")
+            .clone()
     }
 
     #[test]
@@ -161,7 +157,10 @@ mod schema_tests {
         let schema = object(json!({"type": "object", "required": ["name"]}));
         let err =
             validate_against_schema(&json!({}), &schema).expect_err("missing required property");
-        assert!(err.contains("missing required property 'name'"), "unexpected: {err}");
+        assert!(
+            err.contains("missing required property 'name'"),
+            "unexpected: {err}"
+        );
     }
 
     #[test]
@@ -172,7 +171,10 @@ mod schema_tests {
         }));
         let err = validate_against_schema(&json!({"gdd": {}}), &schema)
             .expect_err("nested property missing");
-        assert!(err.contains("$.gdd"), "path should pinpoint the nested field: {err}");
+        assert!(
+            err.contains("$.gdd"),
+            "path should pinpoint the nested field: {err}"
+        );
     }
 
     #[test]

@@ -251,9 +251,7 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> Option<SkillMetadata
                 skills: dependencies
                     .skills
                     .into_iter()
-                    .map(|skill| SkillDependency {
-                        name: skill.name,
-                    })
+                    .map(|skill| SkillDependency { name: skill.name })
                     .collect(),
             }),
         policy: None,
@@ -542,9 +540,9 @@ mod tests {
             short_description: None,
             interface: None,
             dependencies: None,
-            path: ody_utils_absolute_path::AbsolutePathBuf::try_from(
-                std::path::PathBuf::from("/tmp/skills/game-create/SKILL.md"),
-            )
+            path: ody_utils_absolute_path::AbsolutePathBuf::try_from(std::path::PathBuf::from(
+                "/tmp/skills/game-create/SKILL.md",
+            ))
             .expect("absolute path"),
             scope: ody_app_server_protocol::SkillScope::System,
             enabled: true,
@@ -563,9 +561,18 @@ mod tests {
         assert_eq!(core.skill_type, ody_core_skills::SkillType::Flow);
 
         let cases = [
-            (ProtocolSkillType::Prompt, ody_core_skills::SkillType::Prompt),
-            (ProtocolSkillType::Inline, ody_core_skills::SkillType::Inline),
-            (ProtocolSkillType::Knowledge, ody_core_skills::SkillType::Knowledge),
+            (
+                ProtocolSkillType::Prompt,
+                ody_core_skills::SkillType::Prompt,
+            ),
+            (
+                ProtocolSkillType::Inline,
+                ody_core_skills::SkillType::Inline,
+            ),
+            (
+                ProtocolSkillType::Knowledge,
+                ody_core_skills::SkillType::Knowledge,
+            ),
         ];
         for (protocol_type, core_type) in cases {
             let core = protocol_skill_to_core(&protocol_skill(protocol_type))

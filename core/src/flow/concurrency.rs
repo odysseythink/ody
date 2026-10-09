@@ -187,7 +187,10 @@ mod tests {
         let p2 = gate.acquire().await.expect("second permit");
         // Third acquire must block while both slots are held.
         let third = tokio::time::timeout(Duration::from_millis(100), gate.acquire());
-        assert!(third.await.is_err(), "third acquire should wait for a free slot");
+        assert!(
+            third.await.is_err(),
+            "third acquire should wait for a free slot"
+        );
         drop(p1);
         let p3 = gate
             .acquire()
@@ -205,7 +208,10 @@ mod tests {
         drop(p2);
         // Third spawn exceeds the total cap even though slots are free.
         let err = gate.acquire().await.expect_err("total cap must reject");
-        assert!(err.0.contains("agent limit of 2"), "unexpected error: {err}");
+        assert!(
+            err.0.contains("agent limit of 2"),
+            "unexpected error: {err}"
+        );
         // The rejected acquire must have released its concurrency slot.
         assert_eq!(
             gate.permits.available_permits(),

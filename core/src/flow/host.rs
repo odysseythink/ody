@@ -20,8 +20,8 @@ use ody_protocol::protocol::AgentStatus;
 use ody_protocol::protocol::CollabAgentSpawnBeginEvent;
 use ody_protocol::protocol::CollabAgentSpawnEndEvent;
 use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::FlowPhaseBeginEvent;
 use ody_protocol::protocol::FlowLogEvent;
+use ody_protocol::protocol::FlowPhaseBeginEvent;
 use ody_protocol::protocol::FlowPhaseEndEvent;
 use ody_protocol::protocol::FlowStepCompletedEvent;
 use ody_protocol::protocol::Op;
@@ -98,10 +98,7 @@ impl SessionFlowAgentHost {
     }
 
     /// Attach a checkpoint store for this run (M2.1). Call before executing.
-    pub(crate) fn with_checkpoint_store(
-        mut self,
-        store: crate::flow::CheckpointStore,
-    ) -> Self {
+    pub(crate) fn with_checkpoint_store(mut self, store: crate::flow::CheckpointStore) -> Self {
         self.checkpoint_store = Some(Arc::new(store));
         self
     }
@@ -262,12 +259,14 @@ impl SessionFlowAgentHost {
             AgentStatus::Completed(Some(message)) => Ok(message),
             AgentStatus::Completed(None) => Ok(String::new()),
             AgentStatus::Errored(message) => Err(FlowHostError(message)),
-            AgentStatus::Shutdown => {
-                Err(FlowHostError("flow sub-agent shut down before completing".to_string()))
-            }
+            AgentStatus::Shutdown => Err(FlowHostError(
+                "flow sub-agent shut down before completing".to_string(),
+            )),
             AgentStatus::NotFound => Err(FlowHostError("flow sub-agent not found".to_string())),
             AgentStatus::PendingInit | AgentStatus::Running | AgentStatus::Interrupted => {
-                Err(FlowHostError(format!("flow sub-agent ended in non-final status {status:?}")))
+                Err(FlowHostError(format!(
+                    "flow sub-agent ended in non-final status {status:?}"
+                )))
             }
         }
     }
@@ -304,7 +303,10 @@ impl FlowAgentHost for SessionFlowAgentHost {
         let flow_name = self.flow_name.clone();
         async move {
             let event: EventMsg = match progress {
-                FlowProgress::PhaseBegin { phase_id, total_steps } => FlowPhaseBeginEvent {
+                FlowProgress::PhaseBegin {
+                    phase_id,
+                    total_steps,
+                } => FlowPhaseBeginEvent {
                     call_id,
                     flow_name,
                     phase_id,
@@ -312,28 +314,32 @@ impl FlowAgentHost for SessionFlowAgentHost {
                     started_at_ms: now_unix_timestamp_ms(),
                 }
                 .into(),
-                FlowProgress::StepCompleted { phase_id, step_index, total_steps } => {
-                    FlowStepCompletedEvent {
-                        call_id,
-                        flow_name,
-                        phase_id,
-                        step_index,
-                        total_steps,
-                        completed_at_ms: now_unix_timestamp_ms(),
-                    }
-                    .into()
+                FlowProgress::StepCompleted {
+                    phase_id,
+                    step_index,
+                    total_steps,
+                } => FlowStepCompletedEvent {
+                    call_id,
+                    flow_name,
+                    phase_id,
+                    step_index,
+                    total_steps,
+                    completed_at_ms: now_unix_timestamp_ms(),
                 }
-                FlowProgress::PhaseEnd { phase_id, completed_steps, total_steps } => {
-                    FlowPhaseEndEvent {
-                        call_id,
-                        flow_name,
-                        phase_id,
-                        completed_steps,
-                        total_steps,
-                        completed_at_ms: now_unix_timestamp_ms(),
-                    }
-                    .into()
+                .into(),
+                FlowProgress::PhaseEnd {
+                    phase_id,
+                    completed_steps,
+                    total_steps,
+                } => FlowPhaseEndEvent {
+                    call_id,
+                    flow_name,
+                    phase_id,
+                    completed_steps,
+                    total_steps,
+                    completed_at_ms: now_unix_timestamp_ms(),
                 }
+                .into(),
                 FlowProgress::Log { message } => FlowLogEvent {
                     call_id,
                     flow_name,

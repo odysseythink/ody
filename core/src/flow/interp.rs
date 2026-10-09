@@ -37,7 +37,9 @@ pub(crate) fn render_template(
             // `${{` is three bytes; skip past both opening braces.
             let after_open = &rest[3..];
             let Some(rel_end) = after_open.find("}}") else {
-                return Err(FlowError::UnterminatedTemplate { step: step.to_string() });
+                return Err(FlowError::UnterminatedTemplate {
+                    step: step.to_string(),
+                });
             };
             let expr = after_open[..rel_end].trim();
             let segments = parse_expr(expr).ok_or_else(|| FlowError::InvalidExpression {
@@ -54,7 +56,9 @@ pub(crate) fn render_template(
         if rest.starts_with("${") {
             let after_open = &rest[2..];
             let Some(rel_end) = after_open.find('}') else {
-                return Err(FlowError::UnterminatedTemplate { step: step.to_string() });
+                return Err(FlowError::UnterminatedTemplate {
+                    step: step.to_string(),
+                });
             };
             let expr = after_open[..rel_end].trim();
             // Single-brace form is reserved for the pipeline item: `${item}`
@@ -79,7 +83,10 @@ pub(crate) fn render_template(
                 }
             };
             let Some(item) = ctx.item else {
-                return Err(FlowError::UnknownBinding { name: "item".to_string(), step: step.to_string() });
+                return Err(FlowError::UnknownBinding {
+                    name: "item".to_string(),
+                    step: step.to_string(),
+                });
             };
             let segments = parse_path(path).ok_or_else(|| FlowError::InvalidExpression {
                 expr: expr.to_string(),
@@ -126,7 +133,11 @@ fn parse_path(path: &str) -> Option<Vec<String>> {
     Some(segments.into_iter().map(str::to_string).collect())
 }
 
-fn resolve_root<'v>(name: &str, ctx: &'v TemplateContext<'_>, step: &str) -> Result<&'v Value, FlowError> {
+fn resolve_root<'v>(
+    name: &str,
+    ctx: &'v TemplateContext<'_>,
+    step: &str,
+) -> Result<&'v Value, FlowError> {
     // Inside an `each` template the current item shadows any binding of the
     // same name; outside item scope a binding named `item` (if the user bound
     // one) is visible, matching plain binding lookup.
@@ -135,10 +146,12 @@ fn resolve_root<'v>(name: &str, ctx: &'v TemplateContext<'_>, step: &str) -> Res
             return Ok(item);
         }
     }
-    ctx.bindings.get(name).ok_or_else(|| FlowError::UnknownBinding {
-        name: name.to_string(),
-        step: step.to_string(),
-    })
+    ctx.bindings
+        .get(name)
+        .ok_or_else(|| FlowError::UnknownBinding {
+            name: name.to_string(),
+            step: step.to_string(),
+        })
 }
 
 fn resolve_path(root: &Value, path: &[String], name: &str, step: &str) -> Result<Value, FlowError> {

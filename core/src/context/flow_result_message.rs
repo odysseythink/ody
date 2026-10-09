@@ -49,7 +49,11 @@ impl ContextualUserFragment for FlowResultMessage {
     }
 
     fn body(&self) -> String {
-        let outcome = if self.succeeded { "completed" } else { "failed" };
+        let outcome = if self.succeeded {
+            "completed"
+        } else {
+            "failed"
+        };
         format!("\nFlow '{}' {}. {}\n", self.flow_name, outcome, self.detail)
     }
 }

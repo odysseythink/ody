@@ -5,30 +5,60 @@ use serde_json::json;
 fn interp_substitutes_context_binding() {
     let mut bindings = serde_json::Map::new();
     bindings.insert("gdd".to_string(), json!("THE GDD"));
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
-    assert_eq!(interp::render_template("Summary: ${{ gdd }}", &ctx, "test").unwrap(), "Summary: THE GDD");
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
+    assert_eq!(
+        interp::render_template("Summary: ${{ gdd }}", &ctx, "test").unwrap(),
+        "Summary: THE GDD"
+    );
 }
 
 #[test]
 fn interp_supports_dotted_path_and_array_index() {
     let mut bindings = serde_json::Map::new();
     bindings.insert("gdd".to_string(), json!({"mechanics": ["draw", "discard"]}));
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
-    assert_eq!(interp::render_template("${{ gdd.mechanics.0 }}", &ctx, "test").unwrap(), "draw");
-    assert_eq!(interp::render_template("${{ gdd.mechanics }}", &ctx, "test").unwrap(), "[\"draw\",\"discard\"]");
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
+    assert_eq!(
+        interp::render_template("${{ gdd.mechanics.0 }}", &ctx, "test").unwrap(),
+        "draw"
+    );
+    assert_eq!(
+        interp::render_template("${{ gdd.mechanics }}", &ctx, "test").unwrap(),
+        "[\"draw\",\"discard\"]"
+    );
 }
 
 #[test]
 fn interp_item_form_resolves_pipeline_item() {
     let bindings = serde_json::Map::new();
     let item = json!({"name": "deck-building"});
-    let ctx = interp::TemplateContext { bindings: &bindings, item: Some(&item) };
-    assert_eq!(interp::render_template("Implement ${item.name}.", &ctx, "test").unwrap(), "Implement deck-building.");
-    assert_eq!(interp::render_template("${{ item }}", &ctx, "test").unwrap(), "{\"name\":\"deck-building\"}");
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: Some(&item),
+    };
+    assert_eq!(
+        interp::render_template("Implement ${item.name}.", &ctx, "test").unwrap(),
+        "Implement deck-building."
+    );
+    assert_eq!(
+        interp::render_template("${{ item }}", &ctx, "test").unwrap(),
+        "{\"name\":\"deck-building\"}"
+    );
     // Array-valued items support numeric segments in the single-brace form.
     let arr_item = json!(["x", "y"]);
-    let ctx = interp::TemplateContext { bindings: &bindings, item: Some(&arr_item) };
-    assert_eq!(interp::render_template("${item.0}", &ctx, "test").unwrap(), "x");
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: Some(&arr_item),
+    };
+    assert_eq!(
+        interp::render_template("${item.0}", &ctx, "test").unwrap(),
+        "x"
+    );
     assert!(matches!(
         interp::render_template("${item.}", &ctx, "test"),
         Err(FlowError::InvalidExpression { .. })
@@ -44,10 +74,22 @@ fn interp_item_shadows_binding_only_inside_scope() {
     let mut bindings = serde_json::Map::new();
     bindings.insert("item".to_string(), json!("BINDING"));
     let item = json!("SCOPED");
-    let scoped = interp::TemplateContext { bindings: &bindings, item: Some(&item) };
-    assert_eq!(interp::render_template("${{ item }}", &scoped, "test").unwrap(), "SCOPED");
-    let unscoped = interp::TemplateContext { bindings: &bindings, item: None };
-    assert_eq!(interp::render_template("${{ item }}", &unscoped, "test").unwrap(), "BINDING");
+    let scoped = interp::TemplateContext {
+        bindings: &bindings,
+        item: Some(&item),
+    };
+    assert_eq!(
+        interp::render_template("${{ item }}", &scoped, "test").unwrap(),
+        "SCOPED"
+    );
+    let unscoped = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
+    assert_eq!(
+        interp::render_template("${{ item }}", &unscoped, "test").unwrap(),
+        "BINDING"
+    );
     assert!(matches!(
         interp::render_template("${item}", &unscoped, "test"),
         Err(FlowError::UnknownBinding { name, .. }) if name == "item"
@@ -57,14 +99,20 @@ fn interp_item_shadows_binding_only_inside_scope() {
 #[test]
 fn interp_reports_unknown_binding_and_missing_path() {
     let bindings = serde_json::Map::new();
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
     assert!(matches!(
         interp::render_template("${{ missing }}", &ctx, "test"),
         Err(FlowError::UnknownBinding { name, step }) if name == "missing" && step == "test"
     ));
     let mut bindings = serde_json::Map::new();
     bindings.insert("gdd".to_string(), json!({"mechanics": []}));
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
     assert!(matches!(
         interp::render_template("${{ gdd.nope }}", &ctx, "test"),
         Err(FlowError::MissingPath { name, path, .. }) if name == "gdd" && path == "nope"
@@ -78,10 +126,16 @@ fn interp_reports_unknown_binding_and_missing_path() {
 #[test]
 fn interp_reports_invalid_and_unterminated_expressions() {
     let bindings = serde_json::Map::new();
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
     for bad in ["${{ }}", "${{ 1abc }}", "${{ a..b }}", "${{ a b }}"] {
         assert!(
-            matches!(interp::render_template(bad, &ctx, "test"), Err(FlowError::InvalidExpression { .. })),
+            matches!(
+                interp::render_template(bad, &ctx, "test"),
+                Err(FlowError::InvalidExpression { .. })
+            ),
             "{bad} should be an invalid expression"
         );
     }
@@ -103,18 +157,34 @@ fn interp_reports_invalid_and_unterminated_expressions() {
 fn interp_passes_through_literals_and_unaffected_dollars() {
     let mut bindings = serde_json::Map::new();
     bindings.insert("x".to_string(), json!("V"));
-    let ctx = interp::TemplateContext { bindings: &bindings, item: None };
-    assert_eq!(interp::render_template("cost: $5 } end", &ctx, "test").unwrap(), "cost: $5 } end");
+    let ctx = interp::TemplateContext {
+        bindings: &bindings,
+        item: None,
+    };
+    assert_eq!(
+        interp::render_template("cost: $5 } end", &ctx, "test").unwrap(),
+        "cost: $5 } end"
+    );
     // No escape syntax in M1: `$${{ x }}` renders a literal `$` followed by the value.
-    assert_eq!(interp::render_template("$${{ x }}", &ctx, "test").unwrap(), "$V");
+    assert_eq!(
+        interp::render_template("$${{ x }}", &ctx, "test").unwrap(),
+        "$V"
+    );
 }
 
 #[test]
 fn flow_error_display_mentions_variant_details() {
-    let err = FlowError::LimitExceeded { limit: 4096, actual: 4097, step: "phase 'p' step 1".to_string() };
+    let err = FlowError::LimitExceeded {
+        limit: 4096,
+        actual: 4097,
+        step: "phase 'p' step 1".to_string(),
+    };
     let text = err.to_string();
     assert!(text.contains("4096") && text.contains("4097") && text.contains("phase 'p' step 1"));
-    let err = FlowError::Agent { step: "s".to_string(), source: FlowHostError("boom".to_string()) };
+    let err = FlowError::Agent {
+        step: "s".to_string(),
+        source: FlowHostError("boom".to_string()),
+    };
     assert!(err.to_string().contains("boom"));
 }
 
@@ -129,7 +199,6 @@ fn flow_types_are_send_sync_and_default() {
     assert_eq!(FlowContext::default().args.len(), 0);
     assert_eq!(FlowOutcome::default().outputs.len(), 0);
 }
-
 
 // ---- M1.1 execution kernel tests (T03) ----
 
@@ -150,7 +219,10 @@ struct MockHost {
 
 impl MockHost {
     fn with(responses: Vec<Result<String, String>>) -> Self {
-        Self { responses: Mutex::new(responses.into()), ..Self::default() }
+        Self {
+            responses: Mutex::new(responses.into()),
+            ..Self::default()
+        }
     }
 }
 
@@ -206,7 +278,9 @@ impl FlowAgentHost for CancelProbeHost {
 }
 
 fn validate(runtime: &YamlFlowRuntime, source: &str) -> FlowPlanSource {
-    runtime.validate(source).expect("fixture plan should validate")
+    runtime
+        .validate(source)
+        .expect("fixture plan should validate")
 }
 
 #[test]
@@ -217,8 +291,15 @@ fn yaml_runtime_reports_supported_artifact() {
 #[test]
 fn validate_roundtrips_loader_parser() {
     let runtime = YamlFlowRuntime;
-    assert!(runtime.validate("phases:\n  - id: x\n    steps:\n      - agent: do it\n").is_ok());
-    assert!(matches!(runtime.validate("bogus: y\n"), Err(FlowError::Parse { .. })));
+    assert!(
+        runtime
+            .validate("phases:\n  - id: x\n    steps:\n      - agent: do it\n")
+            .is_ok()
+    );
+    assert!(matches!(
+        runtime.validate("bogus: y\n"),
+        Err(FlowError::Parse { .. })
+    ));
 }
 
 #[tokio::test]
@@ -228,9 +309,15 @@ async fn phases_run_in_order_and_outputs_feed_later_steps() {
         &YamlFlowRuntime,
         "phases:\n  - id: design\n    steps:\n      - agent: Generate\n        output: gdd\n  - id: use\n    steps:\n      - agent: Use ${{ gdd }}\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     assert_eq!(outcome.outputs["gdd"], json!("done: Generate"));
-    assert_eq!(*host.prompts.lock().unwrap(), vec!["Generate".to_string(), "Use done: Generate".to_string()]);
+    assert_eq!(
+        *host.prompts.lock().unwrap(),
+        vec!["Generate".to_string(), "Use done: Generate".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -240,7 +327,10 @@ async fn agent_output_is_parsed_as_json_when_possible() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - agent: Generate\n        output: gdd\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     assert_eq!(outcome.outputs["gdd"], json!({"mechanics": ["draw"]}));
 }
 
@@ -261,17 +351,28 @@ async fn pipeline_preserves_item_order_regardless_of_completion_order() {
 
 #[tokio::test]
 async fn pipeline_items_interpolate_context_and_empty_array_is_allowed() {
-    let host = MockHost::with(vec![Ok("{\"mechanics\": [\"draw\", \"discard\"], \"owner\": \"alice\", \"none\": []}".to_string())]);
+    let host = MockHost::with(vec![Ok(
+        "{\"mechanics\": [\"draw\", \"discard\"], \"owner\": \"alice\", \"none\": []}".to_string(),
+    )]);
     let plan = validate(
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - agent: Gen\n        output: gdd\n      - pipeline: ${{ gdd.mechanics }}\n        each: Implement ${item} per ${{ gdd.owner }}\n        output: impls\n      - pipeline: ${{ gdd.none }}\n        each: never\n        output: empties\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     let prompts = host.prompts.lock().unwrap();
     assert_eq!(prompts[0], "Gen");
     assert_eq!(prompts[1], "Implement draw per alice");
     assert_eq!(prompts[2], "Implement discard per alice");
-    assert_eq!(outcome.outputs["impls"], json!(["done: Implement draw per alice", "done: Implement discard per alice"]));
+    assert_eq!(
+        outcome.outputs["impls"],
+        json!([
+            "done: Implement draw per alice",
+            "done: Implement discard per alice"
+        ])
+    );
     assert_eq!(outcome.outputs["empties"], json!([]));
 }
 
@@ -282,7 +383,10 @@ async fn parallel_binds_results_and_merges_child_outputs_in_order() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - parallel:\n          - agent: A\n            output: x\n          - agent: B\n            output: y\n        output: both\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     assert_eq!(outcome.outputs["x"], json!("done: A"));
     assert_eq!(outcome.outputs["y"], json!("done: B"));
     assert_eq!(outcome.outputs["both"], json!(["done: A", "done: B"]));
@@ -297,7 +401,10 @@ async fn parallel_children_see_pre_group_snapshot_only() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - parallel:\n          - agent: A\n            output: x\n          - agent: B uses ${{ x }}\n",
     );
-    let err = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap_err();
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap_err();
     assert!(matches!(err, FlowError::UnknownBinding { name, .. } if name == "x"));
 }
 
@@ -333,21 +440,32 @@ async fn pipeline_over_batch_limit_fails_before_spawning() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - pipeline: ${{ args.items }}\n        each: item ${item}\n",
     );
-    let err = YamlFlowRuntime.run(plan, FlowContext { args }, &host).await.unwrap_err();
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext { args }, &host)
+        .await
+        .unwrap_err();
     assert!(matches!(
         err,
         FlowError::LimitExceeded { limit, actual, .. } if limit == 4096 && actual == 4097
     ));
-    assert!(host.prompts.lock().unwrap().is_empty(), "no agent may start past the limit");
+    assert!(
+        host.prompts.lock().unwrap().is_empty(),
+        "no agent may start past the limit"
+    );
 }
 
 #[tokio::test]
 async fn parallel_over_batch_limit_fails_before_spawning() {
     let host = MockHost::default();
-    let children: String = (0..4097).map(|_| "          - agent: x\n".to_string()).collect();
+    let children: String = (0..4097)
+        .map(|_| "          - agent: x\n".to_string())
+        .collect();
     let source = format!("phases:\n  - id: p\n    steps:\n      - parallel:\n{children}");
     let plan = validate(&YamlFlowRuntime, &source);
-    let err = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap_err();
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap_err();
     assert!(matches!(err, FlowError::LimitExceeded { actual: 4097, .. }));
     assert!(host.prompts.lock().unwrap().is_empty());
 }
@@ -395,7 +513,10 @@ async fn agent_failure_cancels_in_flight_siblings() {
         .await
         .expect_err("a failing sibling must fail the whole plan");
     assert!(matches!(err, FlowError::Agent { .. }));
-    assert!(dropped.load(Ordering::SeqCst), "in-flight sibling future must be dropped on short-circuit");
+    assert!(
+        dropped.load(Ordering::SeqCst),
+        "in-flight sibling future must be dropped on short-circuit"
+    );
 }
 
 #[tokio::test]
@@ -407,9 +528,15 @@ async fn outcome_excludes_the_args_root() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - agent: Make a game about ${{ args.theme }}\n        output: game\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext { args }, &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext { args }, &host)
+        .await
+        .unwrap();
     assert!(!outcome.outputs.contains_key("args"));
-    assert_eq!(outcome.outputs["game"], json!("done: Make a game about space"));
+    assert_eq!(
+        outcome.outputs["game"],
+        json!("done: Make a game about space")
+    );
 }
 
 #[tokio::test]
@@ -419,10 +546,15 @@ async fn nested_parallel_flattens_recursively() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - parallel:\n          - parallel:\n              - agent: Inner\n          - agent: Outer\n        output: nested\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
-    assert_eq!(outcome.outputs["nested"], json!([["done: Inner"], "done: Outer"]));
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome.outputs["nested"],
+        json!([["done: Inner"], "done: Outer"])
+    );
 }
-
 
 // ---- M1.2 session host tests (T01) ----
 
@@ -502,7 +634,10 @@ async fn session_flow_host_spawn_and_wait_returns_final_message() {
                 _ => {}
             }
         }
-        (begin.expect("spawn begin should precede spawn end"), end.unwrap())
+        (
+            begin.expect("spawn begin should precede spawn end"),
+            end.unwrap(),
+        )
     })
     .await
     .expect("spawn begin/end events should arrive");
@@ -512,7 +647,10 @@ async fn session_flow_host_spawn_and_wait_returns_final_message() {
     assert_eq!(end.new_agent_role.as_deref(), Some("test-flow"));
 
     drive_child_to_completion(&manager, thread_id, "all done").await;
-    let result = host.wait_agent(thread_id).await.expect("wait should complete");
+    let result = host
+        .wait_agent(thread_id)
+        .await
+        .expect("wait should complete");
     assert_eq!(result, "all done");
 }
 
@@ -533,9 +671,7 @@ async fn session_flow_host_run_agent_composes_spawn_and_wait() {
     // registry the rest of the session sees.
     let thread_id = timeout(Duration::from_secs(5), async {
         loop {
-            if let Some(thread_id) =
-                pending_child_thread_id(&manager, session.thread_id).await
-            {
+            if let Some(thread_id) = pending_child_thread_id(&manager, session.thread_id).await {
                 return thread_id;
             }
             sleep(Duration::from_millis(10)).await;
@@ -544,7 +680,10 @@ async fn session_flow_host_run_agent_composes_spawn_and_wait() {
     .await
     .expect("run_agent should spawn a child thread");
     drive_child_to_completion(&manager, thread_id, "composed result").await;
-    let result = run.await.expect("run_agent task should finish").expect("run_agent should succeed");
+    let result = run
+        .await
+        .expect("run_agent task should finish")
+        .expect("run_agent should succeed");
     assert_eq!(result, "composed result");
 }
 
@@ -615,17 +754,16 @@ async fn session_flow_host_abort_on_drop_interrupts_unfinished_agent() {
     .expect("dropping the guard should interrupt the unfinished child agent");
 }
 
-
 // ---- M1.3 trigger tests (T02) ----
 
 use super::trigger::flow_args_from_input;
 use super::trigger::partition_flow_skills;
 use super::trigger::run_flow_skills_in_turn;
+use crate::TurnContext;
 use ody_core_skills::HostSkillsSnapshot;
 use ody_core_skills::SkillLoadOutcome;
 use ody_core_skills::SkillMetadata;
 use ody_core_skills::SkillType;
-use crate::TurnContext;
 use ody_utils_absolute_path::AbsolutePathBuf;
 
 fn skill_of_type(name: &str, skill_type: SkillType) -> SkillMetadata {
@@ -749,7 +887,10 @@ async fn run_flow_skills_in_turn_executes_flow_and_records_result_item() {
         .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
 
     let run = tokio::spawn({
@@ -781,8 +922,14 @@ async fn run_flow_skills_in_turn_executes_flow_and_records_result_item() {
     assert_eq!(items.len(), 1, "one result item per flow skill");
     let text = response_item_text(&items[0]);
     assert!(text.contains("<flow_result>"), "missing marker: {text}");
-    assert!(text.contains("Flow 'demo-flow' completed."), "missing outcome: {text}");
-    assert!(text.contains("flow child result"), "missing outputs: {text}");
+    assert!(
+        text.contains("Flow 'demo-flow' completed."),
+        "missing outcome: {text}"
+    );
+    assert!(
+        text.contains("flow child result"),
+        "missing outputs: {text}"
+    );
 }
 
 #[tokio::test]
@@ -813,7 +960,10 @@ async fn run_flow_skills_in_turn_records_failure_item_and_warning_event() {
     // Install the flow skill into the turn's skills snapshot (the harness
     // returns a uniquely-owned Arc, so in-place mutation is safe).
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
 
     let items = run_flow_skills_in_turn(
         &session,
@@ -825,7 +975,10 @@ async fn run_flow_skills_in_turn_records_failure_item_and_warning_event() {
 
     assert_eq!(items.len(), 1);
     let text = response_item_text(&items[0]);
-    assert!(text.contains("Flow 'broken-flow' failed."), "missing failure: {text}");
+    assert!(
+        text.contains("Flow 'broken-flow' failed."),
+        "missing failure: {text}"
+    );
     assert!(text.contains("missing"), "missing error detail: {text}");
 
     // The failure is also surfaced immediately as a warning event (A7).
@@ -838,7 +991,10 @@ async fn run_flow_skills_in_turn_records_failure_item_and_warning_event() {
         }
     })
     .await;
-    assert!(saw_warning.is_ok(), "a warning event should accompany the failure");
+    assert!(
+        saw_warning.is_ok(),
+        "a warning event should accompany the failure"
+    );
 }
 
 // ---- M1.4 progress reporting tests (T03) ----
@@ -872,23 +1028,31 @@ async fn progress_events_follow_phase_and_step_lifecycle() {
     // synchronously and the returned future is a ready no-op. Checked on a
     // throwaway host so the probe event does not pollute the sequence below.
     fn assert_send<T: Send>(_: T) {}
-    assert_send(RecordingHost::default().report_progress(FlowProgress::PhaseBegin {
-        phase_id: "probe".to_string(),
-        total_steps: 0,
-    }));
+    assert_send(
+        RecordingHost::default().report_progress(FlowProgress::PhaseBegin {
+            phase_id: "probe".to_string(),
+            total_steps: 0,
+        }),
+    );
 
     let host = RecordingHost::default();
     let plan = validate(
         &YamlFlowRuntime,
         "phases:\n  - id: design\n    steps:\n      - agent: A\n      - agent: B\n  - id: use\n    steps:\n      - agent: C\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     assert_eq!(outcome.outputs.len(), 0);
 
     assert_eq!(
         *host.progress.lock().unwrap(),
         vec![
-            FlowProgress::PhaseBegin { phase_id: "design".to_string(), total_steps: 2 },
+            FlowProgress::PhaseBegin {
+                phase_id: "design".to_string(),
+                total_steps: 2
+            },
             FlowProgress::StepCompleted {
                 phase_id: "design".to_string(),
                 step_index: 1,
@@ -904,7 +1068,10 @@ async fn progress_events_follow_phase_and_step_lifecycle() {
                 completed_steps: 2,
                 total_steps: 2,
             },
-            FlowProgress::PhaseBegin { phase_id: "use".to_string(), total_steps: 1 },
+            FlowProgress::PhaseBegin {
+                phase_id: "use".to_string(),
+                total_steps: 1
+            },
             FlowProgress::StepCompleted {
                 phase_id: "use".to_string(),
                 step_index: 1,
@@ -929,14 +1096,20 @@ async fn progress_phase_end_reports_partial_completion_on_failure() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - agent: A\n      - agent: B\n",
     );
-    let err = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap_err();
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap_err();
     assert!(matches!(err, FlowError::Agent { .. }));
 
     // PhaseEnd still fires with completed_steps < total_steps (A9).
     assert_eq!(
         *host.progress.lock().unwrap(),
         vec![
-            FlowProgress::PhaseBegin { phase_id: "p".to_string(), total_steps: 2 },
+            FlowProgress::PhaseBegin {
+                phase_id: "p".to_string(),
+                total_steps: 2
+            },
             FlowProgress::PhaseEnd {
                 phase_id: "p".to_string(),
                 completed_steps: 0,
@@ -970,7 +1143,10 @@ async fn run_flow_skills_in_turn_emits_progress_events_on_the_turn_stream() {
         .expect("unique session arc")
         .services
         .agent_control = manager.agent_control();
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
 
     let run = tokio::spawn({
         let session = session.clone();
@@ -1024,7 +1200,6 @@ async fn run_flow_skills_in_turn_emits_progress_events_on_the_turn_stream() {
     assert_eq!(ends[0].total_steps, 1);
 }
 
-
 // ---- M1.5 end-to-end fan-out test (mirrors the bundled game-create sample,
 // removed 2026-09-21 when /game subsumed it; the fixture is self-contained) ----
 
@@ -1043,7 +1218,6 @@ async fn next_pending_child_thread_id(
         .find(|thread_id| *thread_id != parent && !driven.contains(thread_id))
 }
 
-
 #[tokio::test]
 async fn parallel_children_inherit_snapshot_without_rebinding_it() {
     // Regression (found by M1.5 e2e): a parallel group that runs after other
@@ -1060,7 +1234,10 @@ async fn parallel_children_inherit_snapshot_without_rebinding_it() {
         &YamlFlowRuntime,
         "phases:\n  - id: p\n    steps:\n      - agent: Gen\n        output: gdd\n      - parallel:\n          - agent: Uses ${{ gdd.mechanics }}\n          - agent: Plain\n        output: both\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     assert_eq!(outcome.outputs["gdd"], json!({"mechanics": ["a"]}));
     assert_eq!(outcome.outputs["both"], json!(["done: one", "done: two"]));
 }
@@ -1112,7 +1289,10 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
     let session = Arc::new(session);
     // The harness returns a uniquely-owned Arc, so in-place mutation is safe.
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
     let turn = Arc::new(turn);
 
@@ -1164,14 +1344,27 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
     let items = run.await.expect("flow run task should finish");
     assert_eq!(items.len(), 1, "one result item per flow skill");
     let text = response_item_text(&items[0]);
-    assert!(text.contains("Flow 'game-create' completed."), "missing outcome: {text}");
+    assert!(
+        text.contains("Flow 'game-create' completed."),
+        "missing outcome: {text}"
+    );
     // Every phase output is recorded back into the conversation: the parsed
     // GDD, both pipeline results (in item order), and both review results.
     assert!(text.contains("constraints"), "missing gdd output: {text}");
-    let jump = text.find("impl 跳跃 done").expect("missing pipeline output: {text}");
-    let double_jump = text.find("impl 二段跳 done").expect("missing pipeline output: {text}");
-    assert!(jump < double_jump, "pipeline outputs should keep item order: {text}");
-    assert!(text.contains("边界审查通过"), "missing review output: {text}");
+    let jump = text
+        .find("impl 跳跃 done")
+        .expect("missing pipeline output: {text}");
+    let double_jump = text
+        .find("impl 二段跳 done")
+        .expect("missing pipeline output: {text}");
+    assert!(
+        jump < double_jump,
+        "pipeline outputs should keep item order: {text}"
+    );
+    assert!(
+        text.contains("边界审查通过"),
+        "missing review output: {text}"
+    );
     assert!(text.contains("测试全绿"), "missing review output: {text}");
 
     // Drain the unbounded event stream: progress runs begin → step → end per
@@ -1186,10 +1379,16 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
                 progress.push(format!("begin:{}:{}", ev.phase_id, ev.total_steps));
             }
             EventMsg::FlowStepCompleted(ev) => {
-                progress.push(format!("step:{}:{}/{}", ev.phase_id, ev.step_index, ev.total_steps));
+                progress.push(format!(
+                    "step:{}:{}/{}",
+                    ev.phase_id, ev.step_index, ev.total_steps
+                ));
             }
             EventMsg::FlowPhaseEnd(ev) => {
-                progress.push(format!("end:{}:{}/{}", ev.phase_id, ev.completed_steps, ev.total_steps));
+                progress.push(format!(
+                    "end:{}:{}/{}",
+                    ev.phase_id, ev.completed_steps, ev.total_steps
+                ));
             }
             EventMsg::CollabAgentSpawnBegin(ev) => spawn_prompts.push(ev.prompt),
             _ => {}
@@ -1209,22 +1408,53 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
             "end:verify:1/1",
         ]
     );
-    assert_eq!(spawn_prompts.len(), 5, "five fan-out agents should spawn: {spawn_prompts:?}");
-    assert!(spawn_prompts[0].contains("太空跳跃"), "args binding missing: {}", spawn_prompts[0]);
-    assert!(spawn_prompts[1].contains("实现机制 跳跃，"), "pipeline item missing: {}", spawn_prompts[1]);
-    assert!(!spawn_prompts[1].contains("二段跳"), "pipeline items must not leak: {}", spawn_prompts[1]);
-    assert!(spawn_prompts[1].contains("60fps 像素风"), "gdd binding missing: {}", spawn_prompts[1]);
-    assert!(spawn_prompts[2].contains("实现机制 二段跳，"), "pipeline item missing: {}", spawn_prompts[2]);
-    assert!(spawn_prompts[3].contains("impl 跳跃 done"), "implementations binding missing: {}", spawn_prompts[3]);
-    assert!(spawn_prompts[4].contains("运行测试"), "verify prompt missing: {}", spawn_prompts[4]);
+    assert_eq!(
+        spawn_prompts.len(),
+        5,
+        "five fan-out agents should spawn: {spawn_prompts:?}"
+    );
+    assert!(
+        spawn_prompts[0].contains("太空跳跃"),
+        "args binding missing: {}",
+        spawn_prompts[0]
+    );
+    assert!(
+        spawn_prompts[1].contains("实现机制 跳跃，"),
+        "pipeline item missing: {}",
+        spawn_prompts[1]
+    );
+    assert!(
+        !spawn_prompts[1].contains("二段跳"),
+        "pipeline items must not leak: {}",
+        spawn_prompts[1]
+    );
+    assert!(
+        spawn_prompts[1].contains("60fps 像素风"),
+        "gdd binding missing: {}",
+        spawn_prompts[1]
+    );
+    assert!(
+        spawn_prompts[2].contains("实现机制 二段跳，"),
+        "pipeline item missing: {}",
+        spawn_prompts[2]
+    );
+    assert!(
+        spawn_prompts[3].contains("impl 跳跃 done"),
+        "implementations binding missing: {}",
+        spawn_prompts[3]
+    );
+    assert!(
+        spawn_prompts[4].contains("运行测试"),
+        "verify prompt missing: {}",
+        spawn_prompts[4]
+    );
 }
-
 
 // ---- M2.1 checkpoint/replay tests ----
 
+use super::checkpoint::CheckpointStore;
 use super::checkpoint::plan_fingerprint;
 use super::checkpoint::prompt_key;
-use super::checkpoint::CheckpointStore;
 
 /// Wraps MockHost with an in-memory checkpoint map so kernel tests can
 /// assert hit/record behavior without touching the filesystem. The cache is
@@ -1276,12 +1506,18 @@ fn checkpoint_fingerprint_is_stable_and_source_sensitive() {
 #[tokio::test]
 async fn checkpoint_hit_skips_agent_and_replays_output() {
     let host = MemCheckpointHost::default();
-    host.cache.lock().unwrap().insert("Generate".to_string(), "{\"cached\":true}".to_string());
+    host.cache
+        .lock()
+        .unwrap()
+        .insert("Generate".to_string(), "{\"cached\":true}".to_string());
     let plan = validate(
         &YamlFlowRuntime,
         "phases:\n  - id: design\n    steps:\n      - agent: Generate\n        output: gdd\n      - agent: Use ${{ gdd }}\n",
     );
-    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .unwrap();
     // Cached value replays as parsed JSON and feeds later interpolation.
     assert_eq!(outcome.outputs["gdd"], json!({"cached": true}));
     // Only the second step spawned an agent.
@@ -1321,7 +1557,10 @@ async fn failed_run_records_entries_and_rerun_resumes_without_respawn() {
         .unwrap();
     assert_eq!(outcome.outputs["a"], json!(1));
     assert_eq!(outcome.outputs["b"], json!(2));
-    assert_eq!(*succeeding.inner.prompts.lock().unwrap(), vec!["Three".to_string()]);
+    assert_eq!(
+        *succeeding.inner.prompts.lock().unwrap(),
+        vec!["Three".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -1343,7 +1582,10 @@ async fn checkpoint_keys_follow_rendered_prompt_not_step_position() {
         .run(plan, FlowContext { args: args_beta }, &second)
         .await
         .unwrap();
-    assert_eq!(*second.inner.prompts.lock().unwrap(), vec!["Do beta".to_string()]);
+    assert_eq!(
+        *second.inner.prompts.lock().unwrap(),
+        vec!["Do beta".to_string()]
+    );
     assert_eq!(outcome.outputs["r"], json!("done: Do beta"));
 }
 
@@ -1368,9 +1610,13 @@ async fn checkpoint_store_roundtrip_hit_and_discard() {
     reopened.discard().await;
     let after = CheckpointStore::open(&home, "game-create", &fp).await;
     assert_eq!(after.lookup("prompt A").await, None);
-    assert!(!dir.path().join("flow-checkpoints").join(format!("game-create-{fp}.json")).exists());
+    assert!(
+        !dir.path()
+            .join("flow-checkpoints")
+            .join(format!("game-create-{fp}.json"))
+            .exists()
+    );
 }
-
 
 // ---- M2.2 run-before guardian approval tests ----
 
@@ -1404,7 +1650,10 @@ async fn flow_run_with_never_approval_policy_skips_guardian_review() {
         .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
 
     let run = tokio::spawn({
@@ -1448,7 +1697,6 @@ async fn flow_run_with_never_approval_policy_skips_guardian_review() {
     }
     assert_eq!(assessments, 0, "policy=never must skip the guardian review");
 }
-
 
 // ---- M2.3 flow__run host runner tests ----
 
@@ -1538,7 +1786,10 @@ async fn wired_flow_runner(
         .flow_runner
         .init_session(Arc::downgrade(&session));
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     session.services.flow_runner.register_turn(&turn);
     (session, turn, skill, manager, dir)
 }
@@ -1566,8 +1817,7 @@ async fn flow_runner_executes_model_invoked_flow_end_to_end() {
     let thread_id = timeout(Duration::from_secs(30), async {
         loop {
             if let Some(thread_id) =
-                next_pending_child_thread_id(&manager, session.thread_id, &Default::default())
-                    .await
+                next_pending_child_thread_id(&manager, session.thread_id, &Default::default()).await
             {
                 return thread_id;
             }
@@ -1578,7 +1828,10 @@ async fn flow_runner_executes_model_invoked_flow_end_to_end() {
     .expect("model-invoked flow should spawn its agent");
     drive_child_to_completion(&manager, thread_id, "flow result text").await;
 
-    let output = run.await.expect("runner task should finish").expect("flow run should succeed");
+    let output = run
+        .await
+        .expect("runner task should finish")
+        .expect("flow run should succeed");
     // The child reply is plain text (not JSON), so the step output is the
     // final message verbatim.
     assert_eq!(output.outputs["r"], json!("flow result text"));
@@ -1620,7 +1873,6 @@ async fn flow_runner_reports_inactive_turn_after_turn_drop() {
     assert_eq!(reported, turn_id);
 }
 
-
 // ---- M2.4 schema validation + retry tests ----
 
 const GDD_SCHEMA_YAML: &str = r#"
@@ -1659,13 +1911,28 @@ async fn schema_agent_accepts_valid_json_and_injects_schema_in_prompt() {
         .await
         .expect("valid JSON should pass validation");
 
-    assert_eq!(outcome.outputs["gdd"], json!({"mechanics": [{"name": "jump"}]}));
+    assert_eq!(
+        outcome.outputs["gdd"],
+        json!({"mechanics": [{"name": "jump"}]})
+    );
     let prompts = host.prompts.lock().unwrap();
     assert_eq!(prompts.len(), 1, "one spawn expected");
     // The schema requirements are injected at the prompt tail.
-    assert!(prompts[0].starts_with("Generate a GDD."), "missing template render: {}", prompts[0]);
-    assert!(prompts[0].contains("Reply with JSON only"), "missing schema instruction: {}", prompts[0]);
-    assert!(prompts[0].contains("\"mechanics\""), "missing schema body: {}", prompts[0]);
+    assert!(
+        prompts[0].starts_with("Generate a GDD."),
+        "missing template render: {}",
+        prompts[0]
+    );
+    assert!(
+        prompts[0].contains("Reply with JSON only"),
+        "missing schema instruction: {}",
+        prompts[0]
+    );
+    assert!(
+        prompts[0].contains("\"mechanics\""),
+        "missing schema body: {}",
+        prompts[0]
+    );
 }
 
 #[tokio::test]
@@ -1680,7 +1947,10 @@ async fn schema_agent_retries_bad_json_with_failure_feedback() {
         .await
         .expect("retry after bad JSON should succeed");
 
-    assert_eq!(outcome.outputs["gdd"], json!({"mechanics": [{"name": "jump"}]}));
+    assert_eq!(
+        outcome.outputs["gdd"],
+        json!({"mechanics": [{"name": "jump"}]})
+    );
     let prompts = host.prompts.lock().unwrap();
     assert_eq!(prompts.len(), 2, "bad JSON then retry");
     assert!(
@@ -1735,7 +2005,9 @@ async fn schema_agent_fails_after_three_failed_attempts() {
     };
     assert_eq!(step, "phase 'design' step 1 (agent)");
     assert!(
-        source.0.contains("schema validation failed after 3 attempts"),
+        source
+            .0
+            .contains("schema validation failed after 3 attempts"),
         "unexpected source: {source}"
     );
     assert!(
@@ -1765,10 +2037,17 @@ async fn schema_agent_records_checkpoint_under_original_prompt_key() {
     let cache = host.cache.lock().unwrap();
     assert_eq!(cache.len(), 1, "exactly one checkpoint entry");
     let (key, value) = cache.iter().next().expect("one entry");
-    assert!(key.contains("Reply with JSON only"), "key should be the schema-injected prompt");
+    assert!(
+        key.contains("Reply with JSON only"),
+        "key should be the schema-injected prompt"
+    );
     assert_eq!(value, VALID_GDD);
     drop(cache);
-    assert_eq!(host.inner.prompts.lock().unwrap().len(), 2, "initial try plus one retry");
+    assert_eq!(
+        host.inner.prompts.lock().unwrap().len(),
+        2,
+        "initial try plus one retry"
+    );
 }
 
 #[tokio::test]
@@ -1818,7 +2097,11 @@ async fn schema_agent_host_failure_short_circuits_without_retry() {
         matches!(err, FlowError::Agent { ref source, .. } if source.0 == "subagent crashed"),
         "unexpected error: {err:?}"
     );
-    assert_eq!(host.prompts.lock().unwrap().len(), 1, "no retry on host failure");
+    assert_eq!(
+        host.prompts.lock().unwrap().len(),
+        1,
+        "no retry on host failure"
+    );
 }
 
 #[tokio::test]
@@ -1850,7 +2133,6 @@ async fn unconstrained_agent_keeps_parse_or_string_behavior() {
         prompts[0]
     );
 }
-
 
 // ---- M2.5 end-to-end tests ----
 
@@ -1914,7 +2196,10 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
         .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
     let args = || flow_args_from_input(&[user_text_input("demo")]);
     let mut ignored_assessments = Vec::new();
@@ -1927,12 +2212,14 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
         async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
     });
     let prompt_a = next_spawn_prompt(&rx, "step A", &mut ignored_assessments).await;
-    assert!(prompt_a.contains("Step A on demo"), "unexpected prompt: {prompt_a}");
+    assert!(
+        prompt_a.contains("Step A on demo"),
+        "unexpected prompt: {prompt_a}"
+    );
     let thread_a = timeout(Duration::from_secs(30), async {
         loop {
             if let Some(thread_id) =
-                next_pending_child_thread_id(&manager, session.thread_id, &Default::default())
-                    .await
+                next_pending_child_thread_id(&manager, session.thread_id, &Default::default()).await
             {
                 return thread_id;
             }
@@ -1944,12 +2231,18 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
     drive_child_to_completion(&manager, thread_a, "result A").await;
 
     let prompt_b = next_spawn_prompt(&rx, "step B", &mut ignored_assessments).await;
-    assert!(prompt_b.contains("Step B uses result A"), "unexpected prompt: {prompt_b}");
+    assert!(
+        prompt_b.contains("Step B uses result A"),
+        "unexpected prompt: {prompt_b}"
+    );
     // Interrupt the run: dropping the task drops the in-flight `run_agent`
     // future, whose AbortOnDrop guard interrupts the spawned child.
     run1.abort();
     let join = run1.await.expect_err("aborted run should not complete");
-    assert!(join.is_cancelled(), "run should be cancelled, not panicked: {join:?}");
+    assert!(
+        join.is_cancelled(),
+        "run should be cancelled, not panicked: {join:?}"
+    );
 
     // The interrupted run retained its checkpoint file with step A's entry.
     let ody_home = session.get_config().await.ody_home.clone();
@@ -1965,7 +2258,11 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
     let parsed: serde_json::Value =
         serde_json::from_str(&saved).expect("checkpoint file should be valid JSON");
     let entries = parsed["entries"].as_object().expect("entries object");
-    assert_eq!(entries.len(), 1, "only step A completed before the interrupt: {saved}");
+    assert_eq!(
+        entries.len(),
+        1,
+        "only step A completed before the interrupt: {saved}"
+    );
     assert_eq!(
         entries.values().next().expect("one entry"),
         &json!("result A"),
@@ -1978,7 +2275,8 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
         let turn = turn.clone();
         async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
     });
-    let prompt_b2 = next_spawn_prompt(&rx, "step B on the resume run", &mut ignored_assessments).await;
+    let prompt_b2 =
+        next_spawn_prompt(&rx, "step B on the resume run", &mut ignored_assessments).await;
     assert!(
         prompt_b2.contains("Step B uses result A"),
         "resume run must continue at step B, not re-run A: {prompt_b2}"
@@ -2000,7 +2298,10 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
     driven.insert(thread_b2);
 
     let prompt_c = next_spawn_prompt(&rx, "step C", &mut ignored_assessments).await;
-    assert!(prompt_c.contains("Step C uses result B"), "unexpected prompt: {prompt_c}");
+    assert!(
+        prompt_c.contains("Step C uses result B"),
+        "unexpected prompt: {prompt_c}"
+    );
     let thread_c = timeout(Duration::from_secs(30), async {
         loop {
             if let Some(thread_id) =
@@ -2025,7 +2326,10 @@ async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt(
 
     // Success discards the checkpoint file; the conversation only ever saw
     // one spawn per step on this turn (A once, B twice across both runs).
-    assert!(!checkpoint_file.exists(), "successful run must discard its checkpoint");
+    assert!(
+        !checkpoint_file.exists(),
+        "successful run must discard its checkpoint"
+    );
 }
 
 #[tokio::test]
@@ -2085,8 +2389,10 @@ async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
     // without KIMI_API_KEY (mirrors guardian_test_session_turn_and_rx).
     config.model_provider_id = crate::config::TEST_PROVIDER_ID.to_string();
     config.model_provider = crate::config::test_provider();
-    config.model_providers =
-        std::collections::HashMap::from([(crate::config::TEST_PROVIDER_ID.to_string(), crate::config::test_provider())]);
+    config.model_providers = std::collections::HashMap::from([(
+        crate::config::TEST_PROVIDER_ID.to_string(),
+        crate::config::test_provider(),
+    )]);
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     config.agent_max_depth = 4;
     let config = Arc::new(config);
@@ -2112,7 +2418,10 @@ async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
         .services
         .flow_runner
         .init_session(Arc::downgrade(&session));
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     session.services.flow_runner.register_turn(&turn);
 
     let run = tokio::spawn({
@@ -2133,8 +2442,12 @@ async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
     // The guardian review runs against the wiremock reviewer and approves;
     // execution then spawns the flow's agent.
     let mut assessment_statuses = Vec::new();
-    let prompt = next_spawn_prompt(&rx, "the approved flow's agent", &mut assessment_statuses).await;
-    assert!(prompt.contains("Summarize the repo"), "unexpected prompt: {prompt}");
+    let prompt =
+        next_spawn_prompt(&rx, "the approved flow's agent", &mut assessment_statuses).await;
+    assert!(
+        prompt.contains("Summarize the repo"),
+        "unexpected prompt: {prompt}"
+    );
     let mut driven = std::collections::HashSet::new();
     let thread_id = timeout(Duration::from_secs(30), async {
         loop {
@@ -2168,11 +2481,13 @@ async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
     // while waiting for the spawn above).
     assert_eq!(
         assessment_statuses,
-        vec![GuardianAssessmentStatus::InProgress, GuardianAssessmentStatus::Approved],
+        vec![
+            GuardianAssessmentStatus::InProgress,
+            GuardianAssessmentStatus::Approved
+        ],
         "guardian assessment lifecycle missing: {assessment_statuses:?}"
     );
 }
-
 
 // ---- D1 regressions: flow sub-agent spawn slots must be released ----
 
@@ -2203,7 +2518,10 @@ async fn flow_serial_steps_release_subagent_slots_after_completion() {
         .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
     let args = || flow_args_from_input(&[user_text_input("demo")]);
     let mut ignored = Vec::new();
@@ -2215,7 +2533,11 @@ async fn flow_serial_steps_release_subagent_slots_after_completion() {
         let skill = skill.clone();
         async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
     });
-    for (what, result) in [("step 1", "result 1"), ("step 2", "result 2"), ("step 3", "result 3")] {
+    for (what, result) in [
+        ("step 1", "result 1"),
+        ("step 2", "result 2"),
+        ("step 3", "result 3"),
+    ] {
         let prompt = next_spawn_prompt(&rx, what, &mut ignored).await;
         assert!(prompt.starts_with("Step"), "unexpected prompt: {prompt}");
         let thread_id = timeout(Duration::from_secs(30), async {
@@ -2267,7 +2589,10 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
         .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    install_skills(
+        Arc::get_mut(&mut turn).expect("unique turn arc"),
+        vec![skill.clone()],
+    );
     let turn = Arc::new(turn);
     let args = || flow_args_from_input(&[user_text_input("demo")]);
     let mut ignored = Vec::new();
@@ -2294,7 +2619,10 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
     .expect("step A thread should register");
     run1.abort();
     let join = run1.await.expect_err("aborted run should not complete");
-    assert!(join.is_cancelled(), "run should be cancelled, not panicked: {join:?}");
+    assert!(
+        join.is_cancelled(),
+        "run should be cancelled, not panicked: {join:?}"
+    );
 
     // The abort cleanup (interrupt + shutdown) runs on the session runtime;
     // wait until the child thread is actually removed from the manager.
@@ -2337,7 +2665,10 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
     .expect("step A thread should register on the re-trigger");
     drive_child_to_completion(&manager, thread_a2, "result A").await;
     let prompt_b = next_spawn_prompt(&rx, "step B", &mut ignored).await;
-    assert!(prompt_b.contains("Step B uses result A"), "unexpected prompt: {prompt_b}");
+    assert!(
+        prompt_b.contains("Step B uses result A"),
+        "unexpected prompt: {prompt_b}"
+    );
     let mut driven = std::collections::HashSet::from([thread_a, thread_a2]);
     let thread_b = timeout(Duration::from_secs(30), async {
         loop {
@@ -2359,7 +2690,6 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
         .expect("re-trigger should succeed once the interrupted slot is released");
     assert_eq!(outcome.outputs["b"], json!("result B"));
 }
-
 
 // ---- M3.1: carrier dispatch + Starlark runtime + conformance ----
 
@@ -2398,7 +2728,10 @@ fn select_flow_runtime_picks_yaml_and_rejects_unknown_artifacts() {
 fn workflow_js_without_flow_v8_feature_reports_compiled_without_error() {
     match select_flow_runtime("workflow.js") {
         Err(FlowError::Parse { reason }) => {
-            assert!(reason.contains("compiled without the `flow-v8` Cargo feature"), "{reason}");
+            assert!(
+                reason.contains("compiled without the `flow-v8` Cargo feature"),
+                "{reason}"
+            );
         }
         other => panic!("expected compiled-without error, got {other:?}"),
     }
@@ -2409,7 +2742,9 @@ mod starlark {
     use super::*;
 
     fn star_validate(runtime: &StarlarkFlowRuntime, source: &str) -> FlowPlanSource {
-        runtime.validate(source).expect("fixture script should validate")
+        runtime
+            .validate(source)
+            .expect("fixture script should validate")
     }
 
     #[test]
@@ -2434,7 +2769,16 @@ result = main_work()
 "#;
         let plan = star_validate(&StarlarkFlowRuntime, source);
         let outcome = StarlarkFlowRuntime
-            .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &host)
+            .run(
+                plan,
+                FlowContext {
+                    args: serde_json::json!({"topic": "otters"})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                },
+                &host,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -2443,7 +2787,10 @@ result = main_work()
         );
         assert_eq!(
             *host.prompts.lock().unwrap(),
-            vec!["write about otters".to_string(), "summarize done: write about otters".to_string()]
+            vec![
+                "write about otters".to_string(),
+                "summarize done: write about otters".to_string()
+            ]
         );
     }
 
@@ -2495,7 +2842,10 @@ result = parallel([review, test])
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!(["done: Review", "done: Test"]));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!(["done: Review", "done: Test"])
+        );
     }
 
     #[tokio::test]
@@ -2513,7 +2863,9 @@ result = parallel([review, test])
     #[tokio::test]
     async fn starlark_pipeline_enforces_batch_limit() {
         let host = MockHost::default();
-        let many: Vec<String> = (0..super::super::FLOW_BATCH_LIMIT + 1).map(|i| i.to_string()).collect();
+        let many: Vec<String> = (0..super::super::FLOW_BATCH_LIMIT + 1)
+            .map(|i| i.to_string())
+            .collect();
         let many_json = serde_json::to_string(&many).unwrap();
         let source = format!(
             r#"
@@ -2530,7 +2882,11 @@ result = pipeline(json.decode('{many_json}'), handle)
             .expect_err("batch over the cap must fail");
         // The limit surfaces through the eval thread as an Agent error whose
         // message carries the LimitExceeded display text.
-        assert!(err.to_string().contains("batch of 4097 exceeds the limit of 4096"), "{err}");
+        assert!(
+            err.to_string()
+                .contains("batch of 4097 exceeds the limit of 4096"),
+            "{err}"
+        );
     }
 
     /// M2.1 checkpoint/replay must apply to script carriers too: a cached
@@ -2538,7 +2894,10 @@ result = pipeline(json.decode('{many_json}'), handle)
     #[tokio::test]
     async fn starlark_checkpoint_replay_skips_completed_agents() {
         let store = Arc::new(Mutex::new(std::collections::HashMap::new()));
-        let host = CheckpointMockHost { store: Arc::clone(&store), prompts: Mutex::new(Vec::new()) };
+        let host = CheckpointMockHost {
+            store: Arc::clone(&store),
+            prompts: Mutex::new(Vec::new()),
+        };
         let source = r#"
 first = agent('step one')
 result = agent('step two using ' + first)
@@ -2549,7 +2908,10 @@ result = agent('step two using ' + first)
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done:step two using done:step one")
+        );
         assert_eq!(store.lock().unwrap().len(), 2);
 
         // Run 2 (same source): every prompt hits the cache, zero spawns.
@@ -2558,10 +2920,16 @@ result = agent('step two using ' + first)
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done:step two using done:step one")
+        );
         assert_eq!(
             *host.prompts.lock().unwrap(),
-            vec!["step one".to_string(), "step two using done:step one".to_string()]
+            vec![
+                "step one".to_string(),
+                "step two using done:step one".to_string()
+            ]
         );
     }
 
@@ -2598,8 +2966,16 @@ result = reply
         assert_eq!(outcome.outputs["result"], json!(r#"{"name": "ody"}"#));
         let prompts = host.prompts.lock().unwrap();
         assert_eq!(prompts.len(), 2, "one failed attempt then one retry");
-        assert!(prompts[1].contains("failed validation"), "retry prompt: {}", prompts[1]);
-        assert!(prompts[0].contains("required"), "schema instruction injected: {}", prompts[0]);
+        assert!(
+            prompts[1].contains("failed validation"),
+            "retry prompt: {}",
+            prompts[1]
+        );
+        assert!(
+            prompts[0].contains("required"),
+            "schema instruction injected: {}",
+            prompts[0]
+        );
     }
 
     #[tokio::test]
@@ -2617,7 +2993,11 @@ result = reply
             .expect_err("schema exhaustion must fail the run");
         let msg = err.to_string();
         assert!(msg.contains("schema validation failed"), "{msg}");
-        assert_eq!(host.prompts.lock().unwrap().len(), 3, "SCHEMA_MAX_ATTEMPTS tries");
+        assert_eq!(
+            host.prompts.lock().unwrap().len(),
+            3,
+            "SCHEMA_MAX_ATTEMPTS tries"
+        );
     }
 
     #[tokio::test]
@@ -2653,13 +3033,19 @@ result = [a, b]
         assert_eq!(
             *host.progress.lock().unwrap(),
             vec![
-                FlowProgress::PhaseBegin { phase_id: "one".to_string(), total_steps: 1 },
+                FlowProgress::PhaseBegin {
+                    phase_id: "one".to_string(),
+                    total_steps: 1
+                },
                 FlowProgress::PhaseEnd {
                     phase_id: "one".to_string(),
                     completed_steps: 1,
                     total_steps: 1,
                 },
-                FlowProgress::PhaseBegin { phase_id: "two".to_string(), total_steps: 1 },
+                FlowProgress::PhaseBegin {
+                    phase_id: "two".to_string(),
+                    total_steps: 1
+                },
                 FlowProgress::PhaseEnd {
                     phase_id: "two".to_string(),
                     completed_steps: 1,
@@ -2681,8 +3067,12 @@ result = [a, b]
         assert_eq!(
             *host.progress.lock().unwrap(),
             vec![
-                FlowProgress::Log { message: "hello".to_string() },
-                FlowProgress::Log { message: "world".to_string() },
+                FlowProgress::Log {
+                    message: "hello".to_string()
+                },
+                FlowProgress::Log {
+                    message: "world".to_string()
+                },
             ]
         );
     }
@@ -2711,13 +3101,19 @@ result = [a, b]
         assert_eq!(
             *host.progress.lock().unwrap(),
             vec![
-                FlowProgress::PhaseBegin { phase_id: "one".to_string(), total_steps: 1 },
+                FlowProgress::PhaseBegin {
+                    phase_id: "one".to_string(),
+                    total_steps: 1
+                },
                 FlowProgress::PhaseEnd {
                     phase_id: "one".to_string(),
                     completed_steps: 1,
                     total_steps: 1,
                 },
-                FlowProgress::PhaseBegin { phase_id: "two".to_string(), total_steps: 1 },
+                FlowProgress::PhaseBegin {
+                    phase_id: "two".to_string(),
+                    total_steps: 1
+                },
                 FlowProgress::PhaseEnd {
                     phase_id: "two".to_string(),
                     completed_steps: 0,
@@ -2738,12 +3134,10 @@ result = [a, b]
             .unwrap();
         assert_eq!(outcome.outputs["result"], json!("done: plain"));
         assert!(
-            host
-                .progress
-                .lock()
-                .unwrap()
-                .iter()
-                .all(|event| !matches!(event, FlowProgress::PhaseBegin { .. } | FlowProgress::PhaseEnd { .. })),
+            host.progress.lock().unwrap().iter().all(|event| !matches!(
+                event,
+                FlowProgress::PhaseBegin { .. } | FlowProgress::PhaseEnd { .. }
+            )),
             "no phase events without phase() calls"
         );
     }
@@ -2754,7 +3148,9 @@ mod js {
     use super::*;
 
     fn js_validate(runtime: &V8FlowRuntime, source: &str) -> FlowPlanSource {
-        runtime.validate(source).expect("fixture script should validate")
+        runtime
+            .validate(source)
+            .expect("fixture script should validate")
     }
 
     #[test]
@@ -2779,7 +3175,10 @@ var result = await agent("summarize " + first);
             .run(
                 plan,
                 FlowContext {
-                    args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone(),
+                    args: serde_json::json!({"topic": "otters"})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
                 },
                 &host,
             )
@@ -2831,8 +3230,16 @@ var result = reply;
         assert_eq!(outcome.outputs["result"], json!(r#"{"score": 7}"#));
         let prompts = host.prompts.lock().unwrap();
         assert_eq!(prompts.len(), 2, "one failed attempt then one retry");
-        assert!(prompts[1].contains("failed validation"), "retry prompt: {}", prompts[1]);
-        assert!(prompts[0].contains("required"), "schema instruction injected: {}", prompts[0]);
+        assert!(
+            prompts[1].contains("failed validation"),
+            "retry prompt: {}",
+            prompts[1]
+        );
+        assert!(
+            prompts[0].contains("required"),
+            "schema instruction injected: {}",
+            prompts[0]
+        );
     }
 
     #[tokio::test]
@@ -2850,7 +3257,11 @@ var result = reply;
             .expect_err("schema exhaustion must fail the run");
         let msg = err.to_string();
         assert!(msg.contains("schema validation failed"), "{msg}");
-        assert_eq!(host.prompts.lock().unwrap().len(), 3, "SCHEMA_MAX_ATTEMPTS tries");
+        assert_eq!(
+            host.prompts.lock().unwrap().len(),
+            3,
+            "SCHEMA_MAX_ATTEMPTS tries"
+        );
     }
 
     #[tokio::test]
@@ -2878,13 +3289,19 @@ var result = await parallel([() => "Review", () => "Test"]);
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!(["done: Review", "done: Test"]));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!(["done: Review", "done: Test"])
+        );
         // Script `phase()` surfaces as structured begin/end events, not a
         // log line (2026-09-21 script-carrier observability work).
         assert_eq!(
             *host.progress.lock().unwrap(),
             vec![
-                FlowProgress::PhaseBegin { phase_id: "verify".to_string(), total_steps: 1 },
+                FlowProgress::PhaseBegin {
+                    phase_id: "verify".to_string(),
+                    total_steps: 1
+                },
                 FlowProgress::PhaseEnd {
                     phase_id: "verify".to_string(),
                     completed_steps: 1,
@@ -2899,7 +3316,10 @@ var result = await parallel([() => "Review", () => "Test"]);
     #[tokio::test]
     async fn js_checkpoint_replay_skips_completed_agents() {
         let store = Arc::new(Mutex::new(std::collections::HashMap::new()));
-        let host = CheckpointMockHost { store: Arc::clone(&store), prompts: Mutex::new(Vec::new()) };
+        let host = CheckpointMockHost {
+            store: Arc::clone(&store),
+            prompts: Mutex::new(Vec::new()),
+        };
         let source = r#"
 const first = await agent("step one");
 var result = await agent("step two using " + first);
@@ -2910,7 +3330,10 @@ var result = await agent("step two using " + first);
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done:step two using done:step one")
+        );
         assert_eq!(store.lock().unwrap().len(), 2);
 
         // Run 2 (same source): every prompt hits the cache, zero spawns.
@@ -2919,18 +3342,25 @@ var result = await agent("step two using " + first);
             .run(plan, FlowContext::default(), &host)
             .await
             .unwrap();
-        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done:step two using done:step one")
+        );
         assert_eq!(
             *host.prompts.lock().unwrap(),
-            vec!["step one".to_string(), "step two using done:step one".to_string()]
+            vec![
+                "step one".to_string(),
+                "step two using done:step one".to_string()
+            ]
         );
     }
 
     #[tokio::test]
     async fn js_pipeline_enforces_batch_limit() {
         let host = MockHost::default();
-        let many: Vec<String> =
-            (0..super::super::FLOW_BATCH_LIMIT + 1).map(|i| i.to_string()).collect();
+        let many: Vec<String> = (0..super::super::FLOW_BATCH_LIMIT + 1)
+            .map(|i| i.to_string())
+            .collect();
         let source = format!(
             r#"var result = await pipeline({many_json}, (i) => "item " + i);"#,
             many_json = serde_json::to_string(&many).unwrap()
@@ -2941,7 +3371,8 @@ var result = await agent("step two using " + first);
             .await
             .expect_err("batch over the cap must fail");
         assert!(
-            err.to_string().contains("batch of 4097 exceeds the limit of 4096"),
+            err.to_string()
+                .contains("batch of 4097 exceeds the limit of 4096"),
             "{err}"
         );
     }
@@ -2977,7 +3408,10 @@ impl FlowAgentHost for CheckpointMockHost {
     }
 
     async fn checkpoint_write(&self, prompt: &str, output: &str) {
-        self.store.lock().unwrap().insert(prompt.to_string(), output.to_string());
+        self.store
+            .lock()
+            .unwrap()
+            .insert(prompt.to_string(), output.to_string());
     }
 }
 
@@ -3026,17 +3460,24 @@ phase("verify")
 checks = parallel([review_task, test_task])
 result = {"gdd": gdd, "impls": impls, "checks": checks}
 "#;
-    let args = serde_json::json!({"topic": "otters"}).as_object().unwrap().clone();
+    let args = serde_json::json!({"topic": "otters"})
+        .as_object()
+        .unwrap()
+        .clone();
 
     let yaml_host = ConformanceHost::default();
-    let plan = YamlFlowRuntime.validate(yaml_source).expect("yaml validates");
+    let plan = YamlFlowRuntime
+        .validate(yaml_source)
+        .expect("yaml validates");
     let yaml_outcome = YamlFlowRuntime
         .run(plan, FlowContext { args: args.clone() }, &yaml_host)
         .await
         .expect("yaml run succeeds");
 
     let star_host = ConformanceHost::default();
-    let plan = StarlarkFlowRuntime.validate(star_source).expect("starlark validates");
+    let plan = StarlarkFlowRuntime
+        .validate(star_source)
+        .expect("starlark validates");
     let star_outcome = StarlarkFlowRuntime
         .run(plan, FlowContext { args }, &star_host)
         .await
@@ -3093,16 +3534,36 @@ var result = { gdd, impls, checks };
 "#;
 
     let yaml_host = ConformanceHost::default();
-    let plan = YamlFlowRuntime.validate(yaml_source).expect("yaml validates");
+    let plan = YamlFlowRuntime
+        .validate(yaml_source)
+        .expect("yaml validates");
     let yaml_outcome = YamlFlowRuntime
-        .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &yaml_host)
+        .run(
+            plan,
+            FlowContext {
+                args: serde_json::json!({"topic": "otters"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            },
+            &yaml_host,
+        )
         .await
         .expect("yaml run succeeds");
 
     let js_host = ConformanceHost::default();
     let plan = V8FlowRuntime.validate(js_source).expect("js validates");
     let js_outcome = V8FlowRuntime
-        .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &js_host)
+        .run(
+            plan,
+            FlowContext {
+                args: serde_json::json!({"topic": "otters"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            },
+            &js_host,
+        )
         .await
         .expect("js run succeeds");
 
@@ -3146,7 +3607,10 @@ mod embedded_game_flow {
 
     impl GameFlowHost {
         fn with(canned: Vec<Result<String, String>>) -> Self {
-            Self { canned: Mutex::new(canned.into()), ..Self::default() }
+            Self {
+                canned: Mutex::new(canned.into()),
+                ..Self::default()
+            }
         }
     }
 
@@ -3177,7 +3641,9 @@ mod embedded_game_flow {
     }
 
     fn args_context(text: &str) -> FlowContext {
-        FlowContext { args: json!({ "text": text }).as_object().unwrap().clone() }
+        FlowContext {
+            args: json!({ "text": text }).as_object().unwrap().clone(),
+        }
     }
 
     const CONCEPT_A: &str = r#"{"pitch":"打砖块","coreLoop":"接球反弹消砖","input":"左右方向键","winLose":"清空所有砖块获胜，三条命用完失败","fun":"一击多砖的连锁爽感"}"#;
@@ -3186,8 +3652,7 @@ mod embedded_game_flow {
             {"name":"ball","spec":"反弹物理，碰撞后速度递增"}],
         "constraints":["单 index.html","无外部素材","Canvas 2D","60fps"],
         "feedback":["击中砖块：粒子","漏球：生命闪烁"]}"#;
-    const PLAN_A: &str =
-        r#"{"stack":"Canvas 2D（单文件无依赖）","files":["index.html"],"run":"python3 -m http.server 8000"}"#;
+    const PLAN_A: &str = r#"{"stack":"Canvas 2D（单文件无依赖）","files":["index.html"],"run":"python3 -m http.server 8000"}"#;
 
     #[tokio::test]
     async fn track_a_runs_end_to_end() {
@@ -3209,18 +3674,33 @@ mod embedded_game_flow {
         assert_eq!(result["track"], json!("A"));
         assert_eq!(result["implementations"].as_array().unwrap().len(), 2);
         assert_eq!(result["review"].as_array().unwrap().len(), 2);
-        let next_steps = result["nextSteps"].as_array().expect("track A must give next steps");
+        let next_steps = result["nextSteps"]
+            .as_array()
+            .expect("track A must give next steps");
         assert_eq!(next_steps.len(), 3);
         assert!(
-            next_steps[0].as_str().unwrap().contains("python3 -m http.server 8000"),
+            next_steps[0]
+                .as_str()
+                .unwrap()
+                .contains("python3 -m http.server 8000"),
             "first next step should tell the user how to play: {next_steps:?}"
         );
 
         let prompts = host.prompts.lock().unwrap();
-        assert_eq!(prompts.len(), 8, "triage + concept + gdd + plan + 2 implement + 2 review");
-        assert!(prompts[0].contains("意图分类器"), "triage runs first: {}", prompts[0]);
+        assert_eq!(
+            prompts.len(),
+            8,
+            "triage + concept + gdd + plan + 2 implement + 2 review"
+        );
         assert!(
-            prompts.iter().any(|prompt| prompt.contains("实现游戏机制「paddle」")),
+            prompts[0].contains("意图分类器"),
+            "triage runs first: {}",
+            prompts[0]
+        );
+        assert!(
+            prompts
+                .iter()
+                .any(|prompt| prompt.contains("实现游戏机制「paddle」")),
             "per-mechanic fan-out must render item.name"
         );
         let browser_prompt = prompts
@@ -3235,7 +3715,8 @@ mod embedded_game_flow {
 
     #[tokio::test]
     async fn track_b_stops_with_arch_report_and_next_steps() {
-        let host = GameFlowHost::with(vec![
+        let host =
+            GameFlowHost::with(vec![
             Ok(r#"{"track":"B","brief":"做个商业化卡牌手游","reason":"提到商业化"}"#.to_string()),
             Ok(r#"{"pitch":"千门题材卡牌构筑","coreLoop":"组牌-对局-成长","audience":"卡牌玩家",
                    "platforms":["iOS","Android"],"monetization":"IAP 内购","scope":"medium",
@@ -3261,14 +3742,22 @@ mod embedded_game_flow {
             "arch report must be captured: {:?}",
             result["archReport"]
         );
-        let next_steps = result["nextSteps"].as_array().expect("track B must give next steps");
+        let next_steps = result["nextSteps"]
+            .as_array()
+            .expect("track B must give next steps");
         assert!(
-            next_steps.iter().any(|step| step.as_str().unwrap().contains("确认")),
+            next_steps
+                .iter()
+                .any(|step| step.as_str().unwrap().contains("确认")),
             "track B stops for user confirmation: {next_steps:?}"
         );
 
         let prompts = host.prompts.lock().unwrap();
-        assert_eq!(prompts.len(), 4, "triage + concept + gdd + arch only; no implementation");
+        assert_eq!(
+            prompts.len(),
+            4,
+            "triage + concept + gdd + arch only; no implementation"
+        );
         assert!(
             !prompts.iter().any(|prompt| prompt.contains("实现游戏机制")),
             "track B must never fan out implementation agents"
@@ -3278,7 +3767,8 @@ mod embedded_game_flow {
     #[tokio::test]
     async fn track_c_answers_via_router_brief() {
         let host = GameFlowHost::with(vec![Ok(
-            r#"{"track":"C","brief":"Godot 项目怎么做存档","reason":"已有项目具体问题"}"#.to_string(),
+            r#"{"track":"C","brief":"Godot 项目怎么做存档","reason":"已有项目具体问题"}"#
+                .to_string(),
         )]);
         let plan = StarlarkFlowRuntime
             .validate(&game_flow_source())
@@ -3290,7 +3780,12 @@ mod embedded_game_flow {
 
         let result = &outcome.outputs["result"];
         assert_eq!(result["track"], json!("C"));
-        assert!(result["answer"].as_str().unwrap().contains("gamedev-router"));
+        assert!(
+            result["answer"]
+                .as_str()
+                .unwrap()
+                .contains("gamedev-router")
+        );
         let prompts = host.prompts.lock().unwrap();
         assert_eq!(prompts.len(), 2, "triage + single answer agent");
         assert!(
@@ -3306,14 +3801,23 @@ mod embedded_game_flow {
         let plan = StarlarkFlowRuntime
             .validate(&game_flow_source())
             .expect("embedded game flow.star should validate");
-        let outcome = StarlarkFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
 
         let result = &outcome.outputs["result"];
         assert_eq!(result["error"], json!("缺少输入"));
         assert!(
-            result["nextSteps"].as_array().unwrap()[0].as_str().unwrap().contains("/game"),
+            result["nextSteps"].as_array().unwrap()[0]
+                .as_str()
+                .unwrap()
+                .contains("/game"),
             "usage hint must mention the entry command"
         );
-        assert!(host.prompts.lock().unwrap().is_empty(), "no agent may run without input");
+        assert!(
+            host.prompts.lock().unwrap().is_empty(),
+            "no agent may run without input"
+        );
     }
 }

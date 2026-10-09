@@ -1440,8 +1440,11 @@ mod tests {
         let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
         // Fresh artifact: its tmp path does not exist on disk yet, so there is
         // nothing to continue — the P0 triage contract applies as written.
-        let artifact =
-            crate::plan_artifact::PlanArtifact::new_product(plans_base_dir, thread_id, "2026-09-08");
+        let artifact = crate::plan_artifact::PlanArtifact::new_product(
+            plans_base_dir,
+            thread_id,
+            "2026-09-08",
+        );
 
         let instructions = CollaborationModeInstructions::from_collaboration_mode(
             &mode,

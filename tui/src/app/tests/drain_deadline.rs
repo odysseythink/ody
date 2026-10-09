@@ -15,12 +15,15 @@ fn warning(message: &str) -> ThreadBufferedEvent {
     }))
 }
 
-async fn app_with_pending_warnings(warnings: usize) -> (App, tokio::sync::mpsc::Sender<ThreadBufferedEvent>) {
+async fn app_with_pending_warnings(
+    warnings: usize,
+) -> (App, tokio::sync::mpsc::Sender<ThreadBufferedEvent>) {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let (tx, rx) = tokio::sync::mpsc::channel::<ThreadBufferedEvent>(16);
     for i in 0..warnings {
-        tx.try_send(warning(&format!("warning-{i}"))).expect("send warning");
+        tx.try_send(warning(&format!("warning-{i}")))
+            .expect("send warning");
     }
     app.active_thread_rx = Some(rx);
     (app, tx)
@@ -49,7 +52,8 @@ async fn drain_with_future_deadline_processes_everything() -> Result<()> {
     let mut tui = crate::tui::test_support::make_test_tui().expect("test tui");
     let future = Instant::now() + Duration::from_secs(60);
 
-    app.drain_active_thread_events_until(&mut tui, future).await?;
+    app.drain_active_thread_events_until(&mut tui, future)
+        .await?;
 
     let remaining = app
         .active_thread_rx

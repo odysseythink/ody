@@ -842,21 +842,26 @@ impl ConfigToml {
                 // Anthropic-protocol Bedrock providers (Claude via the
                 // invoke operations) use the bare Bedrock runtime host;
                 // OpenAI-compatible Bedrock keeps the /openai/v1 surface.
-                let is_anthropic_bedrock =
-                    provider.r#type == "anthropic" && provider.aws.is_some();
-                let base_url = if provider.base_url.is_none() && (is_bedrock || is_anthropic_bedrock)
-                {
-                    let region = provider
-                        .aws
-                        .as_ref()
-                        .map(|aws| aws.region.as_str())
-                        .filter(|region| !region.is_empty())
-                        .unwrap_or("us-east-1");
-                    let path = if is_anthropic_bedrock { "" } else { "/openai/v1" };
-                    Some(format!("https://bedrock-runtime.{region}.amazonaws.com{path}"))
-                } else {
-                    provider.base_url.clone()
-                };
+                let is_anthropic_bedrock = provider.r#type == "anthropic" && provider.aws.is_some();
+                let base_url =
+                    if provider.base_url.is_none() && (is_bedrock || is_anthropic_bedrock) {
+                        let region = provider
+                            .aws
+                            .as_ref()
+                            .map(|aws| aws.region.as_str())
+                            .filter(|region| !region.is_empty())
+                            .unwrap_or("us-east-1");
+                        let path = if is_anthropic_bedrock {
+                            ""
+                        } else {
+                            "/openai/v1"
+                        };
+                        Some(format!(
+                            "https://bedrock-runtime.{region}.amazonaws.com{path}"
+                        ))
+                    } else {
+                        provider.base_url.clone()
+                    };
                 let aws = provider.aws.as_ref().map(|aws| {
                     ody_model_provider_info::ModelProviderAwsConfig {
                         access_key_id: aws.access_key_id.clone(),
@@ -2035,7 +2040,6 @@ region = "eu-central-1"
         );
         assert!(provider.aws.is_some());
     }
-
 
     #[test]
     fn convert_ody_code_bedrock_type_uses_chat_wire_api_and_sigv4_fields() {

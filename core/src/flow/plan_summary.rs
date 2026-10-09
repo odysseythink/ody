@@ -95,9 +95,19 @@ pub(crate) struct PhaseSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum StepSummary {
-    Agent { preview: String, output: Option<String> },
-    Pipeline { items: String, each_preview: String, output: Option<String> },
-    Parallel { children: Vec<StepSummary>, output: Option<String> },
+    Agent {
+        preview: String,
+        output: Option<String>,
+    },
+    Pipeline {
+        items: String,
+        each_preview: String,
+        output: Option<String>,
+    },
+    Parallel {
+        children: Vec<StepSummary>,
+        output: Option<String>,
+    },
 }
 
 impl FlowPlanSummary {
@@ -123,19 +133,13 @@ impl FlowPlanSummary {
         match plan {
             FlowPlanSource::Yaml(plan) => Self::new(flow_name, plan),
             #[cfg(feature = "flow-starlark")]
-            FlowPlanSource::Starlark(source) => {
-                Self::for_script(flow_name, "flow.star", source)
-            }
+            FlowPlanSource::Starlark(source) => Self::for_script(flow_name, "flow.star", source),
             #[cfg(feature = "flow-v8")]
             FlowPlanSource::V8(source) => Self::for_script(flow_name, "workflow.js", source),
         }
     }
 
-    fn for_script(
-        flow_name: impl Into<String>,
-        carrier: &'static str,
-        source: &str,
-    ) -> Self {
+    fn for_script(flow_name: impl Into<String>, carrier: &'static str, source: &str) -> Self {
         let head: Vec<&str> = source.lines().take(SOURCE_PREVIEW_LINES).collect();
         let preview = if head.len() < source.lines().count() {
             format!("{}\n…", head.join("\n"))
@@ -146,7 +150,10 @@ impl FlowPlanSummary {
         // phase title checklist on top of the bounded source preview.
         let phases = extract_phase_literals(source)
             .into_iter()
-            .map(|id| PhaseSummary { id, steps: Vec::new() })
+            .map(|id| PhaseSummary {
+                id,
+                steps: Vec::new(),
+            })
             .collect();
         Self {
             flow_name: flow_name.into(),
@@ -159,10 +166,19 @@ impl FlowPlanSummary {
 
 fn step_summary(step: &FlowStep) -> StepSummary {
     match step {
-        FlowStep::Agent { agent, output, schema: _ } => {
-            StepSummary::Agent { preview: preview(agent), output: output.clone() }
-        }
-        FlowStep::Pipeline { pipeline, each, output } => StepSummary::Pipeline {
+        FlowStep::Agent {
+            agent,
+            output,
+            schema: _,
+        } => StepSummary::Agent {
+            preview: preview(agent),
+            output: output.clone(),
+        },
+        FlowStep::Pipeline {
+            pipeline,
+            each,
+            output,
+        } => StepSummary::Pipeline {
             items: preview(pipeline),
             each_preview: preview(each),
             output: output.clone(),
@@ -220,7 +236,9 @@ mod tests {
     #[test]
     fn preview_truncates_long_templates() {
         let long = "x".repeat(500);
-        let summary = summary(&format!("phases:\n  - id: p\n    steps:\n      - agent: {long}\n"));
+        let summary = summary(&format!(
+            "phases:\n  - id: p\n    steps:\n      - agent: {long}\n"
+        ));
         match &summary.phases[0].steps[0] {
             StepSummary::Agent { preview, .. } => {
                 assert!(preview.ends_with('…'));
@@ -232,8 +250,10 @@ mod tests {
 
     #[test]
     fn script_summary_previews_first_forty_lines() {
-        let source: String =
-            (1..=45).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let source: String = (1..=45)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let summary = FlowPlanSummary::for_script("demo", "workflow.js", &source);
         assert_eq!(summary.flow_name, "demo");
         assert_eq!(summary.carrier, "workflow.js");
@@ -332,7 +352,11 @@ x.phase("method call is not a hit")
         let source = std::fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("embedded game flow.star should be readable: {err}"));
         let summary = FlowPlanSummary::for_script("game", "flow.star", &source);
-        let titles: Vec<&str> = summary.phases.iter().map(|phase| phase.id.as_str()).collect();
+        let titles: Vec<&str> = summary
+            .phases
+            .iter()
+            .map(|phase| phase.id.as_str())
+            .collect();
         let expected = [
             "triage · 意图识别",
             "A1 · 概念收敛",

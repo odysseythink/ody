@@ -2957,10 +2957,7 @@ impl ChatComposer {
                 // not linger in the composer.
                 self.draft.textarea.set_text_clearing_elements("");
                 self.draft.is_bash_mode = false;
-                return Some(InputResult::SkillCommand(
-                    command,
-                    trimmed_rest.to_string(),
-                ));
+                return Some(InputResult::SkillCommand(command, trimmed_rest.to_string()));
             }
             SlashCommandItem::ServiceTier(_) => return None,
         };
@@ -7886,7 +7883,10 @@ mod tests {
             ActivePopup::Command(popup) => match popup.selected_item() {
                 Some(CommandItem::Skill(command)) => {
                     assert_eq!(command.name, "game-forge");
-                    assert_eq!(command.path, std::path::PathBuf::from("/tmp/skill/SKILL.md"));
+                    assert_eq!(
+                        command.path,
+                        std::path::PathBuf::from("/tmp/skill/SKILL.md")
+                    );
                 }
                 other => panic!("expected flow skill selection, got {other:?}"),
             },
@@ -7908,7 +7908,9 @@ mod tests {
         composer.set_skill_mentions(Some(vec![flow_skill("game-forge")]));
         type_chars_humanlike(
             &mut composer,
-            &"/game-forge make a deck-building game".chars().collect::<Vec<_>>(),
+            &"/game-forge make a deck-building game"
+                .chars()
+                .collect::<Vec<_>>(),
         );
 
         let (result, _needs_redraw) =

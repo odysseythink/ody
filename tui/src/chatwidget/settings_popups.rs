@@ -191,7 +191,9 @@ impl ChatWidget {
 
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Configure Web Search".bold()));
-        header.push(Line::from("Choose a search provider. Press Enter to switch, Tab to configure.".dim()));
+        header.push(Line::from(
+            "Choose a search provider. Press Enter to switch, Tab to configure.".dim(),
+        ));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -283,10 +285,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn open_database_add_connection_form(
-        &mut self,
-        provider: DatabaseProviderName,
-    ) {
+    pub(crate) fn open_database_add_connection_form(&mut self, provider: DatabaseProviderName) {
         self.open_database_connection_form(provider, None);
     }
 
@@ -312,11 +311,9 @@ impl ChatWidget {
             .services
             .as_ref()
             .and_then(|s| s.database.as_ref());
-        let current = existing_name.as_ref().and_then(|name| {
-            config
-                .and_then(|d| d.connections.get(name))
-                .cloned()
-        });
+        let current = existing_name
+            .as_ref()
+            .and_then(|name| config.and_then(|d| d.connections.get(name)).cloned());
         let view = crate::bottom_pane::DatabaseConnectionFormView::new(
             provider,
             existing_name,

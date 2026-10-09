@@ -45,7 +45,12 @@ pub(crate) async fn apply_session_report_gate(
     turn_context: &std::sync::Arc<TurnContext>,
     outcome: &mut StopOutcome,
 ) {
-    if outcome.should_block || !turn_context.config.features.enabled(Feature::SessionReportGate) {
+    if outcome.should_block
+        || !turn_context
+            .config
+            .features
+            .enabled(Feature::SessionReportGate)
+    {
         return;
     }
 
@@ -135,12 +140,7 @@ struct BlockReport {
 }
 
 /// Full gate evaluation: scan, load the stored baseline, decide, persist.
-fn evaluate(
-    cwd: &Path,
-    ody_home: &Path,
-    session_id: &str,
-    settings: &GateSettings,
-) -> Decision {
+fn evaluate(cwd: &Path, ody_home: &Path, session_id: &str, settings: &GateSettings) -> Decision {
     let repos = find_repos(cwd, settings.max_repos);
     if repos.is_empty() {
         return Decision::Allow;
@@ -284,7 +284,10 @@ fn scan_workspace(repos: &[PathBuf]) -> WorkspaceScan {
         };
         let head = head.trim().to_string();
         let status = git_stdout(&repo, &["status", "--porcelain"]).unwrap_or_default();
-        let dirty: Vec<&str> = status.lines().filter(|line| !line.trim().is_empty()).collect();
+        let dirty: Vec<&str> = status
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect();
         // Content, not just names: `status --porcelain` alone cannot see a
         // file edited twice.
         let diff = git_bytes(&repo, &["diff", "HEAD"]).unwrap_or_default();
@@ -297,8 +300,7 @@ fn scan_workspace(repos: &[PathBuf]) -> WorkspaceScan {
         scan.dirty_files += dirty.len();
         if !dirty.is_empty() {
             scan.changed.push(
-                repo
-                    .file_name()
+                repo.file_name()
                     .map(|name| name.to_string_lossy().into_owned())
                     .unwrap_or_else(|| repo.display().to_string()),
             );

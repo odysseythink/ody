@@ -132,7 +132,11 @@ impl<H: FlowAgentHost> WorkflowHost for FlowWorkflowHost<'_, H> {
     /// [`run_agent_text`](super::runtime::run_agent_text) (M2.1/M4.1, same
     /// semantics as the yaml/star carriers); this impl only adapts the
     /// `WorkflowHost` signature and parses the schema transport JSON.
-    async fn run_agent(&self, prompt: String, schema_json: Option<String>) -> Result<String, String> {
+    async fn run_agent(
+        &self,
+        prompt: String,
+        schema_json: Option<String>,
+    ) -> Result<String, String> {
         let schema = schema_json
             .map(|raw| {
                 serde_json::from_str::<serde_json::Value>(&raw)
@@ -158,11 +162,16 @@ impl<H: FlowAgentHost> WorkflowHost for FlowWorkflowHost<'_, H> {
                 .await;
         }
         self.host
-            .report_progress(FlowProgress::PhaseBegin { phase_id: title, total_steps: 1 })
+            .report_progress(FlowProgress::PhaseBegin {
+                phase_id: title,
+                total_steps: 1,
+            })
             .await;
     }
 
     async fn report_progress(&self, message: String) {
-        self.host.report_progress(FlowProgress::Log { message }).await;
+        self.host
+            .report_progress(FlowProgress::Log { message })
+            .await;
     }
 }

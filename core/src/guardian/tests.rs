@@ -3173,8 +3173,10 @@ fn guardian_request_turn_id_prefers_flow_run_owner_turn() {
         flow_name: "game-create".to_string(),
         summary: crate::flow::FlowPlanSummary::new(
             "game-create",
-            &ody_core_skills::parse_flow_plan("phases:\n  - id: p\n    steps:\n      - agent: Go\n")
-                .unwrap(),
+            &ody_core_skills::parse_flow_plan(
+                "phases:\n  - id: p\n    steps:\n      - agent: Go\n",
+            )
+            .unwrap(),
         ),
     };
 

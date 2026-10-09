@@ -60,8 +60,8 @@ async fn max_tokens_truncation_emits_warning_and_ends_turn() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-            aws: None,
-        };
+        aws: None,
+    };
 
     let TestOdy { ody, .. } = test_ody()
         .with_config(move |config| {
@@ -142,8 +142,8 @@ async fn normal_stop_finish_reason_emits_no_warning() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-            aws: None,
-        };
+        aws: None,
+    };
 
     let TestOdy { ody, .. } = test_ody()
         .with_config(move |config| {

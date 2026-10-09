@@ -33,7 +33,12 @@ fn settings() -> GateSettings {
     }
 }
 
-fn scan<const N: usize>(fingerprint: u64, heads: &str, dirty_files: usize, changed: [&str; N]) -> WorkspaceScan {
+fn scan<const N: usize>(
+    fingerprint: u64,
+    heads: &str,
+    dirty_files: usize,
+    changed: [&str; N],
+) -> WorkspaceScan {
     WorkspaceScan {
         fingerprint,
         heads: heads.to_string(),
@@ -119,8 +124,10 @@ fn cooldown_suppresses_repeat_block() {
 fn block_lists_changed_repo_names() {
     let previous = state(SESSION_A, 1, "h1|", 0);
     let scan = scan(2, "h1|", 2, ["beta", "alpha", "beta"]);
-    let Decision::Block(BlockReport { block_reason, changed }) =
-        decide(Some(&previous), &scan, SESSION_A, 10_000, &settings())
+    let Decision::Block(BlockReport {
+        block_reason,
+        changed,
+    }) = decide(Some(&previous), &scan, SESSION_A, 10_000, &settings())
     else {
         panic!("expected block");
     };
@@ -145,10 +152,7 @@ fn scope_uses_repo_name_for_single_repo() {
 
 #[test]
 fn scope_uses_cwd_name_for_repo_hub() {
-    let repos = vec![
-        PathBuf::from("/tmp/hub/one"),
-        PathBuf::from("/tmp/hub/two"),
-    ];
+    let repos = vec![PathBuf::from("/tmp/hub/one"), PathBuf::from("/tmp/hub/two")];
     assert_eq!(workspace_scope(Path::new("/tmp/hub"), &repos), "hub");
 }
 

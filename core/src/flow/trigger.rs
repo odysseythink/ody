@@ -48,7 +48,9 @@ pub(crate) fn partition_flow_skills(
 /// Derive Flow trigger arguments from the submission (A6): all text items of
 /// the triggering input joined in order; a parseable JSON object is used
 /// as-is, anything else becomes `{ "text": <joined> }`.
-pub(crate) fn flow_args_from_input(inputs: &[UserInput]) -> serde_json::Map<String, serde_json::Value> {
+pub(crate) fn flow_args_from_input(
+    inputs: &[UserInput],
+) -> serde_json::Map<String, serde_json::Value> {
     let joined = inputs
         .iter()
         .filter_map(|input| match input {
@@ -155,7 +157,9 @@ pub(crate) async fn run_one_flow_skill(
         .with_checkpoint_store(
             crate::flow::CheckpointStore::open(&ody_home, &name, &fingerprint).await,
         );
-    let result = runtime.run(plan, FlowContext { args: args.clone() }, &host).await;
+    let result = runtime
+        .run(plan, FlowContext { args: args.clone() }, &host)
+        .await;
     if result.is_ok() {
         host.discard_checkpoint().await;
     }
@@ -194,10 +198,14 @@ pub(crate) async fn run_flow_skills_in_turn(
             Err(err) => {
                 sess.send_event(
                     turn_context,
-                    EventMsg::Warning(WarningEvent { message: format!("Flow '{name}' failed: {err}") }),
+                    EventMsg::Warning(WarningEvent {
+                        message: format!("Flow '{name}' failed: {err}"),
+                    }),
                 )
                 .await;
-                items.push(ContextualUserFragment::into(FlowResultMessage::failure(&name, &err)));
+                items.push(ContextualUserFragment::into(FlowResultMessage::failure(
+                    &name, &err,
+                )));
             }
         }
     }

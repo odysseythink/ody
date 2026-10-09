@@ -10606,7 +10606,9 @@ async fn fallback_metadata_warning_only_when_context_window_missing() {
     let turn_context = Arc::new(turn_context);
 
     // Window unknown -> the fallback-metadata warning fires.
-    session.maybe_emit_model_warnings_for_turn(&turn_context).await;
+    session
+        .maybe_emit_model_warnings_for_turn(&turn_context)
+        .await;
     let event = timeout(Duration::from_secs(1), rx.recv())
         .await
         .expect("warning should arrive")
@@ -10614,7 +10616,10 @@ async fn fallback_metadata_warning_only_when_context_window_missing() {
     let EventMsg::Warning(WarningEvent { message }) = &event.msg else {
         panic!("unexpected event: {:?}", event.msg);
     };
-    assert!(message.contains("Model metadata"), "unexpected warning: {message}");
+    assert!(
+        message.contains("Model metadata"),
+        "unexpected warning: {message}"
+    );
 
     // Window configured (e.g. projected per-thread by odyBox) -> suppressed:
     // the warning's concerns (compaction never triggers, zero truncation
@@ -10622,9 +10627,13 @@ async fn fallback_metadata_warning_only_when_context_window_missing() {
     let mut turn_context = Arc::into_inner(turn_context).expect("sole thread settings owner");
     turn_context.model_info.context_window = Some(131072);
     let turn_context = Arc::new(turn_context);
-    session.maybe_emit_model_warnings_for_turn(&turn_context).await;
+    session
+        .maybe_emit_model_warnings_for_turn(&turn_context)
+        .await;
     assert!(
-        timeout(Duration::from_millis(200), rx.recv()).await.is_err(),
+        timeout(Duration::from_millis(200), rx.recv())
+            .await
+            .is_err(),
         "no warning expected when the context window is configured"
     );
 }

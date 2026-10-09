@@ -37,9 +37,7 @@ pub trait StagedWriteSink: Send + Sync {
 ///
 /// Looks at session extension data first (mutable, test-friendly), then at
 /// the host-supplied thread extension init (app-server injection vector).
-fn session_staged_write_sink(
-    session: &Session,
-) -> Option<Arc<dyn StagedWriteSink>> {
+fn session_staged_write_sink(session: &Session) -> Option<Arc<dyn StagedWriteSink>> {
     session
         .services
         .session_extension_data
@@ -168,7 +166,11 @@ mod tests {
         );
     }
 
-    fn applied_add(path: &str, content: &str, overwritten: Option<&str>) -> ody_apply_patch::AppliedPatchChange {
+    fn applied_add(
+        path: &str,
+        content: &str,
+        overwritten: Option<&str>,
+    ) -> ody_apply_patch::AppliedPatchChange {
         ody_apply_patch::AppliedPatchChange {
             path: PathBuf::from(path),
             change: ody_apply_patch::AppliedPatchFileChange::Add {
@@ -257,7 +259,10 @@ mod tests {
             .session_extension_data
             .insert::<Arc<dyn StagedWriteSink>>(sink.clone());
 
-        notify_staged_writes_from_changes(&session, &[applied_add("clobber.txt", "new\n", Some("orig\n"))]);
+        notify_staged_writes_from_changes(
+            &session,
+            &[applied_add("clobber.txt", "new\n", Some("orig\n"))],
+        );
 
         let recorded = sink.recorded();
         assert_eq!(recorded.len(), 1);

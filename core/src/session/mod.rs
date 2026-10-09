@@ -1226,7 +1226,9 @@ impl Session {
     /// Cadence counters carried from the previous read-only-mode turn's
     /// artifact; restored onto the freshly-created per-turn artifact so the
     /// full/sparse reminder schedule survives the per-turn recreation.
-    pub(crate) async fn plan_mode_reminder_turns(&self) -> Option<crate::plan_artifact::ReminderTurns> {
+    pub(crate) async fn plan_mode_reminder_turns(
+        &self,
+    ) -> Option<crate::plan_artifact::ReminderTurns> {
         let state = self.state.lock().await;
         state.plan_mode_reminder_turns()
     }

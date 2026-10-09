@@ -161,7 +161,11 @@ impl WebSearchProviderConfigView {
             .collect();
 
         let save_idx = self.fields.len();
-        let prefix = if selected == Some(save_idx) { '›' } else { ' ' };
+        let prefix = if selected == Some(save_idx) {
+            '›'
+        } else {
+            ' '
+        };
         rows.push(GenericDisplayRow {
             name: format!("{prefix} {SAVE_LABEL}"),
             description: Some(SAVE_DESCRIPTION.to_string()),
@@ -248,7 +252,11 @@ impl WebSearchProviderConfigView {
             return;
         };
         let trimmed = text.trim().to_string();
-        let value = if trimmed.is_empty() { String::new() } else { trimmed };
+        let value = if trimmed.is_empty() {
+            String::new()
+        } else {
+            trimmed
+        };
         self.values.insert(key, value);
     }
 

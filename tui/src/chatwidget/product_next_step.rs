@@ -24,8 +24,7 @@ pub(super) const PRODUCT_NEXT_STEP_STAY: &str = "Stay in Product mode";
 const MODE_UNAVAILABLE: &str = "mode unavailable in this model catalog";
 const PLAN_HANDOFF_PROMPT: &str =
     "Write a step-by-step implementation plan from the approved requirements document.";
-const DESIGN_HANDOFF_PROMPT: &str =
-    "Design the solution from the approved requirements document.";
+const DESIGN_HANDOFF_PROMPT: &str = "Design the solution from the approved requirements document.";
 
 fn handoff_text(prompt: &str, requirements_file_path: Option<&Path>) -> String {
     match requirements_file_path {
@@ -69,8 +68,8 @@ pub(super) fn selection_view_params(
     design_mask: Option<CollaborationModeMask>,
     requirements_file_path: Option<&Path>,
 ) -> SelectionViewParams {
-    let subtitle = requirements_file_path
-        .map(|path| format!("Requirements file: {}", path.display()));
+    let subtitle =
+        requirements_file_path.map(|path| format!("Requirements file: {}", path.display()));
 
     // The handoff prompt names the requirements file so the next mode's turn
     // can read it — the document is always persisted to disk, so a cleared
@@ -102,8 +101,7 @@ pub(super) fn selection_view_params(
         SelectionItem {
             name: PRODUCT_NEXT_STEP_ENTER_DESIGN.to_string(),
             description: Some(
-                "Switch to Design mode and design the solution from the requirements."
-                    .to_string(),
+                "Switch to Design mode and design the solution from the requirements.".to_string(),
             ),
             is_default: design_is_default,
             actions: design_actions,
@@ -198,21 +196,14 @@ mod tests {
 
     #[test]
     fn design_becomes_default_when_plan_unavailable() {
-        let params = selection_view_params(
-            None,
-            Some(mask("Design", ModeKind::Design)),
-            None,
-        );
+        let params = selection_view_params(None, Some(mask("Design", ModeKind::Design)), None);
         assert!(!params.items[0].is_default);
         assert!(params.items[1].is_default);
     }
 
     #[test]
     fn handoff_text_names_the_requirements_file() {
-        let text = handoff_text(
-            PLAN_HANDOFF_PROMPT,
-            Some(Path::new("/d/requirements.md")),
-        );
+        let text = handoff_text(PLAN_HANDOFF_PROMPT, Some(Path::new("/d/requirements.md")));
         assert!(text.contains(PLAN_HANDOFF_PROMPT));
         assert!(text.contains("Requirements file: /d/requirements.md"));
     }
