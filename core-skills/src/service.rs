@@ -69,7 +69,7 @@ pub struct SkillsService {
     ody_home: AbsolutePathBuf,
     restriction_product: Option<Product>,
     extra_roots: RwLock<Vec<AbsolutePathBuf>>,
-    cache_by_cwd: RwLock<HashMap<AbsolutePathBuf, HostSkillsSnapshot>>,
+    cache_by_cwd: RwLock<HashMap<CwdSkillsCacheKey, HostSkillsSnapshot>>,
     cache_by_config: RwLock<HashMap<ConfigSkillsCacheKey, HostSkillsSnapshot>>,
 }
 
@@ -130,7 +130,9 @@ impl SkillsService {
     ) -> HostSkillsSnapshot {
         let roots = self.skill_roots_for_config(input, fs).await;
         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
-        let cache_key = config_skills_cache_key(&roots, &skill_config_rules);
+        let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
+        let cache_key =
+            config_skills_cache_key(&roots, &skill_config_rules, game_skills_enabled);
         if let Some(snapshot) = self.cached_snapshot_for_config(&cache_key) {
             return snapshot;
         }
@@ -173,9 +175,10 @@ impl SkillsService {
         fs: Option<Arc<dyn ExecutorFileSystem>>,
     ) -> HostSkillsSnapshot {
         let use_cwd_cache = fs.is_some();
+        let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
         if use_cwd_cache
             && !force_reload
-            && let Some(snapshot) = self.cached_snapshot_for_cwd(&input.cwd)
+            && let Some(snapshot) = self.cached_snapshot_for_cwd(&input.cwd, game_skills_enabled)
         {
             return snapshot;
         }
@@ -201,7 +204,13 @@ impl SkillsService {
                 .cache_by_cwd
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            cache.insert(input.cwd.clone(), snapshot.clone());
+            cache.insert(
+                CwdSkillsCacheKey {
+                    cwd: input.cwd.clone(),
+                    game_skills_enabled,
+                },
+                snapshot.clone(),
+            );
         }
         snapshot
     }
@@ -216,6 +225,10 @@ impl SkillsService {
         let outcome = load_skills_from_roots(roots, input.plugin_skill_snapshots.as_ref()).await;
         let outcome =
             crate::filter_skill_load_outcome_for_product(outcome, self.restriction_product);
+        let outcome = crate::filter_skill_load_outcome_for_game(
+            outcome,
+            game_skills_enabled_from_stack(&input.config_layer_stack),
+        );
         let disabled_paths = resolve_disabled_skill_paths(&outcome.skills, skill_config_rules);
         finalize_skill_outcome(outcome, disabled_paths)
     }
@@ -243,10 +256,18 @@ impl SkillsService {
         info!("skills cache cleared ({cleared} entries)");
     }
 
-    fn cached_snapshot_for_cwd(&self, cwd: &AbsolutePathBuf) -> Option<HostSkillsSnapshot> {
+    fn cached_snapshot_for_cwd(
+        &self,
+        cwd: &AbsolutePathBuf,
+        game_skills_enabled: bool,
+    ) -> Option<HostSkillsSnapshot> {
+        let key = CwdSkillsCacheKey {
+            cwd: cwd.clone(),
+            game_skills_enabled,
+        };
         match self.cache_by_cwd.read() {
-            Ok(cache) => cache.get(cwd).cloned(),
-            Err(err) => err.into_inner().get(cwd).cloned(),
+            Ok(cache) => cache.get(&key).cloned(),
+            Err(err) => err.into_inner().get(&key).cloned(),
         }
     }
 
@@ -272,6 +293,13 @@ impl SkillsService {
 struct ConfigSkillsCacheKey {
     roots: Vec<(AbsolutePathBuf, u8, Option<String>, Option<String>)>,
     skill_config_rules: SkillConfigRules,
+    game_skills_enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CwdSkillsCacheKey {
+    cwd: AbsolutePathBuf,
+    game_skills_enabled: bool,
 }
 
 pub fn bundled_skills_enabled_from_stack(
@@ -296,9 +324,37 @@ pub fn bundled_skills_enabled_from_stack(
     skills.bundled.unwrap_or_default().enabled
 }
 
+/// Returns whether the embedded game-development skill bundle (the `/game`
+/// entry skill and the vendored gamedev skill set) is visible. Defaults to
+/// `false`; `ody --game` layers `skills.bundled.game = true` onto the config
+/// stack for one invocation.
+pub fn game_skills_enabled_from_stack(config_layer_stack: &ody_config::ConfigLayerStack) -> bool {
+    let effective_config = config_layer_stack.effective_config();
+    let Some(skills_value) = effective_config
+        .as_table()
+        .and_then(|table| table.get("skills"))
+    else {
+        return false;
+    };
+
+    let skills: SkillsConfig = match skills_value.clone().try_into() {
+        Ok(skills) => skills,
+        Err(err) => {
+            warn!("invalid skills config: {err}");
+            return false;
+        }
+    };
+
+    skills
+        .bundled
+        .and_then(|bundled| bundled.game)
+        .unwrap_or_default()
+}
+
 fn config_skills_cache_key(
     roots: &[SkillRoot],
     skill_config_rules: &SkillConfigRules,
+    game_skills_enabled: bool,
 ) -> ConfigSkillsCacheKey {
     ConfigSkillsCacheKey {
         roots: roots
@@ -319,6 +375,7 @@ fn config_skills_cache_key(
             })
             .collect(),
         skill_config_rules: skill_config_rules.clone(),
+        game_skills_enabled,
     }
 }
 

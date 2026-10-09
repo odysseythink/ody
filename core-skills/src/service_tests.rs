@@ -807,3 +807,112 @@ async fn skills_for_config_ignores_cwd_cache_when_session_flags_reenable_skill()
         .expect("demo skill should be discovered");
     assert_eq!(child_outcome.is_skill_enabled(child_skill), true);
 }
+
+#[test]
+fn game_skills_enabled_from_stack_defaults_to_false() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let default_stack = config_stack(&ody_home, "");
+    assert!(!game_skills_enabled_from_stack(&default_stack));
+
+    let enabled_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
+    assert!(game_skills_enabled_from_stack(&enabled_stack));
+
+    let disabled_stack = config_stack(&ody_home, "[skills.bundled]\nenabled = true\ngame = false\n");
+    assert!(!game_skills_enabled_from_stack(&disabled_stack));
+}
+
+#[tokio::test]
+async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let cwd = tempfile::tempdir().expect("tempdir");
+    let skills_service = SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+
+    let default_stack = config_stack(&ody_home, "");
+    let default_outcome =
+        skills_for_config_with_stack(&skills_service, &cwd, &default_stack, &[]).await;
+    assert!(
+        default_outcome
+            .skills
+            .iter()
+            .all(|skill| skill.name != "game" && skill.name != "godot-shaders"),
+        "game bundle skills must be hidden unless the game flag is on"
+    );
+    assert!(
+        default_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "debt-ledger"),
+        "non-game bundled skills must stay visible"
+    );
+
+    // Same roots and skill rules, only the game flag differs: the config cache
+    // must not serve the game-hidden snapshot for a game-enabled stack.
+    let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
+    let game_outcome =
+        skills_for_config_with_stack(&skills_service, &cwd, &game_stack, &[]).await;
+    assert!(
+        game_outcome.skills.iter().any(|skill| skill.name == "game"),
+        "/game skill must be visible when the game flag is on"
+    );
+    assert!(
+        game_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "godot-shaders"),
+        "vendored gamedev skills must be visible when the game flag is on"
+    );
+}
+
+#[tokio::test]
+async fn snapshot_for_cwd_cache_separates_game_flag() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let cwd = tempfile::tempdir().expect("tempdir");
+    let skills_service = SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+
+    let default_stack = config_stack(&ody_home, "");
+    let default_input = SkillsLoadInput::new(
+        cwd.path().abs(),
+        Vec::new(),
+        default_stack.clone(),
+        bundled_skills_enabled_from_stack(&default_stack),
+    );
+    let default_snapshot = skills_service
+        .snapshot_for_cwd(
+            &default_input,
+            /*force_reload*/ false,
+            Some(Arc::clone(&LOCAL_FS)),
+        )
+        .await;
+    assert!(
+        default_snapshot
+            .outcome()
+            .skills
+            .iter()
+            .all(|skill| skill.name != "game")
+    );
+
+    // A second session in the same cwd with the game flag on must not reuse
+    // the cached game-hidden snapshot.
+    let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
+    let game_input = SkillsLoadInput::new(
+        cwd.path().abs(),
+        Vec::new(),
+        game_stack.clone(),
+        bundled_skills_enabled_from_stack(&game_stack),
+    );
+    let game_snapshot = skills_service
+        .snapshot_for_cwd(
+            &game_input,
+            /*force_reload*/ false,
+            Some(Arc::clone(&LOCAL_FS)),
+        )
+        .await;
+    assert!(
+        game_snapshot
+            .outcome()
+            .skills
+            .iter()
+            .any(|skill| skill.name == "game"),
+        "cwd cache must be keyed by the game flag"
+    );
+}

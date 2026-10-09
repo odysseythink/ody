@@ -16,6 +16,120 @@ const SKILLS_DIR_NAME: &str = "skills";
 const SYSTEM_SKILLS_MARKER_FILENAME: &str = ".ody-system-skills.marker";
 const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
 
+/// Names of embedded system skills that belong to the game-development bundle
+/// (the `/game` entry skill plus the vendored gamedev-skills collection).
+///
+/// These are hidden unless the user opts in with the `--game` CLI flag or
+/// `skills.bundled.game = true`, because the bundle is large enough to blow
+/// the skills context budget on every startup.
+///
+/// Classification is enforced by
+/// `tests::game_skill_classification_partitions_embedded_skills`: every
+/// embedded skill must appear in exactly one of `EMBEDDED_GAME_SKILL_NAMES`
+/// or `EMBEDDED_NON_GAME_SKILL_NAMES`.
+const EMBEDDED_GAME_SKILL_NAMES: &[&str] = &[
+    "ai-behavior-trees-utility-ai",
+    "audio-design",
+    "bevy-ecs",
+    "camera-systems",
+    "card-game",
+    "create-game-assets",
+    "dialogue-systems",
+    "fps-shooter",
+    "game",
+    "game-ai",
+    "game-feel",
+    "game-jam",
+    "game-ui-ux",
+    "gamedev-router",
+    "godot-2d-movement",
+    "godot-3d-essentials",
+    "godot-animation",
+    "godot-audio",
+    "godot-csharp",
+    "godot-export",
+    "godot-gdscript",
+    "godot-multiplayer",
+    "godot-nodes-scenes",
+    "godot-physics",
+    "godot-resources",
+    "godot-shaders",
+    "godot-signals-groups",
+    "godot-tilemap",
+    "godot-ui-control",
+    "input-systems",
+    "itch-publish",
+    "level-design",
+    "performance-optimization",
+    "phaser-arcade-physics",
+    "phaser-core",
+    "physics-tuning",
+    "pixijs-rendering",
+    "platformer",
+    "procedural-gen",
+    "prototype-fast",
+    "puzzle",
+    "roguelike",
+    "rpg",
+    "save-systems",
+    "shader-programming",
+    "steam-publish",
+    "survival-crafting",
+    "threejs-gltf-loading",
+    "threejs-materials-lighting",
+    "threejs-scene-setup",
+    "tower-defense",
+    "unity-animation",
+    "unity-build-pipeline",
+    "unity-csharp-scripting",
+    "unity-input-system",
+    "unity-navmesh",
+    "unity-physics",
+    "unity-scriptableobjects",
+    "unity-tilemap-2d",
+    "unreal-behavior-trees",
+    "unreal-blueprints",
+    "unreal-cpp-gameplay",
+    "unreal-enhanced-input",
+    "unreal-niagara",
+    "unreal-packaging",
+    "visual-novel",
+];
+
+/// Names of embedded system skills that are always available, regardless of
+/// the game flag. See `EMBEDDED_GAME_SKILL_NAMES` for the partition contract.
+/// Only referenced by the partition test, hence `#[cfg(test)]`.
+#[cfg(test)]
+const EMBEDDED_NON_GAME_SKILL_NAMES: &[&str] = &[
+    "data-analysis",
+    "debt-ledger",
+    "dispatching-parallel-agents",
+    "executing-plans",
+    "finishing-a-development-branch",
+    "frontend-design",
+    "idea-evaluator",
+    "idea-generator",
+    "legal-contract",
+    "motion-design",
+    "plugin-creator",
+    "roadmap-architect",
+    "simplicity-first",
+    "skill-creator",
+    "skill-installer",
+    "subagent-driven-development",
+    "systematic-debugging",
+    "test-driven-development",
+    "using-git-worktrees",
+    "verification-before-completion",
+    "vibedrop",
+];
+
+/// Returns whether `name` belongs to the embedded game-development skill
+/// bundle that is gated behind the `--game` CLI flag.
+pub fn is_embedded_game_skill(name: &str) -> bool {
+    EMBEDDED_GAME_SKILL_NAMES.contains(&name)
+}
+
 pub use remote_sync::remote_builtin_cache_root_dir;
 
 /// Names of the skills bundled in the embedded system-skills set.
@@ -470,5 +584,55 @@ mod tests {
                 "{name} must stay invocable in Default mode"
             );
         }
+    }
+
+    #[test]
+    fn is_embedded_game_skill_matches_only_the_game_bundle() {
+        assert!(super::is_embedded_game_skill("game"));
+        assert!(super::is_embedded_game_skill("gamedev-router"));
+        assert!(super::is_embedded_game_skill("godot-shaders"));
+        assert!(!super::is_embedded_game_skill("debt-ledger"));
+        assert!(!super::is_embedded_game_skill("motion-design"));
+        assert!(!super::is_embedded_game_skill("no-such-skill"));
+    }
+
+    #[test]
+    fn game_skill_classification_partitions_embedded_skills() {
+        // Every embedded skill must be classified exactly once: either it
+        // belongs to the game-development bundle (gated behind `--game`) or
+        // it is part of the always-on set. Adding a new embedded skill without
+        // classifying it must fail this test.
+        use std::collections::HashSet;
+
+        let embedded: HashSet<String> =
+            super::embedded_system_skill_names().into_iter().collect();
+        let game: HashSet<&str> = super::EMBEDDED_GAME_SKILL_NAMES.iter().copied().collect();
+        let non_game: HashSet<&str> = super::EMBEDDED_NON_GAME_SKILL_NAMES
+            .iter()
+            .copied()
+            .collect();
+
+        assert!(
+            game.is_disjoint(&non_game),
+            "game and non-game skill lists must not overlap"
+        );
+        assert_eq!(
+            game.len(),
+            super::EMBEDDED_GAME_SKILL_NAMES.len(),
+            "game skill list must not contain duplicates"
+        );
+        assert_eq!(
+            non_game.len(),
+            super::EMBEDDED_NON_GAME_SKILL_NAMES.len(),
+            "non-game skill list must not contain duplicates"
+        );
+
+        let classified: HashSet<&str> = game.union(&non_game).copied().collect();
+        let embedded_refs: HashSet<&str> = embedded.iter().map(String::as_str).collect();
+        assert_eq!(
+            classified,
+            embedded_refs,
+            "every embedded skill must be classified as game or non-game"
+        );
     }
 }

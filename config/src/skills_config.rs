@@ -93,11 +93,21 @@ pub struct SkillsConfig {
 pub struct BundledSkillsConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+
+    /// Whether to include the bundled game-development skills (the `/game`
+    /// entry skill and the vendored gamedev skill set). Defaults to `false`;
+    /// the `ody --game` CLI flag layers `skills.bundled.game = true` on top of
+    /// the config stack for one invocation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game: Option<bool>,
 }
 
 impl Default for BundledSkillsConfig {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            enabled: true,
+            game: None,
+        }
     }
 }
 
@@ -122,5 +132,27 @@ impl TryFrom<toml::Value> for SkillsConfig {
 
     fn try_from(value: toml::Value) -> Result<Self, Self::Error> {
         SkillsConfig::deserialize(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_game_flag_defaults_to_absent() {
+        let config: SkillsConfig = toml::from_str("").expect("empty skills config");
+        assert_eq!(config.bundled, None);
+
+        let config: SkillsConfig =
+            toml::from_str("[bundled]\nenabled = false\n").expect("bundled without game");
+        assert_eq!(config.bundled.and_then(|bundled| bundled.game), None);
+    }
+
+    #[test]
+    fn bundled_game_flag_parses() {
+        let config: SkillsConfig =
+            toml::from_str("[bundled]\nenabled = true\ngame = true\n").expect("bundled with game");
+        assert_eq!(config.bundled.and_then(|bundled| bundled.game), Some(true));
     }
 }

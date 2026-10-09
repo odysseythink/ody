@@ -259,12 +259,39 @@ impl fmt::Debug for SkillFileSystemsByPath {
 }
 
 pub fn filter_skill_load_outcome_for_product(
-    mut outcome: SkillLoadOutcome,
+    outcome: SkillLoadOutcome,
     restriction_product: Option<Product>,
+) -> SkillLoadOutcome {
+    retain_skills_matching(outcome, |skill| {
+        skill.matches_product_restriction_for_product(restriction_product)
+    })
+}
+
+/// Filters the embedded game-development skill bundle (the `/game` entry
+/// skill and the vendored gamedev skill set) out of a load outcome unless the
+/// user opted in via the `--game` CLI flag or `skills.bundled.game = true`.
+///
+/// Only System-scope skills are affected: a user- or repo-installed skill
+/// that happens to share a game skill's name always survives.
+pub fn filter_skill_load_outcome_for_game(
+    outcome: SkillLoadOutcome,
+    game_skills_enabled: bool,
+) -> SkillLoadOutcome {
+    if game_skills_enabled {
+        return outcome;
+    }
+    retain_skills_matching(outcome, |skill| {
+        !(skill.scope == SkillScope::System && ody_skills::is_embedded_game_skill(&skill.name))
+    })
+}
+
+fn retain_skills_matching(
+    mut outcome: SkillLoadOutcome,
+    keep: impl Fn(&SkillMetadata) -> bool,
 ) -> SkillLoadOutcome {
     outcome
         .skills
-        .retain(|skill| skill.matches_product_restriction_for_product(restriction_product));
+        .retain(|skill| keep(skill));
     let retained_paths: HashSet<AbsolutePathBuf> = outcome
         .skills
         .iter()
@@ -290,7 +317,7 @@ pub fn filter_skill_load_outcome_for_product(
         outcome
             .implicit_skills_by_scripts_dir
             .iter()
-            .filter(|(_, skill)| skill.matches_product_restriction_for_product(restriction_product))
+            .filter(|(_, skill)| keep(skill))
             .map(|(path, skill)| (path.clone(), skill.clone()))
             .collect(),
     );
@@ -298,7 +325,7 @@ pub fn filter_skill_load_outcome_for_product(
         outcome
             .implicit_skills_by_doc_path
             .iter()
-            .filter(|(_, skill)| skill.matches_product_restriction_for_product(restriction_product))
+            .filter(|(_, skill)| keep(skill))
             .map(|(path, skill)| (path.clone(), skill.clone()))
             .collect(),
     );
