@@ -22,4 +22,9 @@ pub struct TurnInputContext {
     pub user_input: Vec<UserInput>,
     /// Resolved turn environments, in host priority order.
     pub environments: Vec<TurnInputEnvironment>,
+    /// Effective model context window for this turn, when the host knows it.
+    ///
+    /// Contributors that spend prompt space on their own content use this to size
+    /// their budget against the real window instead of guessing at a constant.
+    pub model_context_window: Option<i64>,
 }

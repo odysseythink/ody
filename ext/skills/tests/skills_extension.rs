@@ -127,6 +127,7 @@ async fn installed_extension_uses_host_service_snapshot() -> TestResult {
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -227,6 +228,7 @@ async fn selected_executor_catalog_is_context_and_selected_entrypoint_is_turn_in
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -262,6 +264,7 @@ async fn selected_executor_catalog_is_context_and_selected_entrypoint_is_turn_in
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -457,6 +460,7 @@ async fn orchestrator_catalog_snapshot_caches_failure() -> TestResult {
                         text_elements: Vec::new(),
                     }],
                     environments: Vec::new(),
+                    model_context_window: None,
                 },
                 &session_store,
                 &thread_store,
@@ -536,6 +540,7 @@ async fn root_qualified_locator_selects_only_the_matching_executor_skill() -> Te
                     path: root_b_locator.to_string(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -611,6 +616,7 @@ async fn prompt_hidden_skill_can_still_be_invoked() -> TestResult {
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -946,6 +952,7 @@ async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult 
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -1048,6 +1055,7 @@ async fn knowledge_skills_are_not_selected_by_explicit_mention() -> TestResult {
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -1195,6 +1203,7 @@ async fn knowledge_skill_is_auto_injected_on_trigger_match() -> TestResult {
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -1434,6 +1443,7 @@ async fn skill_activated_event_is_emitted_for_explicit_selection() -> TestResult
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -1514,6 +1524,7 @@ async fn contribute_text_with_catalog(entries: Vec<SkillCatalogEntry>, text: &st
                     text_elements: Vec::new(),
                 }],
                 environments: Vec::new(),
+                model_context_window: None,
             },
             &session_store,
             &thread_store,
@@ -1632,9 +1643,19 @@ async fn cyclic_skill_dependencies_are_injected_in_stable_order() -> TestResult 
 async fn dependency_injected_skills_carry_dependency_annotation() -> TestResult {
     let rendered = contribute_text_with_catalog(
         vec![
-            test_entry(SkillSourceKind::Host, "host", "host/consumer", "consumer/SKILL.md")
-                .with_dependencies(skill_deps(&["provider"])),
-            test_entry(SkillSourceKind::Host, "host", "host/provider", "provider/SKILL.md"),
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/consumer",
+                "consumer/SKILL.md",
+            )
+            .with_dependencies(skill_deps(&["provider"])),
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/provider",
+                "provider/SKILL.md",
+            ),
         ],
         "$consumer please",
     )
@@ -1652,7 +1673,6 @@ async fn dependency_injected_skills_carry_dependency_annotation() -> TestResult 
     );
     Ok(())
 }
-
 
 // ---- M2.3 flow__run tool + catalog visibility split tests ----
 
@@ -1762,9 +1782,7 @@ async fn install_with_host_skills(
         })
         .await;
 
-    let tools = registry
-        .tool_contributors()[0]
-        .tools(&session_store, &thread_store);
+    let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
     InstalledTools { tools }
 }
 
@@ -1827,13 +1845,15 @@ async fn skills_read_rejects_flow_skills() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = Arc::new(StaticSkillProvider {
         catalog: SkillCatalog {
-            entries: vec![test_entry(
-                SkillSourceKind::Host,
-                "host",
-                "host/game-create",
-                "game-create/SKILL.md",
-            )
-            .with_skill_type(SkillType::Flow)],
+            entries: vec![
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/game-create",
+                    "game-create/SKILL.md",
+                )
+                .with_skill_type(SkillType::Flow),
+            ],
             warnings: Vec::new(),
         },
         read_requests: Arc::clone(&read_requests),
@@ -1897,9 +1917,8 @@ async fn skills_flow_run_executes_through_host_runner() -> TestResult {
     .await;
     let run_tool = find_tool(&installed.tools, "flow__run")?;
 
-    let payload = function_payload(
-        serde_json::json!({"name": "game-create", "args": {"text": "太空跳跃"}}),
-    );
+    let payload =
+        function_payload(serde_json::json!({"name": "game-create", "args": {"text": "太空跳跃"}}));
     let output = run_tool.handle(tool_call(run_tool, &payload)).await?;
     let response = output
         .post_tool_use_response("call-1", &payload)

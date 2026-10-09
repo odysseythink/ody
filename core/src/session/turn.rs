@@ -1155,6 +1155,7 @@ async fn build_extension_turn_input_items(
         turn_id: turn_context.sub_id.to_string(),
         user_input: user_input.to_vec(),
         environments,
+        model_context_window: turn_context.model_context_window(),
     };
 
     let mut items = Vec::new();
@@ -1502,13 +1503,12 @@ async fn maybe_run_previous_model_inline_compact(
     );
     // If compaction against the previous model fails with a model-specific error, retry
     // once against the current model.
-    let fallback_turn_context = if previous_model_turn_context.model_info.slug
-        != turn_context.model_info.slug
-    {
-        Some(Arc::clone(turn_context))
-    } else {
-        None
-    };
+    let fallback_turn_context =
+        if previous_model_turn_context.model_info.slug != turn_context.model_info.slug {
+            Some(Arc::clone(turn_context))
+        } else {
+            None
+        };
 
     if should_compact_for_comp_hash_change {
         run_auto_compact(
