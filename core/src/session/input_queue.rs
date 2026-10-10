@@ -133,6 +133,13 @@ impl InputQueue {
         self.has_trigger_turn_mailbox_items().await || self.has_pending_host_notifications().await
     }
 
+    /// Drains only pending inter-agent mails, leaving host notifications in
+    /// place. Used when evicting a v2 resident so queue-only mail can be
+    /// retained in the control-plane runtime mailbox across the unload.
+    pub(crate) async fn drain_pending_mails(&self) -> Vec<InterAgentCommunication> {
+        self.mailbox_pending_mails.lock().await.drain(..).collect()
+    }
+
     pub(crate) async fn drain_mailbox_input_items(&self) -> Vec<TurnInput> {
         let mut items: Vec<TurnInput> = self
             .mailbox_pending_mails

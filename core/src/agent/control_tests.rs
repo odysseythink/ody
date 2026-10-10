@@ -641,6 +641,190 @@ async fn ensure_v2_agent_loaded_reloads_registered_unloaded_agent() {
 }
 
 #[tokio::test]
+async fn queue_only_mail_for_unloaded_agent_is_retained_and_flushed_on_reload() {
+    let (home, mut config) = test_config().await;
+    let _ = config.features.enable(Feature::MultiAgentV2);
+    let _ = config.features.enable(Feature::Sqlite);
+    let harness = AgentControlHarness::new_with_config(home, config).await;
+    let (parent_thread_id, _parent_thread) = harness.start_thread().await;
+    let agent_path = AgentPath::try_from("/root/worker").expect("agent path");
+    let spawned_agent = harness
+        .control
+        .spawn_agent_with_metadata(
+            harness.config.clone(),
+            text_input("hello child"),
+            Some(SessionSource::SubAgent(SubAgentSource::ThreadSpawn {
+                parent_thread_id,
+                depth: 1,
+                agent_path: Some(agent_path.clone()),
+                agent_nickname: None,
+                agent_role: None,
+            })),
+            SpawnAgentOptions {
+                parent_thread_id: Some(parent_thread_id),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("spawn_agent should succeed");
+    let child_thread = harness
+        .manager
+        .get_thread(spawned_agent.thread_id)
+        .await
+        .expect("child thread should exist");
+    child_thread
+        .inject_response_items(vec![assistant_message(
+            "child persisted",
+            Some(MessagePhase::FinalAnswer),
+        )])
+        .await
+        .expect("child rollout should persist with v2 metadata");
+    child_thread
+        .shutdown_and_wait()
+        .await
+        .expect("child thread should shut down");
+    assert!(
+        harness
+            .manager
+            .remove_thread(&spawned_agent.thread_id)
+            .await
+            .is_some()
+    );
+
+    // Queue-only mail for an unloaded agent is retained without reloading it.
+    let make_mail = |content: &str| {
+        InterAgentCommunication::new(
+            AgentPath::root(),
+            agent_path.clone(),
+            Vec::new(),
+            content.to_string(),
+            /*trigger_turn*/ false,
+        )
+    };
+    let mail_one = make_mail("retained one");
+    let mail_two = make_mail("retained two");
+    harness
+        .control
+        .queue_or_deliver_mail(spawned_agent.thread_id, mail_one.clone())
+        .await
+        .expect("queue-only mail should be accepted for an unloaded agent");
+    harness
+        .control
+        .queue_or_deliver_mail(spawned_agent.thread_id, mail_two.clone())
+        .await
+        .expect("queue-only mail should be accepted for an unloaded agent");
+    match harness.manager.get_thread(spawned_agent.thread_id).await {
+        Err(OdyErr::ThreadNotFound(id)) => assert_eq!(id, spawned_agent.thread_id),
+        Err(err) => panic!("expected thread to stay unloaded, got {err:?}"),
+        Ok(_) => panic!("queue-only mail must not reload an unloaded agent"),
+    }
+
+    // Reloading the agent flushes the retained mail in FIFO order.
+    harness
+        .control
+        .ensure_v2_agent_loaded(harness.config.clone(), spawned_agent.thread_id)
+        .await
+        .expect("known v2 agent should reload");
+    let reloaded_thread = harness
+        .manager
+        .get_thread(spawned_agent.thread_id)
+        .await
+        .expect("reloaded child thread should exist");
+    let expected = vec![
+        crate::session::TurnInput::InterAgentCommunication(mail_one),
+        crate::session::TurnInput::InterAgentCommunication(mail_two),
+    ];
+    // The flush goes through the normal op path, which the session consumes
+    // asynchronously; collect until both retained mails have landed.
+    let mut collected = Vec::new();
+    timeout(Duration::from_secs(5), async {
+        while collected.len() < expected.len() {
+            collected.extend(
+                reloaded_thread
+                    .ody
+                    .session
+                    .input_queue
+                    .drain_mailbox_input_items()
+                    .await,
+            );
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("retained queue-only mail should be redelivered after reload");
+    assert_eq!(collected, expected);
+}
+
+#[tokio::test]
+async fn queue_only_mail_to_dead_agent_returns_error_and_discards_mail() {
+    let (home, mut config) = test_config().await;
+    let _ = config.features.enable(Feature::MultiAgentV2);
+    let _ = config.features.enable(Feature::Sqlite);
+    let harness = AgentControlHarness::new_with_config(home, config).await;
+    let (parent_thread_id, _parent_thread) = harness.start_thread().await;
+    let agent_path = AgentPath::try_from("/root/worker").expect("agent path");
+    let spawned_agent = harness
+        .control
+        .spawn_agent_with_metadata(
+            harness.config.clone(),
+            text_input("hello child"),
+            Some(SessionSource::SubAgent(SubAgentSource::ThreadSpawn {
+                parent_thread_id,
+                depth: 1,
+                agent_path: Some(agent_path.clone()),
+                agent_nickname: None,
+                agent_role: None,
+            })),
+            SpawnAgentOptions {
+                parent_thread_id: Some(parent_thread_id),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("spawn_agent should succeed");
+    let child_thread = harness
+        .manager
+        .get_thread(spawned_agent.thread_id)
+        .await
+        .expect("child thread should exist");
+    // The thread stays registered with the manager but its session is dead.
+    child_thread
+        .shutdown_and_wait()
+        .await
+        .expect("child thread should shut down");
+
+    let err = harness
+        .control
+        .queue_or_deliver_mail(
+            spawned_agent.thread_id,
+            InterAgentCommunication::new(
+                AgentPath::root(),
+                agent_path,
+                Vec::new(),
+                "too late".to_string(),
+                /*trigger_turn*/ false,
+            ),
+        )
+        .await
+        .expect_err("mail to a dead agent should fail");
+    assert_matches!(err, OdyErr::InternalAgentDied);
+
+    // The dead agent was removed and its mailbox discarded: no mail lingers.
+    match harness.manager.get_thread(spawned_agent.thread_id).await {
+        Err(OdyErr::ThreadNotFound(id)) => assert_eq!(id, spawned_agent.thread_id),
+        Err(err) => panic!("expected ThreadNotFound, got {err:?}"),
+        Ok(_) => panic!("dead agent should have been removed"),
+    }
+    assert!(
+        harness
+            .control
+            .runtime_mailbox
+            .retained_for(spawned_agent.thread_id)
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn resume_agent_from_rollout_does_not_reopen_v2_descendants() {
     let (home, mut config) = test_config().await;
     let _ = config.features.enable(Feature::MultiAgentV2);

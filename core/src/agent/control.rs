@@ -47,12 +47,14 @@ use tracing::warn;
 
 pub(crate) use self::execution::AgentExecutionGuard;
 use self::execution::AgentExecutionLimiter;
+use self::mailbox::RuntimeMailbox;
 use self::residency::V2Residency;
 
 const ROOT_LAST_TASK_MESSAGE: &str = "Main thread";
 
 mod execution;
 mod legacy;
+mod mailbox;
 mod residency;
 mod spawn;
 
@@ -101,6 +103,8 @@ pub(crate) struct AgentControl {
     manager: Weak<ThreadManagerState>,
     state: Arc<AgentRegistry>,
     v2_residency: Arc<V2Residency>,
+    /// Queue-only mail retained for v2 agents whose threads are unloaded.
+    runtime_mailbox: Arc<RuntimeMailbox>,
     agent_execution_limiter: Arc<AgentExecutionLimiter>,
     /// Session-scoped state shared by the root thread and every cloned sub-agent control handle.
     rollout_budget: Arc<RolloutBudget>,
@@ -200,6 +204,29 @@ impl AgentControl {
             }
         }
         result
+    }
+
+    /// Deliver queue-only mail to a v2 agent without forcing a reload.
+    ///
+    /// The mail is retained in the runtime mailbox first (in-lock FIFO), then
+    /// delivered under the mailbox delivery lock: concurrent senders drain the
+    /// same ordered backlog, mail for an unloaded agent simply stays retained
+    /// until the next reload, and a failed delivery requeues the unsent
+    /// remainder instead of dropping it.
+    pub(crate) async fn queue_or_deliver_mail(
+        &self,
+        agent_id: ThreadId,
+        communication: InterAgentCommunication,
+    ) -> OdyResult<()> {
+        let last_task_message = last_task_message_from_communication(&communication);
+        match last_task_message {
+            Some(last_task_message) => self
+                .state
+                .update_last_task_message(agent_id, last_task_message),
+            None => self.state.clear_last_task_message(agent_id),
+        }
+        self.runtime_mailbox.retain(agent_id, communication);
+        self.deliver_retained_mail(agent_id).await
     }
 
     /// Interrupt the current task for an existing agent thread.

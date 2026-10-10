@@ -1,4 +1,5 @@
 use super::AgentControl;
+use super::mailbox::RuntimeMailbox;
 use crate::agent::AgentStatus;
 use crate::config::Config;
 use crate::ody_thread::OdyThread;
@@ -55,7 +56,12 @@ impl AgentControl {
             .effective_agent_max_threads(MultiAgentVersion::V2)
             .unwrap_or(usize::MAX);
         Arc::clone(&self.v2_residency)
-            .reserve_slot(state, capacity, protected_thread_id)
+            .reserve_slot(
+                state,
+                capacity,
+                protected_thread_id,
+                Arc::clone(&self.runtime_mailbox),
+            )
             .await
     }
 
@@ -73,6 +79,9 @@ impl AgentControl {
 
     pub(super) fn forget_v2_residency(&self, thread_id: ThreadId) {
         self.v2_residency.remove(thread_id);
+        // Forgetting residency means the agent is being removed for good
+        // (died/closed/released), so retained mail is discarded with it.
+        self.runtime_mailbox.discard(thread_id);
     }
 }
 
@@ -82,6 +91,7 @@ impl V2Residency {
         manager: &Arc<ThreadManagerState>,
         capacity: usize,
         protected_thread_id: Option<ThreadId>,
+        runtime_mailbox: Arc<RuntimeMailbox>,
     ) -> OdyResult<V2ResidencySlot> {
         loop {
             if self.try_reserve_pending_slot(capacity) {
@@ -91,7 +101,7 @@ impl V2Residency {
                 });
             }
             if !self
-                .try_unload_one_resident(manager, protected_thread_id)
+                .try_unload_one_resident(manager, protected_thread_id, &runtime_mailbox)
                 .await
             {
                 return Err(OdyErr::AgentLimitReached {
@@ -117,6 +127,7 @@ impl V2Residency {
         &self,
         manager: &Arc<ThreadManagerState>,
         protected_thread_id: Option<ThreadId>,
+        runtime_mailbox: &Arc<RuntimeMailbox>,
     ) -> bool {
         let candidates_to_scan = self.resident_count();
         for _ in 0..candidates_to_scan {
@@ -143,6 +154,17 @@ impl V2Residency {
                 self.touch(candidate_thread_id);
                 continue;
             }
+            // Only queue-only mail can be pending here: trigger-turn mail and
+            // host notifications keep the resident loaded via `is_unloadable`.
+            // Retain it in the control-plane mailbox so it survives eviction
+            // and is redelivered when the agent is reloaded.
+            let pending_mails = candidate_thread
+                .ody
+                .session
+                .input_queue
+                .drain_pending_mails()
+                .await;
+            runtime_mailbox.retain_all(candidate_thread_id, pending_mails);
             let _ = manager.remove_thread(&candidate_thread_id).await;
             return true;
         }
@@ -223,6 +245,9 @@ pub(super) fn is_v2_resident_session_source(session_source: &SessionSource) -> b
 }
 
 async fn is_unloadable(thread: &OdyThread) -> bool {
+    // Queue-only mail no longer blocks eviction: it is retained in the
+    // control-plane runtime mailbox and redelivered on reload. Trigger-turn
+    // mail and host notifications still keep the resident loaded.
     matches!(
         thread.agent_status().await,
         AgentStatus::Completed(_) | AgentStatus::Errored(_) | AgentStatus::Interrupted
@@ -231,7 +256,7 @@ async fn is_unloadable(thread: &OdyThread) -> bool {
             .ody
             .session
             .input_queue
-            .has_pending_mailbox_items()
+            .has_trigger_turn_items()
             .await
 }
 

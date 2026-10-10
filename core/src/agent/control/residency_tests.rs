@@ -5,9 +5,11 @@ use crate::config::test_config;
 use crate::ody_thread::OdyThread;
 use crate::thread_manager::ThreadManagerState;
 use ody_features::Feature;
+use ody_protocol::AgentPath;
 use ody_protocol::ThreadId;
 use ody_protocol::error::OdyErr;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::InterAgentCommunication;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::ThreadSource;
@@ -121,6 +123,124 @@ async fn interrupted_v2_agent_is_lost_after_residency_eviction() {
         Err(err) => panic!("expected evicted thread to be missing, got {err:?}"),
         Ok(_) => panic!("expected evicted thread to be missing"),
     }
+}
+
+#[tokio::test]
+async fn queued_only_mail_does_not_block_residency_eviction() {
+    let mut config = test_config().await;
+    let _ = config.features.enable(Feature::MultiAgentV2);
+    config.multi_agent_v2.max_concurrent_threads_per_session = 2;
+    let temp_home = tempfile::tempdir().expect("create temp home");
+    config.ody_home = temp_home.path().to_path_buf().try_into().unwrap();
+    config.cwd = temp_home.path().to_path_buf().try_into().unwrap();
+    let manager = ThreadManager::with_models_provider_and_home_for_tests(
+        config.model_provider.clone(),
+        config.ody_home.to_path_buf(),
+        Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
+    );
+    let root = manager
+        .start_thread(config.clone())
+        .await
+        .expect("start root thread");
+    let control = manager.agent_control();
+    let state = control.upgrade().expect("thread manager should be live");
+
+    let first_slot = control
+        .reserve_v2_residency_slot(&state, &config, /*protected_thread_id*/ None)
+        .await
+        .expect("first resident slot");
+    let first =
+        spawn_v2_subagent(&control, &state, config.clone(), root.thread_id, "worker-1").await;
+    first_slot.commit(first.thread_id);
+    mark_thread_completed(first.thread.as_ref()).await;
+    let queued_mail = queued_only_mail("queued while idle");
+    first
+        .thread
+        .ody
+        .session
+        .input_queue
+        .enqueue_mailbox_communication(queued_mail.clone())
+        .await;
+
+    control
+        .reserve_v2_residency_slot(&state, &config, /*protected_thread_id*/ None)
+        .await
+        .expect("queue-only mail should not block eviction of an idle agent");
+    match manager.get_thread(first.thread_id).await {
+        Err(OdyErr::ThreadNotFound(thread_id)) => assert_eq!(thread_id, first.thread_id),
+        Err(err) => panic!("expected evicted thread to be missing, got {err:?}"),
+        Ok(_) => panic!("expected evicted thread to be missing"),
+    }
+
+    // The eviction must retain the queue-only mail in the control-plane
+    // runtime mailbox instead of dropping it with the unloaded session.
+    assert_eq!(
+        control.runtime_mailbox.retained_for(first.thread_id),
+        vec![queued_mail]
+    );
+}
+
+#[tokio::test]
+async fn trigger_turn_mail_blocks_residency_eviction() {
+    let mut config = test_config().await;
+    let _ = config.features.enable(Feature::MultiAgentV2);
+    config.multi_agent_v2.max_concurrent_threads_per_session = 2;
+    let temp_home = tempfile::tempdir().expect("create temp home");
+    config.ody_home = temp_home.path().to_path_buf().try_into().unwrap();
+    config.cwd = temp_home.path().to_path_buf().try_into().unwrap();
+    let manager = ThreadManager::with_models_provider_and_home_for_tests(
+        config.model_provider.clone(),
+        config.ody_home.to_path_buf(),
+        Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
+    );
+    let root = manager
+        .start_thread(config.clone())
+        .await
+        .expect("start root thread");
+    let control = manager.agent_control();
+    let state = control.upgrade().expect("thread manager should be live");
+
+    let first_slot = control
+        .reserve_v2_residency_slot(&state, &config, /*protected_thread_id*/ None)
+        .await
+        .expect("first resident slot");
+    let first =
+        spawn_v2_subagent(&control, &state, config.clone(), root.thread_id, "worker-1").await;
+    first_slot.commit(first.thread_id);
+    mark_thread_completed(first.thread.as_ref()).await;
+    first
+        .thread
+        .ody
+        .session
+        .input_queue
+        .enqueue_mailbox_communication(InterAgentCommunication::new(
+            AgentPath::root(),
+            AgentPath::try_from("/root/worker_1").expect("agent path"),
+            Vec::new(),
+            "wake up".to_string(),
+            /*trigger_turn*/ true,
+        ))
+        .await;
+
+    match control
+        .reserve_v2_residency_slot(&state, &config, /*protected_thread_id*/ None)
+        .await
+    {
+        Err(OdyErr::AgentLimitReached { .. }) => {}
+        Err(err) => panic!("expected AgentLimitReached, got {err:?}"),
+        Ok(_) => panic!("trigger-turn mail should keep the idle agent loaded"),
+    }
+    assert!(manager.get_thread(first.thread_id).await.is_ok());
+}
+
+fn queued_only_mail(content: &str) -> InterAgentCommunication {
+    InterAgentCommunication::new(
+        AgentPath::root(),
+        AgentPath::try_from("/root/worker_1").expect("agent path"),
+        Vec::new(),
+        content.to_string(),
+        /*trigger_turn*/ false,
+    )
 }
 
 async fn spawn_v2_subagent(

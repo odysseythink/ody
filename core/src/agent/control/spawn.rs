@@ -177,12 +177,14 @@ impl AgentControl {
             Ok(reloaded_thread) => {
                 residency_slot.commit(reloaded_thread.thread_id);
                 state.notify_thread_created(reloaded_thread.thread_id);
+                self.flush_retained_mail(reloaded_thread.thread_id).await;
                 Ok(())
             }
             Err(err) => {
                 if state.get_thread(thread_id).await.is_ok() {
                     drop(residency_slot);
                     self.touch_loaded_v2_residency(&state, thread_id).await;
+                    self.flush_retained_mail(thread_id).await;
                     return Ok(());
                 }
                 Err(err)
