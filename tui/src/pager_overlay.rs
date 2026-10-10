@@ -1216,7 +1216,9 @@ impl TranscriptOverlay {
             return false;
         };
         let target = &state.targets[state.selected];
-        let text = target.source.trim_end().to_string();
+        // Copy the carried Markdown source byte-identically: trailing
+        // whitespace is part of the payload and must not be trimmed.
+        let text = target.source.clone();
         if text.is_empty() {
             return false;
         }
@@ -2537,7 +2539,10 @@ mod tests {
             selected_kind(&overlay),
             copy_targets::CopyTargetKind::WholeResponse
         );
-        assert_eq!(copy_mode_state(&overlay).targets[copy_mode_state(&overlay).selected].cell_index, 1);
+        assert_eq!(
+            copy_mode_state(&overlay).targets[copy_mode_state(&overlay).selected].cell_index,
+            1
+        );
         assert_eq!(overlay.highlight_cell, Some(1));
         // Copy mode keeps Esc for itself instead of starting backtrack preview.
         assert!(overlay.wants_esc());
@@ -2630,10 +2635,9 @@ mod tests {
 
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Char('g'))));
         assert_eq!(copy_mode_state(&overlay).selected, 0);
-        assert!(overlay.copy_mode_handle_key(KeyEvent::new(
-            KeyCode::Char('G'),
-            KeyModifiers::SHIFT
-        )));
+        assert!(
+            overlay.copy_mode_handle_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT))
+        );
         assert_eq!(copy_mode_state(&overlay).selected, 2);
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Home)));
         assert_eq!(copy_mode_state(&overlay).selected, 0);
@@ -2675,10 +2679,11 @@ mod tests {
 
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
 
-        // The fence and info string are stripped; only the code is copied.
+        // The fence and info string are stripped; only the code is copied,
+        // byte-identical to the carried source including its trailing newline.
         assert_eq!(
             overlay.view.take_pending_copy().as_deref(),
-            Some("fn main() {}")
+            Some("fn main() {}\n")
         );
         assert_eq!(
             overlay.view.notice.as_deref(),
@@ -2688,8 +2693,7 @@ mod tests {
 
     #[test]
     fn copy_mode_commit_blockquote_copies_text_without_markers() {
-        let mut overlay =
-            transcript_overlay(vec![agent_cell("intro\n\n> line one\n> line two\n")]);
+        let mut overlay = transcript_overlay(vec![agent_cell("intro\n\n> line one\n> line two\n")]);
         overlay.enter_copy_mode();
         assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Down)));
         assert_eq!(
@@ -2701,8 +2705,21 @@ mod tests {
 
         assert_eq!(
             overlay.view.take_pending_copy().as_deref(),
-            Some("line one\nline two")
+            Some("line one\nline two\n")
         );
+    }
+
+    #[test]
+    fn copy_mode_commit_preserves_trailing_whitespace_of_markdown_source() {
+        let source = "answer with trailing newline\n\n";
+        let mut overlay = transcript_overlay(vec![agent_cell(source)]);
+        overlay.enter_copy_mode();
+
+        assert!(overlay.copy_mode_handle_key(plain_key(KeyCode::Enter)));
+
+        // The copy is byte-identical to the carried Markdown source: trailing
+        // whitespace is part of the payload and must not be trimmed.
+        assert_eq!(overlay.view.take_pending_copy().as_deref(), Some(source));
     }
 
     #[test]
