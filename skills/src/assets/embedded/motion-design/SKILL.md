@@ -64,15 +64,18 @@ Perceived performance matters as much as real speed: a 180ms dropdown *feels* fa
 - Group entrances stagger 30–80ms between items; stagger is decorative and must never block interaction.
 - Springs for anything the user can touch. Default Apple-style config `{ type: "spring", duration: 0.5, bounce: 0 }`; add bounce (0.1–0.3) only when the gesture itself carried momentum (a flick, a throw).
 - Respect `prefers-reduced-motion`: fewer and gentler animations, **not zero** — keep opacity/color feedback, drop movement. Gate `:hover` motion behind `@media (hover: hover) and (pointer: fine)`.
+- Pick the cheapest tool that works, in this order: CSS transition (hover/press/state toggle) → CSS `@starting-style` (entry on mount) → CSS animation (predetermined, must stay smooth under load) → WAAPI (JS control, no dependency) → a spring library (gestures, interruptible/layout motion). Don't install a motion library for a fade.
 
 ## When to load which reference
 
 - **Naming or identifying an effect** ("the bouncy thing when a popover opens", "the iOS rubber-band scroll") → read `references/motion-vocabulary.md`. A reverse-lookup glossary: describe the feel, get the exact term to prompt with.
 - **Implementing or reviewing animation code** → read `references/motion-audit.md`. The exact value catalog (curves, durations, spring configs), physicality rules, performance constraints, the ten review standards, and the flag-on-sight escalation list.
 - **Building gesture-driven or Apple-style fluid UI** (drag, swipe, bottom sheets, momentum, interruptible motion) → read `references/interaction-principles.md`. Response latency, direct manipulation, interruptibility, velocity handoff, momentum projection, rubber-banding.
+- **Building a common component's motion from scratch** (button press, dropdown, tooltip, modal, drawer, toast, accordion, stagger, hold-to-confirm, tab indicator, scroll reveal, drag-to-dismiss) → read `references/animation-recipes.md`. Ready-to-build implementations; start from the recipe, then adapt.
+- **Finding where an existing UI should animate** ("what could be animated here?", "make this feel more alive") → read `references/animation-opportunities.md`. The four-question Gate, the hunt list with exact values, and the report format (opportunities + required rejections).
 
 When citing a precise value in findings or plans, copy it from the reference — never approximate.
 
 ---
 
-Sources: distilled under MIT from [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `d23d7f88`. See `THIRD_PARTY.md` in this repository's skills crate.
+Sources: distilled under MIT from [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `2d228630`. See `THIRD_PARTY.md` in this repository's skills crate.

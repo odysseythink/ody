@@ -110,6 +110,7 @@ const EMBEDDED_NON_GAME_SKILL_NAMES: &[&str] = &[
     "idea-evaluator",
     "idea-generator",
     "legal-contract",
+    "make-interfaces-feel-better",
     "motion-design",
     "plugin-creator",
     "roadmap-architect",
@@ -495,7 +496,12 @@ mod tests {
             "skill-installer",
         ];
         let odybox_only = ["vibedrop"];
-        let shared = ["data-analysis", "frontend-design", "legal-contract"];
+        let shared = [
+            "data-analysis",
+            "frontend-design",
+            "legal-contract",
+            "make-interfaces-feel-better",
+        ];
 
         let outcome = load(system_root).await;
         assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);

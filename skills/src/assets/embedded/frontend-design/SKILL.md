@@ -19,11 +19,22 @@ Typography carries the personality of the page. Pair the display and body faces 
 
 Structure is information. Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
 
-Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, a scroll-triggered reveal, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated.
+Use non-user-triggered motion sparingly and deliberately, only to draw attention: a single orchestrated moment — one page-load sequence or one reveal — lands harder than scattered effects. Fade-and-slide-up entrances on every section and decorative hover transitions on every card are the generic default and read as AI-generated. Motion that answers a person's action (opening, expanding, confirming, pressing) is different: it is welcome whenever it shows what changed, and the interaction baseline below is part of the quality floor, not decoration.
 
 Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
 
 Consider written content carefully. Often a design brief may not contain real content, and it's up to you to come up with copy. Copy can make a design feel as templated as the design itself. See the below section on writing for more guidance.
+
+## Interaction baseline: nothing clickable feels dead
+
+The quality floor is not static. Every interactive element responds to hover and press — this feedback is hygiene, not decoration, and does not count against your one bold move. The restraint above applies to gratuitous decoration (parallax, particles, scattered entrances), never to feedback.
+
+- Buttons and links: hover color/background shift; press feedback `transform: scale(0.97)` on `:active`, `transition: transform 100–160ms ease-out`. `cursor: pointer` on anything clickable.
+- Clickable cards, list rows, data entries: a hover state that matches the design (background tint, border accent, or a 1–2px lift with a softening shadow), 150–250ms ease-out.
+- Entrances start from `scale(0.9–0.97)` + `opacity: 0` — never `scale(0)`. Group entrances stagger 30–80ms.
+- Animate only `transform` and `opacity`; `transition: all` is banned. Gate `:hover` motion behind `@media (hover: hover) and (pointer: fine)`; under `prefers-reduced-motion` keep opacity/color feedback, drop movement.
+
+For anything beyond this baseline — orchestrated hero sequences, scroll-triggered reveals, springs, drag — load the `motion-design` skill before writing that code and use its exact values.
 
 ## Process: brainstorm, explore, plan, critique, build, critique again
 
@@ -52,3 +63,7 @@ Use active voice by default. A control should say exactly what happens when it i
 Treat failure and emptiness as moments for direction, not mood. Explain what went wrong and how to fix it in the interface's voice. Errors are never vague. An empty screen is an invitation to act.
 
 Keep the register conversational and tuned: plain verbs, sentence case, no filler, with tone matched to the brand and audience. Let each element do exactly one job.
+
+---
+
+Sources: adapted from [anthropics/skills](https://github.com/anthropics/skills) `frontend-design` (Apache-2.0) @ `41bbe19d`; interaction-baseline values distilled under MIT from [emilkowalski/skills](https://github.com/emilkowalski/skills) @ `2d228630`. See `THIRD_PARTY.md` in this repository's skills crate.

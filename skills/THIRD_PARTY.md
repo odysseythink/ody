@@ -8,23 +8,58 @@ the inventory.
 ## emilkowalski/skills (MIT License)
 
 - **Upstream**: https://github.com/emilkowalski/skills
-- **Pinned commit**: `d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7` (cloned 2026-09-13)
+- **Pinned commit**: `2d228630ba1446365f614a108cb8252f1feda202` (synced 2026-10-12; previously `d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7`, cloned 2026-09-13)
 - **Copyright**: Emil Kowalski. Full MIT license text: <https://github.com/emilkowalski/skills/blob/main/LICENSE>
-- **Used by**: `motion-design` (added 2026-09-13)
+- **Used by**: `motion-design` (added 2026-09-13), `frontend-design` interaction baseline (added 2026-10-12)
 
 | Embedded file | Distilled from |
 |---|---|
-| `motion-design/SKILL.md` | animation decision framework + defaults shared across the repo |
+| `motion-design/SKILL.md` | animation decision framework + defaults shared across the repo; tool-selection order from `skills/animate` |
 | `motion-design/references/motion-vocabulary.md` | `skills/animation-vocabulary` (glossary quoted near-verbatim) |
 | `motion-design/references/motion-audit.md` | `skills/improve-animations` (AUDIT.md), `skills/review-animations` (STANDARDS.md), `skills/emil-design-eng` (deduplicated) |
 | `motion-design/references/interaction-principles.md` | `skills/apple-design` (motion/gesture sections; materials, typography, and general design foundations omitted) |
+| `motion-design/references/animation-recipes.md` | `skills/animate` (RECIPES.md, vendored near-verbatim) |
+| `motion-design/references/animation-opportunities.md` | `skills/find-animation-opportunities` (SKILL.md; invocation ritual dropped, cross-skill handoffs adapted) |
+| `frontend-design/SKILL.md` (interaction-baseline section only) | press/entrance/stagger values shared across the repo |
 | `game-create/references/motion-presets.md` | values from the same five skills, adapted for game-feel presets (`tech-selection.md` is original content, no third-party text) |
+
+Known upstream skills deliberately not imported in this sync: `break-ui`,
+`animation-performance`, `prototype`, `pick-ui-library`, `mobile-native`,
+`animate-expo`, `ask-sonner`, `write-swift` — re-evaluate at the next
+quarterly review.
 
 ### Sync policy
 
 Quarterly manual review of upstream changes. When syncing, update the pinned
 commit in this file and re-check the attribution headers inside each embedded
 file.
+
+## anthropics/skills (Apache License 2.0)
+
+- **Upstream**: https://github.com/anthropics/skills (`skills/frontend-design`)
+- **Pinned commit**: `41bbe19d1a1a` (2026-09-03, latest commit touching that path as of 2026-10-12)
+- **Copyright**: Anthropic. Full Apache-2.0 license text: <https://github.com/anthropics/skills/blob/main/LICENSE>
+- **Used by**: `frontend-design` (registered 2026-10-12)
+
+`frontend-design/SKILL.md` is an in-repo adaptation of Anthropic's
+`frontend-design` skill (paraphrased, not vendored), tracking the upstream
+framing that non-user-triggered decorative motion reads as AI-generated while
+motion answering a person's action is welcome. When syncing, re-read the
+upstream SKILL.md and re-check this paragraph's framing against it.
+
+## jakubkrehel/make-interfaces-feel-better (MIT License)
+
+- **Upstream**: https://github.com/jakubkrehel/make-interfaces-feel-better
+- **Pinned commit**: `35545ea1512ad59fa463e6b1f95ca9c052981fe6` (fetched 2026-10-12)
+- **Copyright**: Jakub Krehel. Full MIT license text: <https://github.com/jakubkrehel/make-interfaces-feel-better/blob/main/LICENSE>
+- **Used by**: `make-interfaces-feel-better` (added 2026-10-12)
+
+Vendored near-verbatim: upstream `skills/make-interfaces-feel-better/SKILL.md`
+plus its five topic files, moved under `references/` (Quick Reference links
+updated) with a Boundary paragraph added to the SKILL.md and attribution
+footers appended to every file. When syncing, re-copy upstream, re-apply the
+`references/` move and the Boundary paragraph, and update the pinned commit
+here and in each footer.
 
 ## gamedev-skills/awesome-gamedev-agent-skills (Apache License 2.0)
 
