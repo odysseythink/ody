@@ -846,3 +846,33 @@ fn failed_page_is_retryable_from_the_jump_key() {
     assert!(view.needs_history(&cells));
 }
 
+/// A cross-page resume must scan only the inserted page; entries already covered before the scan
+/// parked must not be scanned again (which would duplicate their matches).
+#[test]
+fn cross_page_resume_does_not_rescan_or_duplicate_matches() {
+    let area = Rect::new(0, 0, 40, 6);
+    let mut cells: Vec<Arc<dyn HistoryCell>> = (0..6)
+        .map(|index| cell(&format!("z row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+    render(&mut view, &cells, area);
+
+    view.begin_search();
+    view.push_search_char('z');
+    while view.search_step(&cells) {}
+    assert!(view.search_awaiting_history());
+    assert_eq!(view.search_match_count(), 6);
+
+    let older: Vec<Arc<dyn HistoryCell>> = (0..4)
+        .map(|index| cell(&format!("z old {index}")))
+        .collect();
+    cells.splice(0..0, older);
+    view.history_loaded(&cells, 0..4);
+    while view.search_step(&cells) {}
+    assert_eq!(
+        view.search_match_count(),
+        10,
+        "the already-scanned window must not be scanned again"
+    );
+}

@@ -123,6 +123,10 @@ impl App {
             if tui.is_owned_screen() {
                 self.transcript_view
                     .set_history_complete(!self.scrollback_has_older_history);
+                // No cells were spliced, but a parked scan still has to learn whether history is
+                // exhausted; an empty splice range settles it without touching any anchor.
+                self.transcript_view
+                    .history_loaded(&self.transcript_cells, 0..0);
                 self.finish_owned_history_page(tui, app_server, thread_id);
             }
             return Ok(());

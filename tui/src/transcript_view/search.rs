@@ -68,6 +68,10 @@ pub(super) struct SearchState {
     progress: SearchProgress,
     /// Entry the scan should resume at, as a content position so a prepend keeps it valid.
     resume: Option<SearchMatch>,
+    /// First entry the current leg must not scan, as a content position. Set when a scan resumes
+    /// over a freshly prepended page: everything from this entry onward was covered before the
+    /// page arrived, so the leg stops here instead of re-scanning it and duplicating its matches.
+    scan_stop: Option<SearchMatch>,
     direction: Option<ScanDirection>,
     /// Set by `Enter`: the query stays highlighted but stops accepting characters.
     accepted: bool,
@@ -80,6 +84,7 @@ impl SearchState {
         self.scanned = 0;
         self.progress = SearchProgress::Idle;
         self.resume = None;
+        self.scan_stop = None;
         self.direction = None;
     }
 
@@ -175,6 +180,24 @@ impl TranscriptView {
         }
         let needle: Vec<char> = self.search.query.chars().collect();
         let total = cells.len();
+        // The leg ends at the boundary of the region scanned before the current page arrived, or
+        // at the newest loaded entry when there is no such boundary.
+        let stop = self
+            .search
+            .scan_stop
+            .map(|boundary| {
+                self.resolve(
+                    cells,
+                    Anchor {
+                        key: boundary.key,
+                        index: boundary.index,
+                        offset: boundary.offset,
+                        row_bias: 0,
+                    },
+                )
+            })
+            .unwrap_or(total)
+            .min(total);
         let start = match self.search.resume {
             // Resume at the position the previous step stopped at, re-resolved by identity so a
             // prepend between steps does not shift the window.
@@ -188,10 +211,11 @@ impl TranscriptView {
                 },
             ),
             None => 0,
-        };
+        }
+        .min(stop);
         self.search.progress = SearchProgress::Scanning;
         self.search.direction = Some(ScanDirection::Older);
-        let end = start.saturating_add(CELLS_PER_STEP).min(total);
+        let end = start.saturating_add(CELLS_PER_STEP).min(stop);
         for index in start..end {
             let Some(layout) = self.layout(cells, index) else {
                 continue;
@@ -207,7 +231,7 @@ impl TranscriptView {
             }
         }
         self.search.scanned = self.search.scanned.saturating_add(end.saturating_sub(start));
-        if end < total {
+        if end < stop {
             self.search.resume = Some(SearchMatch {
                 key: self.entry_key(cells, end),
                 index: end,
@@ -215,6 +239,7 @@ impl TranscriptView {
             });
             return self.search_needs_work();
         }
+        self.search.scan_stop = None;
         self.finish_older_scan(cells);
         self.search_needs_work()
     }
@@ -245,24 +270,42 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         inserted: Range<usize>,
     ) {
-        if self.search.progress != SearchProgress::AwaitingHistory {
+        if !self.search.active || self.search.query.is_empty() {
             return;
         }
         if inserted.is_empty() {
             // The page landed but produced no cells; nothing new to scan here. If the server is
             // still paginating, stay parked so the next page gets its own chance.
-            if !self.history.has_unloaded_history() {
+            if self.search.progress == SearchProgress::AwaitingHistory
+                && !self.history.has_unloaded_history()
+            {
                 self.search.progress = SearchProgress::Exhausted;
             }
             return;
         }
-        // Continue from the oldest row of the inserted page, walking toward the start.
+        if self.search.progress != SearchProgress::AwaitingHistory {
+            // A page arrived while a scan leg was in flight (the reader paged by scrolling, not
+            // by find). The new page sits in front of the resume point, so continuing the leg
+            // would skip it: restart the scan over the widened window. The per-query cap bounds
+            // the repeated work.
+            self.search.reset_scan();
+            return;
+        }
+        // Continue from the oldest row of the inserted page, stopping at the region that was
+        // already scanned before this page arrived. The per-query scan budget refreshes with each
+        // page: the cap bounds one continuous run, and a cross-page continuation is a new run.
         let index = inserted.start;
         self.search.resume = Some(SearchMatch {
             key: self.entry_key(cells, index),
             index,
             offset: 0,
         });
+        self.search.scan_stop = (inserted.end < cells.len()).then(|| SearchMatch {
+            key: self.entry_key(cells, inserted.end),
+            index: inserted.end,
+            offset: 0,
+        });
+        self.search.scanned = 0;
         self.search.progress = SearchProgress::Scanning;
     }
 
@@ -293,11 +336,6 @@ impl TranscriptView {
             self.search.progress = SearchProgress::AwaitingHistory;
             return true;
         }
-        if newer && self.search.progress == SearchProgress::AwaitingHistory {
-            // `^N` from a parked scan: there is nothing newer until the older page lands, but the
-            // reader can still step through the matches already found.
-            self.search.progress = SearchProgress::Scanning;
-        }
         if self.search.matches.is_empty() {
             return false;
         }
@@ -312,10 +350,17 @@ impl TranscriptView {
         self.search.cursor = Some(cursor);
         let target = self.search.matches[cursor];
         self.focus_match(cells, target);
-        if !newer && at_oldest {
-            // The reader walked past the oldest hit; keep the scan going into older history.
-            self.search.resume = Some(target);
-            self.search.progress = SearchProgress::Scanning;
+        if !newer
+            && at_oldest
+            && self.search.progress == SearchProgress::Exhausted
+            && self.history.has_unloaded_history()
+            && self.search.scanned < MAX_SCANNED_CELLS
+        {
+            // The reader walked past the oldest hit after the scan stopped at its per-run cap
+            // while older pages remain: park again so paging continues. The loaded window is
+            // already fully scanned at this point, so nothing needs re-walking — and rewinding
+            // `resume` backwards would duplicate matches.
+            self.search.progress = SearchProgress::AwaitingHistory;
         }
         true
     }

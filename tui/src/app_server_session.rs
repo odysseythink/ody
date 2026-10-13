@@ -477,15 +477,20 @@ impl AppServerSession {
         let width = width.max(/*other*/ 1);
         // Owned mode bounds its first page by the viewport it will actually paint, not by a
         // terminal scrollback cap the user may have disabled or set far higher than a window.
+        let mode = crate::transcript_mode::TranscriptMode::resolve(
+            config.tui_fullscreen_transcript,
+            config.tui_alternate_screen != AltScreenMode::Never,
+        );
         let row_budget = crate::transcript_history::initial_hydration_row_budget(
-            crate::transcript_mode::TranscriptMode::resolve(
-                config.tui_fullscreen_transcript,
-                config.tui_alternate_screen != AltScreenMode::Never,
-            ),
+            mode,
             height,
             crate::resize_reflow_cap::resize_reflow_max_rows(config.terminal_resize_reflow),
         );
-        let turn_scan_limit = crate::transcript_history::OWNED_INITIAL_TURN_SCAN_LIMIT;
+        let turn_scan_limit = if mode.is_owned() {
+            crate::transcript_history::OWNED_INITIAL_TURN_SCAN_LIMIT
+        } else {
+            history::HISTORY_TURN_SCAN_LIMIT
+        };
         self.hydrate_initial_turns_window(
             thread_id,
             &mut started.turns,
