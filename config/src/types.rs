@@ -718,6 +718,15 @@ pub struct Tui {
     #[serde(default)]
     pub alternate_screen: AltScreenMode,
 
+    /// Use the fullscreen owned transcript view for the main chat UI instead of
+    /// writing history into native terminal scrollback.
+    ///
+    /// Defaults to `false`. Requires the alternate screen: `alternate_screen =
+    /// "never"` and the `--no-alt-screen` CLI flag both take precedence and
+    /// force the native-scrollback terminal transcript.
+    #[serde(default)]
+    pub fullscreen_transcript: bool,
+
     /// Ordered list of status line item identifiers.
     ///
     /// When set, the TUI renders the selected items as the status line.

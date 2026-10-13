@@ -910,6 +910,12 @@ pub struct Config {
     /// - `always`: Always use alternate screen.
     /// - `never`: Never use alternate screen (inline mode, preserves scrollback).
     pub tui_alternate_screen: AltScreenMode,
+    /// Whether the main chat UI owns the terminal screen with a fullscreen
+    /// transcript view instead of writing history to native scrollback.
+    ///
+    /// This is the same `tui.fullscreen_transcript` value from `config.toml`.
+    /// Effective only when the alternate screen is allowed.
+    pub tui_fullscreen_transcript: bool,
     /// Ordered list of status line item identifiers for the TUI.
     ///
     /// When unset, the TUI defaults to: `model-with-reasoning` and `current-dir`.
@@ -4332,6 +4338,10 @@ impl Config {
                 .as_ref()
                 .map(|t| t.alternate_screen)
                 .unwrap_or_default(),
+            tui_fullscreen_transcript: cfg
+                .tui
+                .as_ref()
+                .is_some_and(|t| t.fullscreen_transcript),
             tui_status_line: cfg.tui.as_ref().and_then(|t| t.status_line.clone()),
             tui_status_line_use_colors: cfg
                 .tui

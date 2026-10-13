@@ -897,6 +897,7 @@ fn config_toml_deserializes_model_availability_nux() {
             raw_output_mode: false,
             mouse_scroll_speed: None,
             alternate_screen: AltScreenMode::default(),
+            fullscreen_transcript: false,
             status_line: None,
             status_line_use_colors: true,
             terminal_title: None,
@@ -1054,6 +1055,39 @@ async fn runtime_config_uses_tui_raw_output_mode() {
     .expect("load config");
 
     assert!(cfg.tui_raw_output_mode);
+}
+
+#[test]
+fn test_tui_fullscreen_transcript_defaults_to_false() {
+    let toml = r#"
+        [tui]
+    "#;
+    let parsed: ConfigToml = toml::from_str(toml).expect("deserialize empty [tui] table");
+    assert!(
+        !parsed
+            .tui
+            .expect("config should include tui section")
+            .fullscreen_transcript
+    );
+}
+
+#[tokio::test]
+async fn runtime_config_uses_tui_fullscreen_transcript() {
+    let toml = r#"
+        [tui]
+        fullscreen_transcript = true
+    "#;
+    let cfg_toml: ConfigToml =
+        toml::from_str(toml).expect("deserialize fullscreen_transcript=true");
+    let cfg = Config::load_from_base_config_with_overrides(
+        cfg_toml,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load config");
+
+    assert!(cfg.tui_fullscreen_transcript);
 }
 
 #[test]
@@ -3771,6 +3805,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
             raw_output_mode: false,
             mouse_scroll_speed: None,
             alternate_screen: AltScreenMode::Auto,
+            fullscreen_transcript: false,
             status_line: None,
             status_line_use_colors: true,
             terminal_title: None,
