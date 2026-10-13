@@ -173,6 +173,7 @@ mod theme_picker;
 mod thread_transcript;
 mod token_usage;
 mod tooltips;
+mod transcript_mode;
 mod transcript_reflow;
 mod tui;
 mod ui_consts;
@@ -1570,6 +1571,9 @@ async fn run_ratatui_app(
 
     let use_alt_screen = determine_alt_screen_mode(no_alt_screen, config.tui_alternate_screen);
     tui.set_alt_screen_enabled(use_alt_screen);
+    // Adopt launch-time transcript ownership before the first frame. Owned mode defers
+    // entering the alternate screen until the first synchronized draw.
+    tui.prepare_owned_screen(config.tui_fullscreen_transcript)?;
     let mut app_server = match app_server {
         Some(app_server) => app_server,
         None => match start_app_server(
@@ -1978,6 +1982,48 @@ mod tests {
             /*no_alt_screen*/ true,
             AltScreenMode::Auto,
         ));
+    }
+
+    #[test]
+    fn fullscreen_transcript_resolution_prefers_terminal_restrictions() {
+        use crate::transcript_mode::TranscriptMode;
+
+        let resolve = |fullscreen_transcript: bool, no_alt_screen: bool, mode: AltScreenMode| {
+            TranscriptMode::resolve(
+                fullscreen_transcript,
+                determine_alt_screen_mode(no_alt_screen, mode),
+            )
+        };
+
+        // Default (false): always Terminal regardless of alt-screen policy.
+        assert_eq!(
+            resolve(false, false, AltScreenMode::Auto),
+            TranscriptMode::Terminal
+        );
+        assert_eq!(
+            resolve(false, false, AltScreenMode::Always),
+            TranscriptMode::Terminal
+        );
+
+        // Explicit true with alt screen available: Owned.
+        assert_eq!(
+            resolve(true, false, AltScreenMode::Auto),
+            TranscriptMode::Owned
+        );
+        assert_eq!(
+            resolve(true, false, AltScreenMode::Always),
+            TranscriptMode::Owned
+        );
+
+        // AltScreenMode::Never and CLI --no-alt-screen take precedence over the setting.
+        assert_eq!(
+            resolve(true, false, AltScreenMode::Never),
+            TranscriptMode::Terminal
+        );
+        assert_eq!(
+            resolve(true, true, AltScreenMode::Auto),
+            TranscriptMode::Terminal
+        );
     }
 
     #[test]

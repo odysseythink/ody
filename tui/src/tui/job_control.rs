@@ -18,7 +18,6 @@ use ratatui::layout::Rect;
 use crate::key_hint;
 
 use super::DisableAlternateScroll;
-use super::EnableAlternateScroll;
 use super::Terminal;
 
 pub const SUSPEND_KEY: key_hint::KeyBinding = key_hint::ctrl(KeyCode::Char('z'));
@@ -60,8 +59,16 @@ impl SuspendContext {
     ///   otherwise record `RealignInline`.
     /// - Update the cached inline cursor row so suspend can place the cursor meaningfully.
     /// - Trigger SIGTSTP so the process can be resumed and continue drawing with the saved state.
-    pub(crate) fn suspend(&self, alt_screen_active: &Arc<AtomicBool>) -> Result<()> {
+    pub(crate) fn suspend(
+        &self,
+        alt_screen_active: &Arc<AtomicBool>,
+        mouse_capture_active: &Arc<AtomicBool>,
+    ) -> Result<()> {
         if alt_screen_active.load(Ordering::Relaxed) {
+            // Release pointer capture so the shell never inherits mouse reporting while suspended.
+            if mouse_capture_active.swap(false, Ordering::Relaxed) {
+                let _ = execute!(stdout(), crossterm::event::DisableMouseCapture);
+            }
             // Leave alt-screen so the terminal returns to the normal buffer while suspended; also turn off alt-scroll.
             let _ = execute!(stdout(), DisableAlternateScroll);
             let _ = execute!(stdout(), LeaveAlternateScreen);
@@ -178,15 +185,26 @@ pub(crate) enum PreparedResumeAction {
 }
 
 impl PreparedResumeAction {
-    pub(crate) fn apply(self, terminal: &mut Terminal) -> Result<()> {
+    pub(crate) fn apply(
+        self,
+        terminal: &mut Terminal,
+        mouse_capture_active: &Arc<AtomicBool>,
+    ) -> Result<()> {
         match self {
             PreparedResumeAction::RealignViewport(area) => {
                 terminal.set_viewport_area(area);
             }
             PreparedResumeAction::RestoreAltScreen => {
                 execute!(terminal.backend_mut(), EnterAlternateScreen)?;
-                // Enable "alternate scroll" so terminals may translate wheel to arrows
-                execute!(terminal.backend_mut(), EnableAlternateScroll)?;
+                // Re-apply the input modes the active screen had before suspension:
+                // pointer capture (overlays and the owned transcript handle wheel speed,
+                // drag selection, and link clicks themselves) instead of alternate scroll.
+                execute!(
+                    terminal.backend_mut(),
+                    DisableAlternateScroll,
+                    crossterm::event::EnableMouseCapture
+                )?;
+                mouse_capture_active.store(true, Ordering::Relaxed);
                 if let Ok(size) = terminal.size() {
                     terminal.set_viewport_area(Rect::new(0, 0, size.width, size.height));
                     terminal.clear()?;

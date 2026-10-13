@@ -65,6 +65,8 @@ mod keyboard_modes;
 mod terminal_stderr;
 #[cfg(test)]
 pub(crate) mod test_support;
+#[cfg(test)]
+mod owned_screen_tests;
 
 /// Target frame interval for UI redraw scheduling.
 pub(crate) const TARGET_FRAME_INTERVAL: Duration = frame_rate_limiter::MIN_FRAME_INTERVAL;
@@ -619,6 +621,10 @@ pub struct Tui {
     suspend_context: SuspendContext,
     // True when overlay alt-screen UI is active
     alt_screen_active: Arc<AtomicBool>,
+    // True while the active screen holds pointer capture. Tracked separately from screen
+    // activity so suspend and external-program handoffs can release and later re-apply
+    // input modes independently of the screen transition.
+    mouse_capture_active: Arc<AtomicBool>,
     // True when terminal/tab is focused; updated internally from crossterm events
     terminal_focused: Arc<AtomicBool>,
     enhanced_keys_supported: bool,
@@ -628,6 +634,10 @@ pub struct Tui {
     is_zellij: bool,
     // When false, enter_alt_screen() becomes a no-op.
     alt_screen_enabled: bool,
+    // True when the session owns the alternate screen for the main UI (fullscreen transcript).
+    // Set at launch and survives overlay open/close; external programs and suspension
+    // temporarily restore the shell.
+    owned_screen: bool,
     // Keeps unmanaged process stderr writes out of the inline viewport.
     _stderr_guard: terminal_stderr::TerminalStderrGuard,
 }
@@ -676,19 +686,70 @@ impl Tui {
             #[cfg(unix)]
             suspend_context: SuspendContext::new(),
             alt_screen_active: Arc::new(AtomicBool::new(false)),
+            mouse_capture_active: Arc::new(AtomicBool::new(false)),
             terminal_focused: Arc::new(AtomicBool::new(true)),
             enhanced_keys_supported,
             notification_backend: Some(detect_backend(NotificationMethod::default())),
             notification_condition: NotificationCondition::default(),
             is_zellij,
             alt_screen_enabled: true,
+            owned_screen: false,
             _stderr_guard: stderr_guard,
         }
     }
 
-    /// Set whether alternate screen is enabled. When false, enter_alt_screen() becomes a no-op.
+    /// Set whether alternate screen is enabled. When false, enter_alt_screen() becomes a no-op
+    /// and any Owned session screen is released first.
     pub fn set_alt_screen_enabled(&mut self, enabled: bool) {
+        if !enabled && self.owned_screen {
+            let _ = self.set_owned_screen(/*owned*/ false);
+        }
         self.alt_screen_enabled = enabled;
+    }
+
+    /// Defer a fresh fullscreen launch until its first synchronized frame is ready.
+    pub(crate) fn prepare_owned_screen(&mut self, owned: bool) -> Result<()> {
+        if owned && self.alt_screen_enabled && !self.is_alt_screen_active() {
+            self.owned_screen = true;
+            self.frame_requester.schedule_frame();
+            Ok(())
+        } else {
+            self.set_owned_screen(owned)
+        }
+    }
+
+    /// Own the terminal for the session, unless alternate-screen rendering is disabled.
+    ///
+    /// Closing an overlay retains the screen; external programs and suspension temporarily
+    /// restore the shell. Startup resolves ownership before the conversation begins.
+    pub fn set_owned_screen(&mut self, owned: bool) -> Result<()> {
+        let owned = owned && self.alt_screen_enabled;
+        if self.owned_screen == owned {
+            return Ok(());
+        }
+        let transition = if owned {
+            self.owned_screen = true;
+            self.enter_alt_screen()
+        } else {
+            self.owned_screen = false;
+            self.leave_alt_screen_for_handoff()
+        };
+        if let Err(error) = transition {
+            self.owned_screen = self.is_alt_screen_active();
+            self.terminal.invalidate_viewport();
+            return Err(error);
+        }
+        self.frame_requester.schedule_frame();
+        Ok(())
+    }
+
+    /// Whether the session owns the screen, including while temporarily yielding to an editor.
+    pub fn is_owned_screen(&self) -> bool {
+        self.transcript_mode().is_owned()
+    }
+
+    pub(crate) fn transcript_mode(&self) -> crate::transcript_mode::TranscriptMode {
+        crate::transcript_mode::TranscriptMode::resolve(self.owned_screen, self.alt_screen_enabled)
     }
 
     pub fn set_notification_settings(
@@ -710,6 +771,29 @@ impl Tui {
 
     pub fn is_alt_screen_active(&self) -> bool {
         self.alt_screen_active.load(Ordering::Relaxed)
+    }
+
+    /// Apply the pointer-capture policy for the currently active screen. Idempotent:
+    /// repeated calls with the same policy emit no escape sequences.
+    fn set_mouse_capture(&mut self, capture: bool) -> Result<()> {
+        if self.mouse_capture_active.load(Ordering::Relaxed) == capture {
+            return Ok(());
+        }
+        if capture {
+            execute!(
+                self.terminal.backend_mut(),
+                DisableAlternateScroll,
+                EnableMouseCapture
+            )?;
+        } else {
+            execute!(
+                self.terminal.backend_mut(),
+                DisableMouseCapture,
+                EnableAlternateScroll
+            )?;
+        }
+        self.mouse_capture_active.store(capture, Ordering::Relaxed);
+        Ok(())
     }
 
     // Drop crossterm EventStream to avoid stdin conflicts with other processes.
@@ -737,9 +821,11 @@ impl Tui {
         self.pause_events();
 
         // Leave alt screen if active to avoid conflicts with external program `f`.
+        // A handoff always releases the screen, even when the session owns it; the
+        // re-entry below (or the next owned draw) restores it afterwards.
         let was_alt_screen = self.is_alt_screen_active();
         if was_alt_screen {
-            let _ = self.leave_alt_screen();
+            let _ = self.leave_alt_screen_for_handoff();
         }
 
         if let Err(err) = mode.restore() {
@@ -804,6 +890,7 @@ impl Tui {
             self.terminal_focused.clone(),
             self.suspend_context.clone(),
             self.alt_screen_active.clone(),
+            self.mouse_capture_active.clone(),
         );
         #[cfg(not(unix))]
         let stream = TuiEventStream::new(
@@ -817,16 +904,27 @@ impl Tui {
     /// Enter alternate screen and expand the viewport to full terminal size, saving the current
     /// inline viewport for restoration when leaving.
     pub fn enter_alt_screen(&mut self) -> Result<()> {
+        if self.is_alt_screen_active() {
+            return Ok(());
+        }
+        // History queued before opening an overlay belongs to the inline transcript.
+        // Flush before switching screens or it would be written into the alt screen.
+        Self::flush_pending_history_lines(
+            &mut self.terminal,
+            &mut self.pending_history_lines,
+            self.is_zellij,
+        )?;
         if !self.alt_screen_enabled {
             return Ok(());
         }
         let _ = execute!(self.terminal.backend_mut(), EnterAlternateScreen);
-        // Enable "alternate scroll" so terminals may translate wheel to arrows
-        let _ = execute!(self.terminal.backend_mut(), EnableAlternateScroll);
-        // Capture mouse events so overlays can handle wheel speed, drag selection,
-        // and link clicks themselves. Terminals that honor capture stop emitting
-        // alternate-scroll arrows; the ones that do not still fall back to arrows.
-        let _ = execute!(self.terminal.backend_mut(), EnableMouseCapture);
+        // A freshly entered screen has no input modes applied yet.
+        self.mouse_capture_active.store(false, Ordering::Relaxed);
+        // Capture mouse events so overlays and the owned transcript can handle wheel
+        // speed, drag selection, and link clicks themselves. Terminals that honor
+        // capture stop emitting alternate-scroll arrows; the ones that do not still
+        // fall back to arrows.
+        let _ = self.set_mouse_capture(/*capture*/ true);
         if let Ok(size) = self.terminal.size() {
             self.alt_saved_viewport = Some(self.terminal.viewport_area);
             self.terminal.set_viewport_area(ratatui::layout::Rect::new(
@@ -841,18 +939,36 @@ impl Tui {
         Ok(())
     }
 
-    /// Leave alternate screen and restore the previously saved inline viewport, if any.
+    /// Close an overlay, preserving the alternate screen when the session owns it.
     pub fn leave_alt_screen(&mut self) -> Result<()> {
-        if !self.alt_screen_enabled {
+        if self.is_owned_screen() {
+            // Owned sessions keep the screen for the main UI; the next draw repaints
+            // the full frame because the overlay changed the diff baseline.
+            self.terminal.invalidate_viewport();
             return Ok(());
+        }
+        self.leave_alt_screen_for_handoff()
+    }
+
+    /// Yield the alternate screen entirely: overlay close in Terminal mode, or handoff to
+    /// an external program while the session owns the screen.
+    pub(crate) fn leave_alt_screen_for_handoff(&mut self) -> Result<()> {
+        if !self.alt_screen_enabled || !self.is_alt_screen_active() {
+            return Ok(());
+        }
+        // Release pointer capture before leaving so the shell/main screen never
+        // inherits mouse reporting from the overlay or owned transcript.
+        if self.mouse_capture_active.swap(false, Ordering::Relaxed) {
+            let _ = execute!(self.terminal.backend_mut(), DisableMouseCapture);
         }
         // Disable alternate scroll when leaving alt-screen
         let _ = execute!(self.terminal.backend_mut(), DisableAlternateScroll);
-        let _ = execute!(self.terminal.backend_mut(), DisableMouseCapture);
         let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
         if let Some(saved) = self.alt_saved_viewport.take() {
             self.terminal.set_viewport_area(saved);
         }
+        // The restored main screen does not contain the alternate screen's diff baseline.
+        self.terminal.invalidate_viewport();
         self.alt_screen_active.store(false, Ordering::Relaxed);
         Ok(())
     }
@@ -1015,7 +1131,14 @@ impl Tui {
         stdout().sync_update(|_| {
             #[cfg(unix)]
             if let Some(prepared) = prepared_resume.take() {
-                prepared.apply(&mut self.terminal)?;
+                prepared.apply(&mut self.terminal, &self.mouse_capture_active)?;
+            }
+
+            // An owned session enters the alternate screen on its first synchronized frame,
+            // and re-enters after external programs or suspension yield it.
+            if self.owned_screen && !self.is_alt_screen_active() {
+                self.enter_alt_screen()?;
+                pending_viewport_area = None;
             }
 
             let terminal = &mut self.terminal;
@@ -1147,7 +1270,13 @@ impl Tui {
         stdout().sync_update(|_| {
             #[cfg(unix)]
             if let Some(prepared) = prepared_resume.take() {
-                prepared.apply(&mut self.terminal)?;
+                prepared.apply(&mut self.terminal, &self.mouse_capture_active)?;
+            }
+
+            // An owned session enters the alternate screen on its first synchronized frame,
+            // and re-enters after external programs or suspension yield it.
+            if self.owned_screen && !self.is_alt_screen_active() {
+                self.enter_alt_screen()?;
             }
 
             let terminal = &mut self.terminal;
