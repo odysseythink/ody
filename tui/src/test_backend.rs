@@ -21,6 +21,7 @@ use ratatui::layout::Size;
 pub struct VT100Backend {
     crossterm_backend: CrosstermBackend<vt100::Parser>,
     write_count: usize,
+    byte_count: usize,
 }
 
 impl VT100Backend {
@@ -30,11 +31,16 @@ impl VT100Backend {
         Self {
             crossterm_backend: CrosstermBackend::new(vt100::Parser::new(height, width, 0)),
             write_count: 0,
+            byte_count: 0,
         }
     }
 
     pub fn write_count(&self) -> usize {
         self.write_count
+    }
+
+    pub fn byte_count(&self) -> usize {
+        self.byte_count
     }
 
     pub fn vt100(&self) -> &vt100::Parser {
@@ -45,6 +51,7 @@ impl VT100Backend {
 impl Write for VT100Backend {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.write_count += 1;
+        self.byte_count += buf.len();
         self.crossterm_backend.writer_mut().write(buf)
     }
 

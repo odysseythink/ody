@@ -454,6 +454,11 @@ impl AppServerSession {
         let fork_parent_title = self
             .fork_parent_title_from_app_server(response.thread.forked_from_id.as_deref())
             .await;
+        seed_history_pagination(
+            &mut self.history_pagination,
+            thread_id,
+            response.initial_turns_page.as_ref(),
+        );
         let mut started =
             started_thread_from_resume_response(response, &config, self.thread_params_mode())
                 .await?;

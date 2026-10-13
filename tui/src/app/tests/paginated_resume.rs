@@ -122,6 +122,30 @@ fn turn_context_item(turn_id: &str) -> ody_protocol::protocol::TurnContextItem {
     }
 }
 
+/// Extract the first user-message text of each turn. The app server assigns
+/// synthetic `rollout-{line}` turn ids and never reads back the fixture's
+/// `TurnContext.turn_id`, so cross-page ordering is asserted on message
+/// content instead of literal ids.
+fn turn_user_texts(turns: &[Turn]) -> Vec<String> {
+    turns
+        .iter()
+        .map(|turn| {
+            turn.items
+                .iter()
+                .find_map(|item| match item {
+                    ThreadItem::UserMessage { content, .. } => {
+                        content.iter().find_map(|input| match input {
+                            UserInput::Text { text, .. } => Some(text.clone()),
+                            _ => None,
+                        })
+                    }
+                    _ => None,
+                })
+                .expect("synthetic turn has a user message")
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
@@ -132,41 +156,10 @@ async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
     let thread_id = ThreadId::new();
     write_multi_turn_rollout(config.ody_home.as_path(), thread_id, /*turn_count*/ 7).await;
     let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(&config)).await?;
-    // 探针：resume 前手动翻页统计服务端总 turn 数
-    {
-        let mut cursor = None;
-        let mut total = 0;
-        for _ in 0..10 {
-            let page = Box::pin(app_server.thread_turns_page(thread_id, cursor.take()))
-                .await
-                .expect("probe page");
-            eprintln!(
-                "DEBUG pre-resume probe page len={} next={:?}",
-                page.data.len(),
-                page.next_cursor
-            );
-            total += page.data.len();
-            cursor = page.next_cursor;
-            if cursor.is_none() {
-                break;
-            }
-        }
-        eprintln!("DEBUG pre-resume probe total={total}");
-    }
 
     let started = Box::pin(app_server.resume_thread(config, thread_id))
         .await
         .expect("resume synthetic rollout");
-    eprintln!(
-        "DEBUG turns={} ids={:?} pag={:?}",
-        started.turns.len(),
-        started
-            .turns
-            .iter()
-            .map(|t| t.id.as_str())
-            .collect::<Vec<_>>(),
-        app_server.history_pagination.get(&thread_id)
-    );
     assert_eq!(started.turns.len(), 5, "initial page is capped at 5 turns");
     assert!(
         app_server.has_older_history(thread_id),
@@ -174,9 +167,17 @@ async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
     );
     // 时间序 + 无重复 + 取最新 5 个 turn。
     let ids: Vec<&str> = started.turns.iter().map(|turn| turn.id.as_str()).collect();
+    let unique_ids: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique_ids.len(), ids.len(), "turn ids must be unique");
     assert_eq!(
-        ids,
-        vec!["turn-002", "turn-003", "turn-004", "turn-005", "turn-006"]
+        turn_user_texts(&started.turns),
+        vec![
+            "user message 2",
+            "user message 3",
+            "user message 4",
+            "user message 5",
+            "user message 6",
+        ]
     );
     Ok(())
 }
@@ -219,10 +220,11 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
     let mut tui = crate::tui::test_support::make_test_tui()?;
     let mut applied_pages = 0usize;
     while app_server.has_older_history(thread_id) {
-        assert!(
-            app.request_older_history_page(&mut app_server, thread_id),
-            "a page request must be accepted while older history exists"
-        );
+        // `handle_older_history_page` chains the next page request itself while
+        // the viewport is still under the row budget, so a request may already
+        // be in flight; a rejected request here just means "wait for the
+        // in-flight page", not stalled pagination.
+        app.request_older_history_page(&mut app_server, thread_id);
         let event = tokio::time::timeout(Duration::from_secs(5), app_event_rx.recv())
             .await?
             .ok_or_else(|| color_eyre::eyre::eyre!("event channel closed"))?;
@@ -245,8 +247,10 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
     let store = channel.store.lock().await;
     assert_eq!(store.turns.len(), 30);
     let ids: Vec<&str> = store.turns.iter().map(|turn| turn.id.as_str()).collect();
-    let expected: Vec<String> = (0..30).map(|i| format!("turn-{i:03}")).collect();
-    assert_eq!(ids, expected.iter().map(String::as_str).collect::<Vec<_>>());
+    let unique_ids: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique_ids.len(), ids.len(), "turn ids must be unique");
+    let expected: Vec<String> = (0..30).map(|i| format!("user message {i}")).collect();
+    assert_eq!(turn_user_texts(&store.turns), expected);
     Ok(())
 }
 
@@ -267,6 +271,79 @@ async fn resume_without_cap_degrades_to_full_history() -> Result<()> {
     assert!(
         !app_server.has_older_history(thread_id),
         "full hydration must exhaust the cursor"
+    );
+    Ok(())
+}
+
+/// P0 performance baseline for the fullscreen-transcript roadmap
+/// (`.ody-code/roadmaps/2026-10-13-tui-fullscreen-transcript-port.md`).
+///
+/// Measures the current Terminal-mode resume path end to end for a 1000-turn
+/// session with no row cap (worst case: full history replay): resume RPC time,
+/// cell formatting time, line layout time at 80 columns, and the terminal
+/// replay cost (wall time, backend write calls, bytes written).
+///
+/// Run manually with:
+/// `cargo test -p ody-tui --lib resume_baseline_1000_turns -- --ignored --nocapture`
+#[tokio::test]
+#[ignore = "manual performance baseline; not part of CI"]
+async fn resume_baseline_1000_turns_terminal_mode() -> Result<()> {
+    use std::time::Instant;
+
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut config = app.chat_widget.config_ref().clone();
+    config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Disabled;
+    let thread_id = ThreadId::new();
+
+    let fixture_start = Instant::now();
+    write_multi_turn_rollout(config.ody_home.as_path(), thread_id, /*turn_count*/ 1000).await;
+    let fixture_elapsed = fixture_start.elapsed();
+
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(&config)).await?;
+
+    let resume_start = Instant::now();
+    let started = Box::pin(app_server.resume_thread(config, thread_id))
+        .await
+        .expect("resume synthetic rollout");
+    let resume_elapsed = resume_start.elapsed();
+
+    let cells_start = Instant::now();
+    let cells = crate::thread_transcript::turns_to_transcript_cells(
+        started.session.cwd.as_path(),
+        &started.turns,
+        crate::thread_transcript::RawReasoningVisibility::Hidden,
+    );
+    let cells_elapsed = cells_start.elapsed();
+
+    let layout_start = Instant::now();
+    let lines: Vec<_> = cells
+        .iter()
+        .flat_map(|cell| {
+            cell.display_hyperlink_lines_for_mode(/*width*/ 80, crate::history_cell::HistoryRenderMode::Rich)
+        })
+        .map(|line| line.line)
+        .collect();
+    let layout_elapsed = layout_start.elapsed();
+
+    let backend = crate::test_backend::VT100Backend::new(/*width*/ 80, /*height*/ 24);
+    let mut terminal =
+        crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+    terminal.set_viewport_area(ratatui::layout::Rect::new(0, 23, 80, 1));
+    let insert_start = Instant::now();
+    let line_count = lines.len();
+    crate::insert_history::insert_history_lines(&mut terminal, lines).expect("insert history");
+    let insert_elapsed = insert_start.elapsed();
+
+    eprintln!(
+        "BASELINE turns={} fixture={fixture_elapsed:?} resume={resume_elapsed:?} \
+         cells={} format={cells_elapsed:?} lines={} layout={layout_elapsed:?} \
+         insert={insert_elapsed:?} writes={} bytes={}",
+        started.turns.len(),
+        cells.len(),
+        line_count,
+        terminal.backend().write_count(),
+        terminal.backend().byte_count(),
     );
     Ok(())
 }
