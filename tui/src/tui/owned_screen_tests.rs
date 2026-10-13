@@ -182,13 +182,16 @@ async fn resume_action_restores_alt_screen_with_pointer_capture() -> io::Result<
     // resume intent recorded as RestoreAlt.
     tui.mouse_capture_active.store(false, Ordering::Relaxed);
 
+    // The resume action sizes the viewport from the live backend, so derive the
+    // expectation from the terminal instead of assuming the test harness height.
+    let size = tui.terminal.size()?;
     let resume = PreparedResumeAction::RestoreAltScreen;
     resume.apply(&mut tui.terminal, &tui.mouse_capture_active)?;
 
     assert!(mouse_capture_active(&tui));
     assert_eq!(
         tui.terminal.viewport_area,
-        ratatui::layout::Rect::new(0, 0, 80, 24)
+        ratatui::layout::Rect::new(0, 0, size.width, size.height)
     );
 
     // Clean up the screen state the apply left behind.
