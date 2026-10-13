@@ -159,12 +159,15 @@ where
         wrapped.extend(line_wrapped);
     }
     let wrapped_lines = wrapped_rows as u16;
+    // Build the complete terminal update before writing it. A line-buffered stdout can flush on
+    // each CRLF even when `queue!` is used, making a long resume visibly replay row by row.
+    let mut output = Vec::new();
     match mode {
         InsertHistoryMode::ZellijRaw => {
             // The existing viewport is immediately replaced in the same draw pass. Clear it
             // before terminal scrolling can move composer contents into scrollback.
             terminal.clear_after_position(area.as_position())?;
-            let writer = terminal.backend_mut();
+            let writer = &mut output;
             queue!(writer, MoveTo(/*x*/ 0, area.top()))?;
             for (index, line) in wrapped.iter().enumerate() {
                 if index > 0 {
@@ -191,7 +194,7 @@ where
             }
         }
         InsertHistoryMode::Standard => {
-            let writer = terminal.backend_mut();
+            let writer = &mut output;
             let cursor_top = if area.bottom() < screen_size.height {
                 // If the viewport is not at the bottom of the screen, scroll it down to make room.
                 // Don't scroll it past the bottom of the screen.
@@ -244,6 +247,8 @@ where
             queue!(writer, MoveTo(last_cursor_pos.x, last_cursor_pos.y))?;
         }
     }
+
+    terminal.backend_mut().write_all(&output)?;
 
     if should_update_area {
         terminal.set_viewport_area(area);
@@ -484,6 +489,34 @@ mod tests {
     use ratatui::layout::Rect;
     use ratatui::style::Color;
 
+    #[test]
+    fn multi_row_history_insertion_is_one_backend_write() {
+        let backend = VT100Backend::new(/*width*/ 40, /*height*/ 8);
+        let mut terminal =
+            crate::custom_terminal::Terminal::with_options(backend).expect("terminal");
+        terminal.set_viewport_area(Rect::new(0, 7, 40, 1));
+        let writes_before = terminal.backend().write_count();
+
+        insert_history_lines(
+            &mut terminal,
+            vec![
+                Line::from("first"),
+                Line::from("second"),
+                Line::from("third"),
+            ],
+        )
+        .expect("insert history");
+
+        assert_eq!(terminal.backend().write_count() - writes_before, 1);
+        assert!(
+            terminal
+                .backend()
+                .vt100()
+                .screen()
+                .contents()
+                .contains("third")
+        );
+    }
     #[test]
     fn writes_bold_then_regular_spans() {
         use ratatui::style::Stylize;

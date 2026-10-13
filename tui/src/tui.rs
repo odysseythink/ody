@@ -610,6 +610,8 @@ pub struct Tui {
     event_broker: Arc<EventBroker>,
     pub(crate) terminal: Terminal,
     pending_history_lines: Vec<PendingHistoryLines>,
+    // Reflow clears the screen in the same synchronized draw that writes its replacement rows.
+    pending_transcript_replay_clear: bool,
     ambient_pet_image_state: crate::pets::PetImageRenderState,
     pet_picker_preview_image_state: crate::pets::PetImageRenderState,
     alt_saved_viewport: Option<ratatui::layout::Rect>,
@@ -667,6 +669,7 @@ impl Tui {
             event_broker: Arc::new(EventBroker::new()),
             terminal,
             pending_history_lines: vec![],
+            pending_transcript_replay_clear: false,
             ambient_pet_image_state: crate::pets::PetImageRenderState::default(),
             pet_picker_preview_image_state: crate::pets::PetImageRenderState::default(),
             alt_saved_viewport: None,
@@ -890,6 +893,11 @@ impl Tui {
 
     pub fn clear_pending_history_lines(&mut self) {
         self.pending_history_lines.clear();
+        self.pending_transcript_replay_clear = false;
+    }
+
+    pub(crate) fn defer_transcript_replay_clear(&mut self) {
+        self.pending_transcript_replay_clear = true;
     }
 
     /// Resize the inline viewport for the resize-reflow path.
@@ -1143,6 +1151,13 @@ impl Tui {
             }
 
             let terminal = &mut self.terminal;
+            if self.pending_transcript_replay_clear {
+                if self.alt_screen_active.load(Ordering::Relaxed) {
+                    terminal.clear_visible_screen()?;
+                } else {
+                    terminal.clear_scrollback_and_visible_screen_ansi()?;
+                }
+            }
             let needs_full_repaint =
                 Self::update_inline_viewport_for_resize_reflow(terminal, height)?;
             Self::flush_pending_history_lines(
@@ -1172,7 +1187,9 @@ impl Tui {
             terminal.draw(|frame| {
                 draw_fn(frame);
             })
-        })?
+        })?;
+        self.pending_transcript_replay_clear = false;
+        Ok(())
     }
 
     fn pending_viewport_area(&mut self) -> Result<Option<Rect>> {

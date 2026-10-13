@@ -260,18 +260,15 @@ impl App {
         }
     }
 
-    fn clear_terminal_for_resize_replay(&mut self, tui: &mut tui::Tui) -> Result<()> {
-        if tui.is_alt_screen_active() {
-            tui.terminal.clear_visible_screen()?;
-        } else {
-            tui.terminal.clear_scrollback_and_visible_screen_ansi()?;
-        }
+    fn defer_terminal_clear_for_resize_replay(&mut self, tui: &mut tui::Tui) {
+        // The replacement rows are queued below. Clearing here exposes a blank frame until the
+        // next draw, so perform the clear inside that draw's synchronized update instead.
+        tui.defer_transcript_replay_clear();
         let mut area = tui.terminal.viewport_area;
         if area.y > 0 {
             area.y = 0;
             tui.terminal.set_viewport_area(area);
         }
-        Ok(())
     }
 
     /// Finish stream consolidation by repairing any resize work that happened during streaming.
@@ -438,7 +435,7 @@ impl App {
 
         // Drop any queued pre-resize/pre-consolidation inserts before rebuilding from cells.
         tui.clear_pending_history_lines();
-        self.clear_terminal_for_resize_replay(tui)?;
+        self.defer_terminal_clear_for_resize_replay(tui);
 
         self.deferred_history_lines.clear();
         let reflowed_row_count = reflowed_lines.len();
@@ -469,7 +466,7 @@ impl App {
         };
 
         tui.clear_pending_history_lines();
-        self.clear_terminal_for_resize_replay(tui)?;
+        self.defer_terminal_clear_for_resize_replay(tui);
 
         self.deferred_history_lines.clear();
         if !reflowed_lines.is_empty() {
