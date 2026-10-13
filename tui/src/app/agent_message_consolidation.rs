@@ -63,6 +63,10 @@ impl App {
                 .into_iter()
                 .chain(std::iter::once(consolidated.clone()))
                 .collect();
+            // A reader anchored inside the streamed run would otherwise fall back to a stale
+            // index when the run disappears, so move the anchor onto the consolidated cell.
+            self.transcript_view
+                .replace_range(&self.transcript_cells, start..end, &consolidated);
             self.transcript_cells.splice(start..end, replacement);
 
             if let Some(Overlay::Transcript(t)) = &mut self.overlay {

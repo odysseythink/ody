@@ -22,6 +22,7 @@ pub struct VT100Backend {
     crossterm_backend: CrosstermBackend<vt100::Parser>,
     write_count: usize,
     byte_count: usize,
+    output: Vec<u8>,
 }
 
 impl VT100Backend {
@@ -32,6 +33,7 @@ impl VT100Backend {
             crossterm_backend: CrosstermBackend::new(vt100::Parser::new(height, width, 0)),
             write_count: 0,
             byte_count: 0,
+            output: Vec::new(),
         }
     }
 
@@ -43,6 +45,19 @@ impl VT100Backend {
         self.byte_count
     }
 
+    /// Raw bytes written through this backend.
+    ///
+    /// The screen model consumes escape sequences, so tests that must forbid a specific one (for
+    /// example the scrollback purge `CSI 3J`) assert on this stream instead.
+    pub fn output(&self) -> &[u8] {
+        &self.output
+    }
+
+    /// Drop recorded bytes so a later assertion only covers the phase it is interested in.
+    pub fn clear_output(&mut self) {
+        self.output.clear();
+    }
+
     pub fn vt100(&self) -> &vt100::Parser {
         self.crossterm_backend.writer()
     }
@@ -52,6 +67,7 @@ impl Write for VT100Backend {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.write_count += 1;
         self.byte_count += buf.len();
+        self.output.extend_from_slice(buf);
         self.crossterm_backend.writer_mut().write(buf)
     }
 

@@ -453,7 +453,13 @@ impl App {
     pub(super) fn reset_for_thread_switch(&mut self, tui: &mut tui::Tui) -> Result<()> {
         self.reset_transcript_state_after_clear();
         tui.clear_pending_history_lines();
-        Self::clear_terminal_for_thread_switch(&mut tui.terminal)?;
+        if tui.is_owned_screen() {
+            // The owned view repaints itself from the new thread's cells; purging scrollback here
+            // would emit `CSI 3J` for no visible benefit.
+            tui.terminal.clear_visible_screen()?;
+        } else {
+            Self::clear_terminal_for_thread_switch(&mut tui.terminal)?;
+        }
         Ok(())
     }
 

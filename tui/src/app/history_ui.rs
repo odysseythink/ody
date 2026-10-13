@@ -85,10 +85,19 @@ impl App {
             .chat_widget
             .history_wrap_width(tui.terminal.last_known_screen_size.width);
         let header_lines = self.clear_ui_header_lines(width);
-        if !header_lines.is_empty() {
-            tui.insert_history_lines(header_lines);
-            self.has_emitted_history_lines = true;
+        if header_lines.is_empty() {
+            return;
         }
+        if tui.is_owned_screen() {
+            // Owned mode has no scrollback to print the banner into, so the banner becomes the
+            // first committed cell of the reopened view.
+            self.transcript_cells
+                .push(Arc::new(history_cell::PlainHistoryCell::new(header_lines)));
+            tui.frame_requester().schedule_frame();
+            return;
+        }
+        tui.insert_history_lines(header_lines);
+        self.has_emitted_history_lines = true;
     }
 
     pub(super) fn clear_terminal_ui(
@@ -96,6 +105,21 @@ impl App {
         tui: &mut tui::Tui,
         redraw_header: bool,
     ) -> Result<()> {
+        // Owned mode paints the whole screen from `transcript_cells`, so there is no inline
+        // scrollback of our own to purge. Purging it anyway would emit `CSI 3J` and wipe the shell
+        // history sitting *above* the alternate screen, which this session does not own.
+        if tui.is_owned_screen() {
+            tui.clear_pending_history_lines();
+            tui.terminal.clear_visible_screen()?;
+            self.has_emitted_history_lines = false;
+
+            if redraw_header {
+                self.queue_clear_ui_header(tui);
+            }
+            tui.frame_requester().schedule_frame();
+            return Ok(());
+        }
+
         let is_alt_screen_active = tui.is_alt_screen_active();
 
         // Drop queued history insertions so stale transcript lines cannot be flushed after /clear.
@@ -131,6 +155,7 @@ impl App {
     pub(super) fn reset_transcript_state_after_clear(&mut self) {
         self.overlay = None;
         self.transcript_cells.clear();
+        self.transcript_view.reset();
         self.deferred_history_lines.clear();
         self.has_emitted_history_lines = false;
         self.transcript_reflow.clear();

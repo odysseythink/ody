@@ -3,6 +3,7 @@
 mod buffered_replay;
 mod drain_deadline;
 mod model_catalog;
+mod owned_transcript;
 mod paginated_resume;
 mod plugin_catalog;
 mod session_summary;
@@ -4139,6 +4140,7 @@ async fn make_test_app() -> App {
         runtime_permission_profile_override: None,
         file_search,
         transcript_cells: Vec::new(),
+        transcript_view: TranscriptView::default(),
         overlay: None,
         deferred_history_lines: Vec::new(),
         has_emitted_history_lines: false,
@@ -4205,6 +4207,7 @@ async fn make_test_app_with_channels() -> (
             runtime_permission_profile_override: None,
             file_search,
             transcript_cells: Vec::new(),
+            transcript_view: TranscriptView::default(),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,

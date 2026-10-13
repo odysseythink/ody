@@ -127,3 +127,39 @@ impl Renderable for ChatWidget {
         self.as_renderable().cursor_style(area)
     }
 }
+
+/// Bottom-pane-only rendering used by the owned (fullscreen transcript) layout.
+///
+/// The owned layout paints history, the live tail and the composer inside one frame, so the active
+/// cell must not be drawn twice: the transcript view owns it as its live tail, and the widget
+/// contributes only its input surface here.
+impl ChatWidget {
+    pub(crate) fn bottom_pane_desired_height(&self, width: u16) -> u16 {
+        self.bottom_pane.desired_height_with_composer_right_reserve(
+            width,
+            self.ambient_pet_wrap_reserved_cols(),
+        )
+    }
+
+    pub(crate) fn render_bottom_pane(&self, area: Rect, buf: &mut Buffer) {
+        // Frames are diffed against the previous buffer, so clear the region the split layout
+        // handed to the input surface before painting into it.
+        Clear.render(area, buf);
+        self.bottom_pane.render_with_composer_right_reserve(
+            area,
+            buf,
+            self.ambient_pet_wrap_reserved_cols(),
+        );
+        self.last_rendered_width.set(Some(area.width as usize));
+    }
+
+    pub(crate) fn bottom_pane_cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
+        self.bottom_pane
+            .cursor_pos_with_composer_right_reserve(area, self.ambient_pet_wrap_reserved_cols())
+    }
+
+    pub(crate) fn bottom_pane_cursor_style(&self, area: Rect) -> crossterm::cursor::SetCursorStyle {
+        self.bottom_pane
+            .cursor_style_with_composer_right_reserve(area, self.ambient_pet_wrap_reserved_cols())
+    }
+}

@@ -72,6 +72,7 @@ use crate::test_support::test_path_buf;
 use crate::test_support::test_path_display;
 use crate::token_usage::TokenUsage;
 use crate::transcript_reflow::TranscriptReflowState;
+use crate::transcript_view::TranscriptView;
 use crate::tui;
 use crate::tui::TuiEvent;
 use crate::update_action::UpdateAction;
@@ -84,6 +85,8 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use ody_ansi_escape::ansi_escape_line;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
@@ -512,6 +515,11 @@ pub(crate) struct App {
     pub(crate) file_search: FileSearchManager,
 
     pub(crate) transcript_cells: Vec<Arc<dyn HistoryCell>>,
+
+    /// Owned-mode reading position and bounded layout cache for the fullscreen transcript.
+    ///
+    /// Terminal mode never touches this: history there is still written into terminal scrollback.
+    pub(crate) transcript_view: TranscriptView,
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
@@ -986,6 +994,7 @@ See the Ody keymap documentation for supported actions and examples."
         })?;
         #[cfg(not(debug_assertions))]
         let upgrade_version = crate::updates::get_upgrade_version(&config);
+        let mouse_scroll_speed = config.tui_mouse_scroll_speed.unwrap_or(1.0);
 
         let mut app = Self {
             model_catalog,
@@ -1005,6 +1014,7 @@ See the Ody keymap documentation for supported actions and examples."
             enhanced_keys_supported,
             keymap: runtime_keymap,
             transcript_cells: Vec::new(),
+            transcript_view: TranscriptView::new(mouse_scroll_speed),
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
@@ -1256,9 +1266,12 @@ See the Ody keymap documentation for supported actions and examples."
                     let pasted = pasted.replace("\r", "\n");
                     self.chat_widget.handle_paste(pasted);
                 }
-                // Mouse capture is only enabled for alternate-screen overlays; any
-                // mouse event arriving without an overlay has no target.
-                TuiEvent::Mouse(_) => {}
+                // Overlays consume their own mouse input. A bare owned screen still receives
+                // wheel events because screen ownership enables mouse capture, so those are
+                // routed to the transcript view.
+                TuiEvent::Mouse(mouse_event) => {
+                    self.handle_mouse_event(tui, mouse_event);
+                }
                 TuiEvent::Draw | TuiEvent::Resize => {
                     if self.backtrack_render_pending {
                         self.rebuild_transcript_after_backtrack(tui)?;
@@ -1319,11 +1332,22 @@ See the Ody keymap documentation for supported actions and examples."
     }
 
     fn render_chat_widget_frame(&mut self, tui: &mut tui::Tui) -> Result<Rect> {
-        let desired_height = self.chat_widget.desired_height(tui.terminal.size()?.width);
+        let size = tui.terminal.size()?;
+        // The owned layout paints history and the input surface inside one full-screen frame.
+        let owned = tui.transcript_mode().is_owned();
+        let desired_height = if owned {
+            size.height
+        } else {
+            self.chat_widget.desired_height(size.width)
+        };
         let mut rendered_area = Rect::default();
         tui.draw_with_resize_reflow(desired_height, |frame| {
             let area = frame.area();
             rendered_area = area;
+            if owned {
+                self.render_owned_transcript_frame(area, frame);
+                return;
+            }
             self.chat_widget.render(area, frame.buffer);
             if let Some((x, y)) = self.chat_widget.cursor_pos(area) {
                 frame.set_cursor_style(self.chat_widget.cursor_style(area));
@@ -1331,6 +1355,46 @@ See the Ody keymap documentation for supported actions and examples."
             }
         })?;
         Ok(rendered_area)
+    }
+
+    /// Paint the owned transcript: virtualized history above, input surface below, one frame.
+    ///
+    /// History formatting is limited to the visible window plus the live tail, and nothing is ever
+    /// written above the viewport, so a large session does not cost a full-transcript replay.
+    fn render_owned_transcript_frame(
+        &mut self,
+        area: Rect,
+        frame: &mut crate::custom_terminal::Frame<'_>,
+    ) {
+        self.transcript_view
+            .set_mode(self.chat_widget.history_render_mode());
+        let pane_height = self
+            .chat_widget
+            .bottom_pane_desired_height(area.width)
+            .min(area.height);
+        let history_height = area.height.saturating_sub(pane_height);
+        let history_area = Rect::new(area.x, area.y, area.width, history_height);
+        let pane_area = Rect::new(
+            area.x,
+            area.y.saturating_add(history_height),
+            area.width,
+            pane_height,
+        );
+
+        let history_width = self.chat_widget.history_wrap_width(history_area.width);
+        let key = self.chat_widget.active_cell_transcript_key();
+        self.transcript_view
+            .sync_live_tail(history_width, key, |width| {
+                self.chat_widget
+                    .active_cell_transcript_hyperlink_lines(width)
+            });
+        self.transcript_view
+            .render(history_area, frame.buffer, &self.transcript_cells);
+        self.chat_widget.render_bottom_pane(pane_area, frame.buffer);
+        if let Some((x, y)) = self.chat_widget.bottom_pane_cursor_pos(pane_area) {
+            frame.set_cursor_style(self.chat_widget.bottom_pane_cursor_style(pane_area));
+            frame.set_cursor_position((x, y));
+        }
     }
 }
 

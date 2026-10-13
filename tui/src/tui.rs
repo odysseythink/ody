@@ -996,6 +996,18 @@ impl Tui {
         if lines.is_empty() {
             return;
         }
+        // An owned session paints its transcript into the alternate screen from source cells
+        // instead of writing rows above an inline viewport. Dropping rows here keeps that
+        // invariant even if a caller forgets to check the mode; the virtualized view already
+        // reads the same committed cells from `App::transcript_cells`.
+        //
+        // The alt-screen check matters: while an external program borrows the terminal the
+        // session still "owns" it, but rendering is back on the main screen where inserting
+        // history rows is the correct behavior.
+        if self.is_owned_screen() && self.is_alt_screen_active() {
+            self.frame_requester().schedule_frame();
+            return;
+        }
         if let Some(last) = self.pending_history_lines.last_mut()
             && last.wrap_policy == wrap_policy
         {
@@ -1010,6 +1022,14 @@ impl Tui {
     pub fn clear_pending_history_lines(&mut self) {
         self.pending_history_lines.clear();
         self.pending_transcript_replay_clear = false;
+    }
+
+    /// How many row batches are queued to be written above the viewport.
+    ///
+    /// Owned mode must keep this empty: its transcript is painted from source cells instead.
+    #[cfg(test)]
+    pub(crate) fn pending_history_line_count(&self) -> usize {
+        self.pending_history_lines.len()
     }
 
     pub(crate) fn defer_transcript_replay_clear(&mut self) {
@@ -1281,7 +1301,10 @@ impl Tui {
 
             let terminal = &mut self.terminal;
             if self.pending_transcript_replay_clear {
-                if self.alt_screen_active.load(Ordering::Relaxed) {
+                // An owned session clears only the visible screen: the scrollback above the
+                // alternate screen belongs to the shell, not to this session, so `CSI 3J` must
+                // never be emitted for it.
+                if self.owned_screen || self.alt_screen_active.load(Ordering::Relaxed) {
                     terminal.clear_visible_screen()?;
                 } else {
                     terminal.clear_scrollback_and_visible_screen_ansi()?;

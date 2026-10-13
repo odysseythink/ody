@@ -292,7 +292,11 @@ impl App {
     pub(crate) fn close_transcript_overlay(&mut self, tui: &mut tui::Tui) {
         let _ = tui.leave_alt_screen();
         let was_backtrack = self.backtrack.overlay_preview_active;
-        if !self.deferred_history_lines.is_empty() {
+        if tui.is_owned_screen() {
+            // The owned view renders deferred history from `transcript_cells`; there is no
+            // scrollback to flush into.
+            self.deferred_history_lines.clear();
+        } else if !self.deferred_history_lines.is_empty() {
             let lines = std::mem::take(&mut self.deferred_history_lines);
             tui.insert_history_hyperlink_lines_with_wrap_policy(
                 lines,

@@ -94,6 +94,11 @@ impl App {
         cell: &dyn HistoryCell,
         width: u16,
     ) {
+        // Owned mode never writes history into the terminal: the virtualized view paints the
+        // visible window from `transcript_cells` on the next frame instead.
+        if tui.is_owned_screen() {
+            return;
+        }
         let display = self.display_lines_for_history_insert(cell, width);
         if display.is_empty() {
             return;
@@ -144,6 +149,12 @@ impl App {
             return;
         };
 
+        // Owned mode has nothing to replay: the retained buffer is dropped and the view renders the
+        // visible window from `transcript_cells`, including any paginated top-up.
+        if tui.is_owned_screen() {
+            return;
+        }
+
         if buffer.retained_lines.is_empty() {
             if buffer.render_from_transcript_tail {
                 let width = tui.terminal.last_known_screen_size.width;
@@ -175,6 +186,9 @@ impl App {
         cell: &dyn HistoryCell,
         width: u16,
     ) {
+        if tui.is_owned_screen() {
+            return;
+        }
         if self
             .initial_history_replay_buffer
             .as_ref()
@@ -422,6 +436,15 @@ impl App {
 
     pub(super) fn reflow_transcript_now(&mut self, tui: &mut tui::Tui) -> Result<u16> {
         let terminal_width = tui.terminal.size()?.width;
+        if tui.is_owned_screen() {
+            // Owned mode keeps `transcript_cells` as the single source of truth. The virtualized
+            // view re-lays out the visible window on the next frame, and nothing is written above
+            // the viewport or cleared from scrollback.
+            tui.clear_pending_history_lines();
+            self.deferred_history_lines.clear();
+            tui.frame_requester().schedule_frame();
+            return Ok(terminal_width);
+        }
         let width = self.chat_widget.history_wrap_width(terminal_width);
         if self.transcript_cells.is_empty() {
             // Drop any queued pre-resize/pre-consolidation inserts before rebuilding from cells.
@@ -457,6 +480,15 @@ impl App {
     /// transcript.
     pub(super) fn rebuild_transcript_after_backtrack(&mut self, tui: &mut tui::Tui) -> Result<()> {
         let terminal_width = tui.terminal.size()?.width;
+        if tui.is_owned_screen() {
+            // Rollback trimmed `transcript_cells`; the view repaints from that source, and the
+            // reading position returns to the new tail because the rollback target is gone.
+            tui.clear_pending_history_lines();
+            self.deferred_history_lines.clear();
+            self.transcript_view.jump_to_latest();
+            tui.frame_requester().schedule_frame();
+            return Ok(());
+        }
         let width = self.chat_widget.history_wrap_width(terminal_width);
         let reflowed_lines = if self.transcript_cells.is_empty() {
             self.reset_history_emission_state();

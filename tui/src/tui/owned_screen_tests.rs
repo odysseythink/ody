@@ -5,6 +5,7 @@ use std::sync::atomic::Ordering;
 
 use super::test_support::make_test_tui;
 use crate::tui::job_control::PreparedResumeAction;
+use ratatui::text::Line;
 
 fn mouse_capture_active(tui: &super::Tui) -> bool {
     tui.mouse_capture_active.load(Ordering::Relaxed)
@@ -254,5 +255,37 @@ async fn resume_realign_viewport_keeps_pointer_capture_off() -> io::Result<()> {
         tui.terminal.viewport_area,
         ratatui::layout::Rect::new(0, 20, 80, 4)
     );
+    Ok(())
+}
+
+/// Owned sessions paint history themselves, so nothing may be queued above the viewport.
+#[tokio::test(flavor = "current_thread")]
+async fn owned_screen_never_queues_history_rows() -> io::Result<()> {
+    let mut tui = make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    assert!(tui.is_alt_screen_active());
+
+    tui.insert_history_lines(vec![Line::from("first committed turn")]);
+    assert_eq!(
+        tui.pending_history_line_count(),
+        0,
+        "an owned screen has no viewport history to write above"
+    );
+
+    // Handing the screen to an external program puts the session back on the main screen,
+    // where inserting history rows above an inline viewport is correct again.
+    tui.leave_alt_screen_for_handoff()?;
+    tui.insert_history_lines(vec![Line::from("editor handoff notice")]);
+    assert_eq!(
+        tui.pending_history_line_count(),
+        1,
+        "the main screen still accepts history rows"
+    );
+
+    // Releasing ownership keeps the terminal history path in use.
+    tui.clear_pending_history_lines();
+    tui.set_owned_screen(/*owned*/ false)?;
+    tui.insert_history_lines(vec![Line::from("released session")]);
+    assert_eq!(tui.pending_history_line_count(), 1);
     Ok(())
 }

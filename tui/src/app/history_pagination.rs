@@ -113,6 +113,13 @@ impl App {
             .rposition(|cell| cell.as_any().is::<history_cell::SessionInfoCell>())
             .map_or(/*default*/ 0, |index| index.saturating_add(/*rhs*/ 1));
         self.transcript_cells.splice(index..index, cells);
+        if tui.is_owned_screen() {
+            // Owned mode prepends into the view's source data only: the anchor is keyed by cell
+            // identity, so the reading position survives, and no terminal scrollback is rebuilt.
+            // Viewport-driven paging arrives in P4; until then this is the only top-up path.
+            tui.frame_requester().schedule_frame();
+            return Ok(());
+        }
         let width = self
             .chat_widget
             .history_wrap_width(tui.terminal.last_known_screen_size.width);
