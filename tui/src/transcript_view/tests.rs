@@ -677,3 +677,172 @@ fn streaming_keeps_the_reading_anchor() {
     assert!(view.has_unseen_activity());
     assert!(view.needs_return_to_bottom());
 }
+
+// ---------------------------------------------------------------------------------------------
+// P4: viewport-driven paging and cross-page search.
+// ---------------------------------------------------------------------------------------------
+
+/// Scrolling to the top of the loaded history exposes a page request; the bottom never does.
+#[test]
+fn paging_is_requested_only_near_the_loaded_top() {
+    let area = Rect::new(0, 0, 20, 4);
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..12)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+
+    render(&mut view, &cells, area);
+    assert!(
+        !view.needs_history(&cells),
+        "the bottom of a loaded window must not page"
+    );
+
+    view.jump_to_beginning(&cells);
+    // Older pages still exist, so the jump is only *aimed*; it must ask for history.
+    assert!(view.is_loading_beginning());
+    assert!(view.needs_history(&cells));
+}
+
+/// A pending beginning jump holds the reading position while pages arrive, then lands on row 0.
+#[test]
+fn beginning_jump_holds_position_until_history_is_exhausted() {
+    let area = Rect::new(0, 0, 20, 4);
+    let mut cells: Vec<Arc<dyn HistoryCell>> = (0..8)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+    render(&mut view, &cells, area);
+
+    view.jump_to_beginning(&cells);
+    let Position::Reading(held) = view.position else {
+        panic!("a beginning jump while history is unloaded keeps the current position");
+    };
+    // The anchor must not be re-aimed at the oldest loaded row: that is what makes the top crawl.
+    assert_eq!(held.index, view.resolve(&cells, held));
+
+    // An older page lands.
+    let older: Vec<Arc<dyn HistoryCell>> = (0..4)
+        .map(|index| cell(&format!("old {index}")))
+        .collect();
+    cells.splice(0..0, older);
+    view.set_history_complete(/*complete*/ false);
+    view.history_loaded(&cells, 0..4);
+    assert!(
+        view.is_loading_beginning(),
+        "still chaining until the server is exhausted"
+    );
+
+    // No more pages: land on the real beginning.
+    view.set_history_complete(/*complete*/ true);
+    view.land_on_beginning(&cells);
+    let Position::Reading(landed) = view.position else {
+        panic!("after the jump completes the view is reading");
+    };
+    assert_eq!(landed.index, 0);
+    assert!(!view.needs_history(&cells));
+    assert!(!view.needs_return_to_bottom());
+}
+
+/// Scrolling away abandons a pending beginning jump but keeps loading older pages.
+#[test]
+fn scrolling_cancels_a_beginning_jump_without_stopping_paging() {
+    let area = Rect::new(0, 0, 20, 6);
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..20)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+    render(&mut view, &cells, area);
+
+    view.jump_to_beginning(&cells);
+    assert!(view.is_loading_beginning());
+
+    view.scroll(&cells, /*rows*/ -1);
+    assert!(!view.is_loading_beginning());
+    assert_eq!(view.history, TranscriptHistoryState::LoadingOlder);
+    assert!(view.wants_older_history());
+}
+
+/// A prepend keeps the reader on the same content and can resume a parked scan.
+#[test]
+fn prepended_page_keeps_the_anchor_and_resumes_search() {
+    let area = Rect::new(0, 0, 40, 6);
+    let mut cells: Vec<Arc<dyn HistoryCell>> = (0..6)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+    render(&mut view, &cells, area);
+
+    // Read an older row, then park a scan at the top of what is loaded.
+    view.scroll(&cells, /*rows*/ -2);
+    let Position::Reading(before) = view.position else {
+        panic!("scrolling up leaves the live tail");
+    };
+    let anchored = view.resolve(&cells, before);
+    view.begin_search();
+    view.push_search_char('z');
+    view.search_step(&cells);
+    // `z` matches nothing in the loaded window; older pages remain, so it parks.
+    assert!(view.search_awaiting_history());
+
+    let older: Vec<Arc<dyn HistoryCell>> = (0..4)
+        .map(|index| cell(&format!("oldz {index}")))
+        .collect();
+    cells.splice(0..0, older);
+    view.history_loaded(&cells, 0..4);
+    // The anchor moved down by the page, but still names the same cell.
+    let Position::Reading(after) = view.position else {
+        panic!("still reading after the prepend");
+    };
+    assert_eq!(view.resolve(&cells, after), anchored + 4);
+
+    // The scan resumes over the inserted page and finds the older hit.
+    view.search_step(&cells);
+    assert!(view.search_match_count() > 0, "the older page was searched");
+}
+
+/// A scan that reaches the oldest loaded entry with no pages left reports exhaustion.
+#[test]
+fn search_exhausts_once_history_is_complete() {
+    let area = Rect::new(0, 0, 40, 6);
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..4)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Complete;
+    render(&mut view, &cells, area);
+
+    view.begin_search();
+    view.push_search_char('r');
+    while view.search_step(&cells) {}
+    assert!(view.search_exhausted());
+    assert!(!view.search_awaiting_history());
+    assert!(view.search_match_count() > 0);
+}
+
+/// A retry gesture clears a failed page so paging resumes instead of stalling.
+#[test]
+fn failed_page_is_retryable_from_the_jump_key() {
+    let area = Rect::new(0, 0, 20, 6);
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..20)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    view.history = TranscriptHistoryState::Partial;
+    render(&mut view, &cells, area);
+
+    view.mark_history_failed();
+    assert!(!view.wants_older_history(), "nothing re-requests on its own");
+
+    let action = view.handle_key(key(KeyCode::Home), &cells, &pager());
+    assert_eq!(action, Some(ViewAction::Changed));
+    assert!(
+        view.is_loading_beginning(),
+        "Home after a failure restarts the jump instead of refusing"
+    );
+    assert!(view.needs_history(&cells));
+}
+

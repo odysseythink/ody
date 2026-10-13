@@ -8,6 +8,7 @@ mod history;
 
 use crate::bottom_pane::FeedbackAudience;
 use crate::legacy_core::config::Config;
+use ody_protocol::config_types::AltScreenMode;
 use crate::permission_compat::legacy_compatible_permission_profile;
 use crate::service_tier_resolution;
 use crate::session_state::MessageHistoryMetadata;
@@ -472,11 +473,19 @@ impl AppServerSession {
         } else {
             crate::history_cell::HistoryRenderMode::Rich
         };
-        let width = crossterm::terminal::size()
-            .map(|(width, _)| width.max(/*other*/ 1))
-            .unwrap_or(/*default*/ 80);
-        let row_budget =
-            crate::resize_reflow_cap::resize_reflow_max_rows(config.terminal_resize_reflow);
+        let (width, height) = crossterm::terminal::size().unwrap_or(/*default*/ (80, 24));
+        let width = width.max(/*other*/ 1);
+        // Owned mode bounds its first page by the viewport it will actually paint, not by a
+        // terminal scrollback cap the user may have disabled or set far higher than a window.
+        let row_budget = crate::transcript_history::initial_hydration_row_budget(
+            crate::transcript_mode::TranscriptMode::resolve(
+                config.tui_fullscreen_transcript,
+                config.tui_alternate_screen != AltScreenMode::Never,
+            ),
+            height,
+            crate::resize_reflow_cap::resize_reflow_max_rows(config.terminal_resize_reflow),
+        );
+        let turn_scan_limit = crate::transcript_history::OWNED_INITIAL_TURN_SCAN_LIMIT;
         self.hydrate_initial_turns_window(
             thread_id,
             &mut started.turns,
@@ -485,6 +494,7 @@ impl AppServerSession {
             render_mode,
             width,
             row_budget,
+            turn_scan_limit,
         )
         .await?;
         started.session.fork_parent_title = fork_parent_title;

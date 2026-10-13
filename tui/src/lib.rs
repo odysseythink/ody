@@ -173,6 +173,7 @@ mod theme_picker;
 mod thread_transcript;
 mod token_usage;
 mod tooltips;
+mod transcript_history;
 mod transcript_mode;
 mod transcript_reflow;
 mod transcript_view;

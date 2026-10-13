@@ -402,6 +402,10 @@ impl App {
     }
 
     /// Request a repaint, and keep the find scan going while it still has entries to cover.
+    ///
+    /// Called after every transcript gesture, so it is also where a viewport that has reached the
+    /// top of the loaded history asks for the next page. Paging is not driven from render: a request
+    /// is a side effect, and render must stay pure enough to run on every frame.
     pub(super) fn schedule_view_frame(&mut self, tui: &mut tui::Tui) {
         if tui.is_owned_screen() && self.transcript_view.interaction_needs_frame() {
             self.transcript_view.search_step(&self.transcript_cells);
@@ -413,7 +417,12 @@ impl App {
     ///
     /// Mouse capture is enabled for the owned screen, so wheel, click and drag events arrive even
     /// with no overlay present.
-    pub(super) fn handle_mouse_event(&mut self, tui: &mut tui::Tui, event: MouseEvent) {
+    pub(super) fn handle_mouse_event(
+        &mut self,
+        tui: &mut tui::Tui,
+        app_server: &mut AppServerSession,
+        event: MouseEvent,
+    ) {
         if !self.owned_transcript_accepts_input(tui) {
             return;
         }
@@ -423,6 +432,7 @@ impl App {
         {
             self.apply_view_action(tui, action);
         }
+        self.request_owned_history(tui, app_server);
     }
 
     pub(super) fn refresh_status_line(&mut self) {

@@ -3,20 +3,53 @@
 //! Search runs over the entries the app has already loaded, walking the bounded layout cache so a
 //! query only ever formats a few entries per step. Scanning is incremental: a step wraps a small
 //! number of entries, returns whether more work remains, and the caller asks for another frame.
-//! That keeps a long loaded history from being formatted in one keystroke, and it is the same shape
-//! P4 needs when search has to continue into older pages.
+//! That keeps a long loaded history from being formatted in one keystroke.
 //!
-//! Matches are stored as content positions (entry identity plus byte offset), so jumping to one
-//! uses the same anchor machinery as ordinary scrolling and survives prepends and resizes.
+//! When the scan reaches the oldest loaded entry and the server still has older turns, the search
+//! does not give up: it parks in `SearchProgress::AwaitingHistory` and the app loads one more page.
+//! The scan then resumes from the newly inserted page, walking backwards until it finds a hit, runs
+//! out of history, or hits the per-query scan cap. Matches are stored as content positions (entry
+//! identity plus byte offset), so jumping to one uses the same anchor machinery as ordinary
+//! scrolling and survives prepends and resizes.
 
 use super::*;
+use crate::transcript_history::TranscriptHistoryState;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 
 /// Entries wrapped per search step. Small enough to stay invisible in a frame budget.
 const CELLS_PER_STEP: usize = 24;
-/// Total entries one query scans. Older history is P4's job, so search reports what it covered.
+/// Total entries one query scans before it stops on its own.
+///
+/// Not a hard cap on reach: reaching the oldest loaded entry with older pages still on the server
+/// parks the scan in `AwaitingHistory` instead of stopping, so a query can cross page boundaries.
+/// The counter bounds only the entries scanned within one continuous run, which is what keeps a
+/// pathological query from wrapping an unbounded history in a single gesture.
 const MAX_SCANNED_CELLS: usize = 400;
+
+/// Which way the scan is walking.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ScanDirection {
+    /// Toward older entries, prepending as pages arrive.
+    Older,
+    /// Toward newer entries; never crosses a page boundary because the tail is always loaded.
+    Newer,
+}
+
+/// Where the incremental scan stands.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) enum SearchProgress {
+    #[default]
+    Idle,
+    /// Scanning entries inside the loaded window.
+    Scanning,
+    /// Reached the oldest loaded entry while older pages still exist. The app should load one.
+    AwaitingHistory,
+    /// The page the scan was waiting for failed to load. `^P` retries.
+    Failed,
+    /// Every entry the server has was scanned.
+    Exhausted,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct SearchMatch {
@@ -32,7 +65,10 @@ pub(super) struct SearchState {
     matches: Vec<SearchMatch>,
     cursor: Option<usize>,
     scanned: usize,
-    exhausted: bool,
+    progress: SearchProgress,
+    /// Entry the scan should resume at, as a content position so a prepend keeps it valid.
+    resume: Option<SearchMatch>,
+    direction: Option<ScanDirection>,
     /// Set by `Enter`: the query stays highlighted but stops accepting characters.
     accepted: bool,
 }
@@ -42,7 +78,13 @@ impl SearchState {
         self.matches.clear();
         self.cursor = None;
         self.scanned = 0;
-        self.exhausted = false;
+        self.progress = SearchProgress::Idle;
+        self.resume = None;
+        self.direction = None;
+    }
+
+    fn query_is_set(&self) -> bool {
+        !self.query.is_empty()
     }
 }
 
@@ -89,11 +131,41 @@ impl TranscriptView {
     }
 
     /// Whether another scan step is needed for the current query.
-    pub(super) fn search_needs_work(&self) -> bool {
+    ///
+    /// `AwaitingHistory` is not "needs work" here: no amount of further stepping helps until a page
+    /// arrives, so this stays false and the caller stops asking for frames. `search_needs_history`
+    /// is the hook that starts the load instead.
+    pub(crate) fn search_needs_work(&self) -> bool {
         self.search.active
-            && !self.search.exhausted
+            && matches!(self.search.progress, SearchProgress::Idle | SearchProgress::Scanning)
             && !self.search.query.is_empty()
             && self.search.scanned < MAX_SCANNED_CELLS
+    }
+
+    /// Whether the scan is parked waiting for an older page.
+    pub(crate) fn search_awaiting_history(&self) -> bool {
+        self.search.active
+            && matches!(
+                self.search.progress,
+                SearchProgress::AwaitingHistory | SearchProgress::Failed
+            )
+    }
+
+    /// Report that the page the scan was waiting for never arrived.
+    ///
+    /// The scan keeps its query and its matches so `^P` can retry without re-typing.
+    pub(crate) fn mark_search_page_failed(&mut self) {
+        if self.search.progress == SearchProgress::AwaitingHistory {
+            self.search.progress = SearchProgress::Failed;
+        }
+    }
+
+    /// Whether the query has run out of entries to scan *and* the server has no more.
+    ///
+    /// Only this state justifies telling the reader "no matches"; `AwaitingHistory` means the
+    /// answer is still unknown.
+    pub(super) fn search_exhausted(&self) -> bool {
+        self.search.progress == SearchProgress::Exhausted
     }
 
     /// Scan one bounded batch of entries; returns whether more work remains.
@@ -103,8 +175,24 @@ impl TranscriptView {
         }
         let needle: Vec<char> = self.search.query.chars().collect();
         let total = cells.len();
-        let end = (self.search.scanned + CELLS_PER_STEP).min(total);
-        for index in self.search.scanned..end {
+        let start = match self.search.resume {
+            // Resume at the position the previous step stopped at, re-resolved by identity so a
+            // prepend between steps does not shift the window.
+            Some(resume) => self.resolve(
+                cells,
+                Anchor {
+                    key: resume.key,
+                    index: resume.index,
+                    offset: resume.offset,
+                    row_bias: 0,
+                },
+            ),
+            None => 0,
+        };
+        self.search.progress = SearchProgress::Scanning;
+        self.search.direction = Some(ScanDirection::Older);
+        let end = start.saturating_add(CELLS_PER_STEP).min(total);
+        for index in start..end {
             let Some(layout) = self.layout(cells, index) else {
                 continue;
             };
@@ -118,29 +206,103 @@ impl TranscriptView {
                 });
             }
         }
-        self.search.scanned = end;
-        if end >= total {
-            self.search.exhausted = true;
-            // Start on the newest match, which is nearest the live tail the reader came from.
-            if self.search.cursor.is_none() && !self.search.matches.is_empty() {
-                self.search.cursor = Some(self.search.matches.len() - 1);
-                let target = self.search.matches[self.search.matches.len() - 1];
-                self.focus_match(cells, target);
-            }
+        self.search.scanned = self.search.scanned.saturating_add(end.saturating_sub(start));
+        if end < total {
+            self.search.resume = Some(SearchMatch {
+                key: self.entry_key(cells, end),
+                index: end,
+                offset: 0,
+            });
+            return self.search_needs_work();
         }
+        self.finish_older_scan(cells);
         self.search_needs_work()
     }
 
+    /// Decide what reaching the oldest loaded entry means.
+    ///
+    /// With older pages still on the server this parks in `AwaitingHistory` so the app loads one and
+    /// the scan continues; otherwise the query really is done.
+    fn finish_older_scan(&mut self, cells: &[Arc<dyn HistoryCell>]) {
+        if self.history.has_unloaded_history() && self.search.scanned < MAX_SCANNED_CELLS {
+            self.search.progress = SearchProgress::AwaitingHistory;
+            self.search.resume = None;
+            return;
+        }
+        self.search.progress = SearchProgress::Exhausted;
+        self.search.resume = None;
+        // Start on the newest match, which is nearest the live tail the reader came from.
+        if self.search.cursor.is_none() && !self.search.matches.is_empty() {
+            self.search.cursor = Some(self.search.matches.len() - 1);
+            let target = self.search.matches[self.search.matches.len() - 1];
+            self.focus_match(cells, target);
+        }
+    }
+
+    /// Resume a parked scan over a page that was just prepended.
+    pub(super) fn search_history_loaded(
+        &mut self,
+        cells: &[Arc<dyn HistoryCell>],
+        inserted: Range<usize>,
+    ) {
+        if self.search.progress != SearchProgress::AwaitingHistory {
+            return;
+        }
+        if inserted.is_empty() {
+            // The page landed but produced no cells; nothing new to scan here. If the server is
+            // still paginating, stay parked so the next page gets its own chance.
+            if !self.history.has_unloaded_history() {
+                self.search.progress = SearchProgress::Exhausted;
+            }
+            return;
+        }
+        // Continue from the oldest row of the inserted page, walking toward the start.
+        let index = inserted.start;
+        self.search.resume = Some(SearchMatch {
+            key: self.entry_key(cells, index),
+            index,
+            offset: 0,
+        });
+        self.search.progress = SearchProgress::Scanning;
+    }
+
+    /// Force a fresh scan of the whole loaded window, e.g. after cells were removed.
+    pub(crate) fn restart_search(&mut self) {
+        self.search.reset_scan();
+    }
+
+    /// Whether find should keep scanning with no further page available.
+    pub(super) fn search_found_nothing(&self) -> bool {
+        self.search.active
+            && self.search.query_is_set()
+            && self.search.progress == SearchProgress::Exhausted
+            && self.search.matches.is_empty()
+    }
+
     /// Move to the next (newer) or previous (older) match.
+    ///
+    /// Walking past the oldest known match while older pages remain un-parked the scan, so `^P` at
+    /// the end of the loaded window keeps looking instead of silently stopping at the boundary.
     pub(super) fn search_advance(
         &mut self,
         cells: &[Arc<dyn HistoryCell>],
         newer: bool,
     ) -> bool {
+        if !newer && self.search.progress == SearchProgress::Failed {
+            // A retry gesture: the previous page never arrived, so ask for it again.
+            self.search.progress = SearchProgress::AwaitingHistory;
+            return true;
+        }
+        if newer && self.search.progress == SearchProgress::AwaitingHistory {
+            // `^N` from a parked scan: there is nothing newer until the older page lands, but the
+            // reader can still step through the matches already found.
+            self.search.progress = SearchProgress::Scanning;
+        }
         if self.search.matches.is_empty() {
             return false;
         }
         let last = self.search.matches.len() - 1;
+        let at_oldest = self.search.cursor == Some(0);
         let cursor = match self.search.cursor {
             Some(cursor) if newer => (cursor + 1).min(last),
             Some(cursor) => cursor.saturating_sub(/*rhs*/ 1),
@@ -150,6 +312,11 @@ impl TranscriptView {
         self.search.cursor = Some(cursor);
         let target = self.search.matches[cursor];
         self.focus_match(cells, target);
+        if !newer && at_oldest {
+            // The reader walked past the oldest hit; keep the scan going into older history.
+            self.search.resume = Some(target);
+            self.search.progress = SearchProgress::Scanning;
+        }
         true
     }
 
@@ -179,7 +346,7 @@ impl TranscriptView {
         self.search.matches.len()
     }
 
-    /// One-line find status: query plus how far the scan and the cursor got.
+    /// One-line find status: query, scan progress and how far the cursor got.
     pub(super) fn search_status(&self) -> Option<String> {
         if !self.search.active {
             return None;
@@ -188,10 +355,13 @@ impl TranscriptView {
             (Some(cursor), total) => format!("{}/{}", cursor + 1, total),
             (None, total) => format!("0/{total}"),
         };
-        let suffix = if self.search.exhausted && self.search.scanned < MAX_SCANNED_CELLS {
-            " (loaded history)"
-        } else {
-            ""
+        let suffix = match self.search.progress {
+            SearchProgress::AwaitingHistory => " (loading earlier messages…)",
+            SearchProgress::Failed => " (load failed · ^P retries)",
+            // Only claim the search covered everything loaded when it really stopped there.
+            SearchProgress::Exhausted if self.search.scanned >= MAX_SCANNED_CELLS => " (scan limit)",
+            SearchProgress::Exhausted => " (all messages)",
+            _ => "",
         };
         Some(format!(
             " Find: {}{suffix}  {position}  ^P older · ^N newer · esc close",

@@ -69,6 +69,8 @@ pub(super) fn seed_history_pagination(
 
 /// Safety cap on total turns scanned during hydration, bounding requests even
 /// when rows undercount (e.g. turns whose items all render to zero height).
+///
+/// Owned mode uses its own, smaller cap (`OWNED_INITIAL_TURN_SCAN_LIMIT`).
 pub(crate) const HISTORY_TURN_SCAN_LIMIT: usize = 100;
 
 /// Advance to `next` unless it was already seen (server cursor loop guard).
@@ -122,12 +124,16 @@ impl super::AppServerSession {
             .wrap_err("failed to load a bounded thread history page")
     }
 
-    /// Fetch older turn pages until the terminal row budget is filled.
+    /// Fetch older turn pages until the row budget is filled.
     ///
     /// `turns` already holds the initial page in chronological order; older
     /// pages (descending) are prepended in front. With `row_budget == None`
     /// (no `terminal_resize_reflow` cap) every older page is fetched, which
     /// degrades gracefully to the pre-pagination full-history resume.
+    ///
+    /// `turn_scan_limit` bounds how many turns this pass may scan. Owned mode
+    /// passes a bounded budget because the view only repaints a window; Terminal
+    /// mode keeps the historical `HISTORY_TURN_SCAN_LIMIT`.
     pub(crate) async fn hydrate_initial_turns_window(
         &mut self,
         thread_id: ThreadId,
@@ -137,6 +143,7 @@ impl super::AppServerSession {
         render_mode: HistoryRenderMode,
         width: u16,
         row_budget: Option<usize>,
+        turn_scan_limit: usize,
     ) -> Result<()> {
         if row_budget.is_none() {
             while let Some(cursor) = self.take_next_turn_cursor(thread_id) {
@@ -150,7 +157,7 @@ impl super::AppServerSession {
         let mut rendered_rows = rendered_turns_rows(cwd, turns, visibility, render_mode, width);
         let mut scanned_turns = turns.len();
         while rendered_rows < budget
-            && scanned_turns < HISTORY_TURN_SCAN_LIMIT
+            && scanned_turns < turn_scan_limit
             && self.has_older_history(thread_id)
         {
             let Some(cursor) = self.take_next_turn_cursor(thread_id) else {

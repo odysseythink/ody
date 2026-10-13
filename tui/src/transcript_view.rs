@@ -15,10 +15,12 @@ mod follow_control;
 mod input;
 mod layout;
 mod mutations;
+mod paging;
 mod search;
 mod selection;
 mod text;
 
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,6 +33,7 @@ use crate::chatwidget::ActiveCellTranscriptKey;
 use crate::history_cell::HistoryCell;
 use crate::history_cell::HistoryRenderMode;
 use crate::terminal_hyperlinks::HyperlinkLine;
+use crate::transcript_history::TranscriptHistoryState;
 
 use layout::LayoutCache;
 use search::SearchState;
@@ -107,6 +110,9 @@ pub(crate) struct TranscriptView {
     last_click: Option<(u16, u16, Instant)>,
     /// Transient feedback (`Copied 128 chars`) shown in the reserved status row.
     notice: Option<String>,
+    /// How much of the thread's history is loaded. Owned by the app; the view reads it to decide
+    /// whether to hold a reading position or ask for older pages.
+    pub(crate) history: TranscriptHistoryState,
 }
 
 impl Default for TranscriptView {
@@ -132,6 +138,7 @@ impl Default for TranscriptView {
             pressed_link: None,
             last_click: None,
             notice: None,
+            history: TranscriptHistoryState::Idle,
         }
     }
 }
@@ -203,6 +210,7 @@ impl TranscriptView {
         self.pressed_link = None;
         self.last_click = None;
         self.notice = None;
+        self.history = TranscriptHistoryState::Idle;
     }
 
     /// Set the transient feedback shown in the reserved status row.
@@ -330,12 +338,16 @@ impl TranscriptView {
     /// Label for the reserved row, if any.
     ///
     /// One row serves every transient affordance, so the order here decides what the reader sees:
-    /// find status, then the last action's feedback, then the selection hint.
+    /// find status, then history paging state, then the last action's feedback, then the selection
+    /// hint.
     fn status_row(&self, width: u16) -> Option<String> {
         if width == 0 {
             return None;
         }
         if let Some(status) = self.search_status() {
+            return Some(status);
+        }
+        if let Some(status) = self.history_status() {
             return Some(status);
         }
         if let Some(notice) = &self.notice {
@@ -347,11 +359,31 @@ impl TranscriptView {
         None
     }
 
+    /// Reserved-row label for a page load in flight or a failed one.
+    ///
+    /// Only shown while the reader is actually looking at the boundary, so a background page never
+    /// takes the row away from the transcript. Failures always surface, because nothing else will
+    /// tell the reader that history stopped arriving.
+    fn history_status(&self) -> Option<String> {
+        match self.history {
+            TranscriptHistoryState::LoadingOlder if !self.tail_visible => {
+                Some(" loading earlier messages…".to_string())
+            }
+            TranscriptHistoryState::Failed => {
+                Some(" earlier messages failed to load · home retries".to_string())
+            }
+            _ => None,
+        }
+    }
+
     /// Scroll by `rows` (negative scrolls toward older content).
     pub(crate) fn scroll(&mut self, cells: &[Arc<dyn HistoryCell>], rows: isize) {
         if rows == 0 || self.area.is_empty() {
             return;
         }
+        // Deliberate navigation supersedes a pending jump-to-beginning, but keeps the page loads
+        // that jump already started.
+        self.cancel_beginning();
         let start = self.start(cells);
         let moved = self.move_rows(cells, start.0, start.1, rows);
         if moved == start {
@@ -415,20 +447,46 @@ impl TranscriptView {
     /// Unlike scrolling up repeatedly, this leaves the first row of the oldest entry at the top
     /// instead of keeping the entry's separator in view, which is what "jump to the beginning"
     /// should show.
+    ///
+    /// When older pages still exist this only *aims* at the beginning: the position is held and
+    /// `history` records that the reader is waiting, so the app chains pages and
+    /// `land_on_beginning` finishes the jump once nothing older remains. Landing on the oldest
+    /// *loaded* row immediately would look like the request was ignored — the top would keep moving
+    /// away as each page arrives.
     pub(crate) fn jump_to_beginning(&mut self, cells: &[Arc<dyn HistoryCell>]) {
-        let Some(first) = self.next_nonempty(cells, 0) else {
+        if self.history == TranscriptHistoryState::LoadingBeginning {
+            // A previous page is still in flight; let the chain finish rather than restarting it.
             return;
-        };
-        let offset = self
-            .layout(cells, first)
-            .map_or(/*default*/ 0, |layout| layout.position_at(0, 0));
-        self.position = Position::Reading(Anchor {
-            key: self.entry_key(cells, first),
-            index: first,
-            offset,
-            row_bias: 0,
-        });
-        self.tail_visible = false;
+        }
+        if self.history.has_unloaded_history() {
+            self.hold_for_beginning(cells);
+            return;
+        }
+        self.land_on_beginning(cells);
+    }
+
+    /// Start or continue a beginning jump, keeping the window where it is until pages arrive.
+    ///
+    /// The window is frozen into a content anchor first: while history is unloaded the position
+    /// would otherwise stay `Latest` and re-derive a new window from the newest page on every
+    /// `history_loaded`, which is exactly the crawl this state exists to avoid. Pinning the top row
+    /// means each prepend shifts the anchor down by identity and the reader keeps looking at the
+    /// same rows.
+    fn hold_for_beginning(&mut self, cells: &[Arc<dyn HistoryCell>]) {
+        let (index, row) = self.start(cells);
+        if let Some(layout) = self.layout(cells, index) {
+            let offset = layout.position_at(row, /*column*/ 0);
+            self.position = Position::Reading(Anchor {
+                key: self.entry_key(cells, index),
+                index,
+                offset,
+                row_bias: layout.row_for_offset(offset) as isize - row as isize,
+            });
+        }
+        // Only a reader who was already away from the bottom needs the hint back; someone who
+        // jumped up from the tail should not be told to return to a bottom that is one screen down.
+        self.tail_visible = self.is_tail_row(cells, self.visible.last().copied());
+        self.history = TranscriptHistoryState::LoadingBeginning;
         self.unseen_activity = false;
         self.pending_mouse_scroll = 0.0;
     }

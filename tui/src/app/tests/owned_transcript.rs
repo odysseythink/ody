@@ -153,13 +153,17 @@ async fn owned_mode_keeps_history_in_source_cells() {
 
 /// The wheel and navigation keys drive the Owned viewport; Terminal mode is left untouched.
 #[tokio::test]
-async fn owned_transcript_scrolling_follows_and_detaches() {
+async fn owned_transcript_scrolling_follows_and_detaches() -> Result<()> {
     let mut app = make_test_app().await;
     for index in 0..80 {
         app.transcript_cells
             .push(history_cell(&format!("turn {index}")));
     }
     let mut tui = make_test_tui().expect("test tui");
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
+        app.chat_widget.config_ref(),
+    ))
+    .await?;
 
     // Terminal mode never routes input to the owned view.
     assert!(!app.owned_transcript_accepts_input(&tui));
@@ -171,7 +175,11 @@ async fn owned_transcript_scrolling_follows_and_detaches() {
     draw_owned_frame(&mut app, /*width*/ 40, /*height*/ 8);
     assert!(app.transcript_view.is_following());
 
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3));
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3),
+    );
     assert!(
         !app.transcript_view.is_following(),
         "scrolling up leaves the live tail"
@@ -192,12 +200,17 @@ async fn owned_transcript_scrolling_follows_and_detaches() {
     assert!(app.transcript_view.is_following());
 
     // A wheel notch followed by Esc-in-reading returns to the newest content.
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3));
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3),
+    );
     assert!(!app.transcript_view.is_following());
     assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::Esc)));
     assert!(app.transcript_view.is_following());
 
     tui.set_owned_screen(/*owned*/ false).expect("release");
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -212,18 +225,44 @@ fn owned_terminal(app: &mut App) -> (crate::tui::Tui, Terminal<VT100Backend>) {
     (tui, terminal)
 }
 
+/// An owned screen plus an app server, for gestures that can trigger a history page request.
+///
+/// Mouse routing is passed through `App::handle_mouse_event`, which also asks the view whether it
+/// wants older history; the server is only ever touched on that path, so these tests use a real
+/// embedded one rather than a stub.
+async fn owned_terminal_with_server(
+    app: &mut App,
+) -> Result<(crate::tui::Tui, Terminal<VT100Backend>, AppServerSession)> {
+    let app_server =
+        Box::pin(crate::start_embedded_app_server_for_picker(app.chat_widget.config_ref())).await?;
+    let (tui, terminal) = owned_terminal(app);
+    Ok((tui, terminal, app_server))
+}
+
 /// A drag plus Enter copies the selected text through the app and reattaches to the tail.
 #[tokio::test]
-async fn owned_transcript_selection_copy_reaches_the_app() {
+async fn owned_transcript_selection_copy_reaches_the_app() -> Result<()> {
     let mut app = make_test_app().await;
     app.transcript_cells.push(history_cell("alpha beta"));
     app.transcript_cells.push(history_cell("gamma delta"));
-    let (mut tui, _terminal) = owned_terminal(&mut app);
+    let (mut tui, _terminal, mut app_server) = owned_terminal_with_server(&mut app).await?;
 
     // Rows: 0 "alpha beta", 1 separator, 2 "gamma delta".
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 2));
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2));
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Up(MouseButton::Left), 5, 2));
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Down(MouseButton::Left), 0, 2),
+    );
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2),
+    );
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Up(MouseButton::Left), 5, 2),
+    );
     assert!(app.transcript_view.has_selection());
 
     assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::Enter)));
@@ -239,17 +278,18 @@ async fn owned_transcript_selection_copy_reaches_the_app() {
     );
 
     tui.set_owned_screen(/*owned*/ false).expect("release");
+    Ok(())
 }
 
 /// A draft keeps every navigation key; a selection still gets the copy keys.
 #[tokio::test]
-async fn owned_transcript_priority_draft_then_selection() {
+async fn owned_transcript_priority_draft_then_selection() -> Result<()> {
     let mut app = make_test_app().await;
     for index in 0..30 {
         app.transcript_cells
             .push(history_cell(&format!("turn {index}")));
     }
-    let (mut tui, _terminal) = owned_terminal(&mut app);
+    let (mut tui, _terminal, mut app_server) = owned_terminal_with_server(&mut app).await?;
 
     app.chat_widget
         .apply_external_edit("a draft that stays editable".to_string());
@@ -260,8 +300,16 @@ async fn owned_transcript_priority_draft_then_selection() {
     assert!(app.transcript_view.is_following());
 
     // Selecting with the mouse still works while the draft is present, and so do its keys.
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 0));
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Drag(MouseButton::Left), 4, 0));
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Down(MouseButton::Left), 0, 0),
+    );
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Drag(MouseButton::Left), 4, 0),
+    );
     assert!(app.transcript_view.has_selection());
     assert!(
         app.route_owned_transcript_key(&mut tui, key(KeyCode::Esc)),
@@ -270,11 +318,12 @@ async fn owned_transcript_priority_draft_then_selection() {
     assert!(!app.transcript_view.has_selection());
 
     tui.set_owned_screen(/*owned*/ false).expect("release");
+    Ok(())
 }
 
 /// A popup or approval modal keeps the transcript out of the input path.
 #[tokio::test]
-async fn owned_transcript_yields_to_popups() {
+async fn owned_transcript_yields_to_popups() -> Result<()> {
     let mut app = make_test_app().await;
     for index in 0..30 {
         app.transcript_cells
@@ -292,10 +341,19 @@ async fn owned_transcript_yields_to_popups() {
     assert!(!app.route_owned_transcript_key(&mut tui, key(KeyCode::PageDown)));
 
     // Mouse input is not routed either: a click must not select behind a popup.
-    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 0));
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
+        app.chat_widget.config_ref(),
+    ))
+    .await?;
+    app.handle_mouse_event(
+        &mut tui,
+        &mut app_server,
+        mouse(MouseEventKind::Down(MouseButton::Left), 0, 0),
+    );
     assert!(!app.transcript_view.has_selection());
 
     tui.set_owned_screen(/*owned*/ false).expect("release");
+    Ok(())
 }
 
 /// A printable key is not a transcript gesture: it belongs to the composer.

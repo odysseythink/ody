@@ -330,10 +330,16 @@ impl TranscriptView {
     ) -> Option<ViewAction> {
         let key = KeyEvent::new(code, modifiers);
         if pager.jump_top.is_pressed(key) {
+            // Pressing the jump key after a failed page is the retry gesture: clear the failure so
+            // `jump_to_beginning` resumes chaining instead of refusing.
+            if self.history == TranscriptHistoryState::Failed {
+                self.history = TranscriptHistoryState::Partial;
+            }
             self.jump_to_beginning(cells);
             return Some(ViewAction::Changed);
         }
         if pager.jump_bottom.is_pressed(key) {
+            self.cancel_beginning();
             self.jump_to_latest();
             return Some(ViewAction::Changed);
         }
@@ -343,6 +349,7 @@ impl TranscriptView {
             if self.is_following() {
                 return None;
             }
+            self.cancel_beginning();
             self.jump_to_latest();
             return Some(ViewAction::Changed);
         }

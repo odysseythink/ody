@@ -309,6 +309,13 @@ impl App {
                     .chat_widget
                     .thread_id()
                     .is_some_and(|thread_id| app_server.has_older_history(thread_id));
+                if tui.is_owned_screen() {
+                    // Seed the view's paging state from what the initial hydration pass left
+                    // unloaded, so the first frame can show the boundary affordance without waiting
+                    // for a gesture.
+                    self.transcript_view
+                        .set_history_complete(!self.scrollback_has_older_history);
+                }
                 self.finish_initial_history_replay_buffer(tui);
             }
             AppEvent::RequestOlderScrollbackHistory { thread_id } => {

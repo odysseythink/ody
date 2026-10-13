@@ -1276,7 +1276,7 @@ See the Ody keymap documentation for supported actions and examples."
                 // wheel events because screen ownership enables mouse capture, so those are
                 // routed to the transcript view.
                 TuiEvent::Mouse(mouse_event) => {
-                    self.handle_mouse_event(tui, mouse_event);
+                    self.handle_mouse_event(tui, app_server, mouse_event);
                 }
                 TuiEvent::Draw | TuiEvent::Resize => {
                     if self.backtrack_render_pending {
@@ -1293,12 +1293,15 @@ See the Ody keymap documentation for supported actions and examples."
                     // Allow widgets to process any pending timers before rendering.
                     self.chat_widget.pre_draw_tick();
                     // Find-in-transcript walks the loaded history in bounded batches; each step
-                    // asks for the next frame, so a long history never scans in one go.
+                    // asks for the next frame, so a long history never scans in one go. When the
+                    // scan reaches the oldest loaded entry this also loads the next page and the
+                    // scan resumes over it.
                     if tui.is_owned_screen() && self.transcript_view.interaction_needs_frame() {
                         if self.transcript_view.search_step(&self.transcript_cells) {
                             tui.frame_requester().schedule_frame();
                         }
                     }
+                    self.request_owned_history(tui, app_server);
                     let rendered_area = self.render_chat_widget_frame(tui)?;
                     if self.chat_widget.ambient_pet_image_enabled() {
                         let terminal_size = tui.terminal.size()?;

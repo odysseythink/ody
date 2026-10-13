@@ -12,7 +12,7 @@ const SESSIONS_SUBDIR: &str = "sessions";
 /// Write a synthetic rollout with `turn_count` turns (user message + agent
 /// reply each) so the embedded app server can resume it through the real
 /// `thread/resume` + `thread/turns/list` protocol surface.
-async fn write_multi_turn_rollout(
+pub(super) async fn write_multi_turn_rollout(
     ody_home: &std::path::Path,
     thread_id: ThreadId,
     turn_count: usize,
@@ -126,7 +126,7 @@ fn turn_context_item(turn_id: &str) -> ody_protocol::protocol::TurnContextItem {
 /// synthetic `rollout-{line}` turn ids and never reads back the fixture's
 /// `TurnContext.turn_id`, so cross-page ordering is asserted on message
 /// content instead of literal ids.
-fn turn_user_texts(turns: &[Turn]) -> Vec<String> {
+pub(super) fn turn_user_texts(turns: &[Turn]) -> Vec<String> {
     turns
         .iter()
         .map(|turn| {
