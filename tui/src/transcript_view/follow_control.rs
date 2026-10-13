@@ -1,9 +1,9 @@
-//! Return-to-latest affordance for the owned transcript.
+//! Reserved-row affordances for the owned transcript.
 //!
-//! The hint only appears when the reader is away from the bottom of the transcript. It borrows the
-//! last row of the history area, which shrinks the painted window by one row instead of covering
-//! transcript content; pointer interaction for this control lands in P3 together with the rest of
-//! the transcript input routing.
+//! One row at the bottom of the history area is borrowed for a single line of feedback: the
+//! return-to-latest hint while the reader is away from the bottom, or the find/selection/notice
+//! status once P3's interaction needs it. Borrowing a row shrinks the painted window by one instead
+//! of covering transcript content.
 
 use super::*;
 use ratatui::style::Modifier;
@@ -32,6 +32,21 @@ impl TranscriptView {
             /*height*/ 1,
         );
         Paragraph::new(label)
+            .style(Style::default().add_modifier(Modifier::DIM))
+            .render(target, buf);
+    }
+
+    /// Draw find status, action feedback or the selection hint in the reserved row.
+    ///
+    /// Unlike the return-to-bottom control this is left aligned, because it carries a variable
+    /// amount of text (a query, a match counter) rather than one short label.
+    pub(super) fn render_status_row(&self, area: Rect, buf: &mut Buffer, label: &str) {
+        if area.is_empty() {
+            return;
+        }
+        let width = u16::try_from(label.width()).unwrap_or(0).min(area.width);
+        let target = Rect::new(area.x, area.y, width, /*height*/ 1);
+        Paragraph::new(label.to_string())
             .style(Style::default().add_modifier(Modifier::DIM))
             .render(target, buf);
     }

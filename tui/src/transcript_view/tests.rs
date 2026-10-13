@@ -2,7 +2,14 @@
 
 use super::*;
 use crate::history_cell::PlainHistoryCell;
+use crate::terminal_hyperlinks::annotate_web_urls;
 use crate::terminal_hyperlinks::plain_hyperlink_lines;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use pretty_assertions::assert_eq;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -17,6 +24,83 @@ fn cell(text: &str) -> Arc<dyn HistoryCell> {
         .map(|line| Line::from(line.to_string()))
         .collect::<Vec<_>>();
     Arc::new(PlainHistoryCell::new(lines))
+}
+
+/// A cell whose text carries an OSC 8 destination, for link hit tests.
+#[derive(Debug)]
+struct LinkedCell(String);
+
+impl HistoryCell for LinkedCell {
+    fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+        vec![Line::from(self.0.clone())]
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        vec![Line::from(self.0.clone())]
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        annotate_web_urls(self.display_lines(width))
+    }
+}
+
+/// A collapsible cell that renders the same "alt+o to expand" hint real cells do.
+#[derive(Debug, Default)]
+struct CollapsibleCell {
+    expanded: std::sync::atomic::AtomicBool,
+}
+
+impl HistoryCell for CollapsibleCell {
+    fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
+        let mut lines = vec![Line::from("collapsed body".to_string())];
+        if !self.is_expanded() {
+            lines.push(Line::from(
+                "... (3 more lines, alt+o to expand)".to_string(),
+            ));
+        }
+        lines
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.display_lines(/*width*/ 80)
+    }
+
+    fn is_collapsible(&self) -> bool {
+        true
+    }
+
+    fn is_expanded(&self) -> bool {
+        self.expanded
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn toggle_expanded(&self) -> bool {
+        let next = !self.is_expanded();
+        self.expanded
+            .store(next, std::sync::atomic::Ordering::Relaxed);
+        next
+    }
+}
+
+fn pager() -> crate::keymap::PagerKeymap {
+    crate::keymap::RuntimeKeymap::defaults().pager
+}
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+fn key_with(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+    KeyEvent::new(code, modifiers)
+}
+
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+    MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }
 }
 
 fn render(view: &mut TranscriptView, cells: &[Arc<dyn HistoryCell>], area: Rect) -> Buffer {
@@ -232,4 +316,364 @@ fn live_tail_is_cached_until_the_key_changes() {
     // New width: reformat.
     assert!(view.sync_live_tail(41, Some(bumped), &mut lines));
     assert_eq!(calls.get(), 3);
+}
+
+// ---------------------------------------------------------------------------------------------
+// P3: selection, copy, links, disclosure, find and their routing.
+// ---------------------------------------------------------------------------------------------
+
+/// A drag selects exactly the dragged characters, and the selection is stored by content so it
+/// survives a re-wrap and a prepended page.
+#[test]
+fn drag_selection_extracts_text_and_survives_rewrap() {
+    let cells = vec![cell("alpha beta"), cell("gamma delta")];
+    let area = Rect::new(0, 0, 20, 6);
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, area);
+
+    // Rows: 0 "alpha beta", 1 separator, 2 "gamma delta".
+    assert!(
+        view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 2), &cells)
+            .is_some()
+    );
+    assert!(
+        view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2), &cells)
+            .is_some()
+    );
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 5, 2), &cells);
+    assert!(view.has_selection());
+    assert_eq!(view.selected_text(&cells).as_deref(), Some("gamma"));
+
+    // Extending across the separator keeps the row text and drops the blank separator row.
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 5, 2), &cells);
+    assert_eq!(view.selected_text(&cells).as_deref(), Some("alpha beta\ngamma"));
+    assert_eq!(view.selection_bounds(&cells), Some(((0, 0), (1, 5))));
+
+    // The anchor is content based: a resize moves the rows, not the selected characters.
+    render(&mut view, &cells, Rect::new(0, 0, 8, 6));
+    assert_eq!(view.selection_bounds(&cells), Some(((0, 0), (1, 5))));
+    assert!(
+        view.selected_text(&cells)
+            .is_some_and(|text| text.starts_with("alpha")),
+        "the same characters stay selected at a new width"
+    );
+
+    // Prepending older history shifts the indices but not the selected characters.
+    let mut prepended = vec![cell("older a"), cell("older b")];
+    prepended.extend(cells.clone());
+    render(&mut view, &prepended, Rect::new(0, 0, 20, 6));
+    assert_eq!(view.selection_bounds(&prepended), Some(((2, 0), (3, 5))));
+    assert_eq!(
+        view.selected_text(&prepended).as_deref(),
+        Some("alpha beta\ngamma")
+    );
+}
+
+/// A click that never moves leaves no zero-width selection behind (pager overlay behavior).
+#[test]
+fn stationary_click_leaves_no_selection() {
+    let cells = vec![cell("alpha beta")];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 20, 4));
+
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 3, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 3, 0), &cells);
+    assert!(!view.has_selection());
+}
+
+#[test]
+fn double_click_selects_the_whole_row() {
+    let cells = vec![cell("alpha beta"), cell("gamma delta")];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 20, 6));
+
+    // Two clicks on the same cell become a whole-row selection on the second press.
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 2, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 0), &cells);
+    assert_eq!(view.selected_text(&cells).as_deref(), Some("alpha beta"));
+}
+
+/// A stationary click on a link opens it; Ctrl-click does the same without a selection.
+#[test]
+fn click_on_a_link_queues_it_to_open() {
+    let cells: Vec<Arc<dyn HistoryCell>> =
+        vec![Arc::new(LinkedCell("see https://example.com/docs here".to_string()))];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 40, 4));
+
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 6, 0), &cells);
+    let action = view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 6, 0), &cells);
+    let Some(ViewAction::OpenLink(destination)) = action else {
+        panic!("expected a link activation, got {action:?}");
+    };
+    assert!(destination.contains("example.com/docs"), "{destination}");
+    assert!(!view.has_selection());
+
+    // Ctrl-click activates immediately, on the press.
+    let action = view.handle_mouse(
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6,
+            row: 0,
+            modifiers: KeyModifiers::CONTROL,
+        },
+        &cells,
+    );
+    assert!(matches!(action, Some(ViewAction::OpenLink(_))));
+}
+
+/// Right-click copies an existing selection, matching the pager overlay.
+#[test]
+fn right_click_copies_the_selection() {
+    let cells = vec![cell("alpha beta")];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 20, 4));
+
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 0), &cells);
+    let action = view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Right), 5, 0), &cells);
+    assert_eq!(action, Some(ViewAction::Copy("alpha".to_string())));
+}
+
+/// Clicking the collapsed-form hint toggles that cell and only that cell.
+#[test]
+fn click_on_the_collapse_hint_toggles_that_cell() {
+    let collapsible = Arc::new(CollapsibleCell::default());
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![cell("plain"), Arc::clone(&collapsible) as _];
+    let area = Rect::new(0, 0, 40, 8);
+    let mut view = TranscriptView::default();
+    let buf = render(&mut view, &cells, area);
+    assert!(screen_text(&buf).contains("alt+o to expand"));
+
+    // Rows: 0 "plain", 1 separator, 2 "collapsed body", 3 the hint.
+    assert!(
+        view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 4, 3), &cells)
+            .is_some()
+    );
+    assert!(collapsible.is_expanded(), "the hint expands its own cell");
+    let buf = render(&mut view, &cells, area);
+    assert!(!screen_text(&buf).contains("alt+o to expand"));
+    assert!(!view.has_selection(), "the toggle does not leave a selection");
+
+    // Clicking the body starts a selection instead of toggling.
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 4, 2), &cells);
+    assert!(collapsible.is_expanded());
+    assert!(view.has_selection());
+}
+
+/// Navigation only claims keys that cannot be draft text.
+#[test]
+fn navigation_keys_leave_draft_text_alone() {
+    let view = TranscriptView::default();
+    let pager = pager();
+    for code in [
+        KeyCode::Up,
+        KeyCode::Down,
+        KeyCode::PageUp,
+        KeyCode::PageDown,
+        KeyCode::Home,
+        KeyCode::End,
+        KeyCode::Esc,
+    ] {
+        assert!(view.owns_navigation_key(key(code), &pager), "{code:?}");
+    }
+    assert!(view.owns_navigation_key(key_with(KeyCode::Char('u'), KeyModifiers::CONTROL), &pager));
+    assert!(view.owns_navigation_key(key_with(KeyCode::Char('f'), KeyModifiers::CONTROL), &pager));
+    // Typing keys are never claimed, even though the pager binds them.
+    for code in [KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Char(' ')] {
+        assert!(!view.owns_navigation_key(key(code), &pager), "{code:?}");
+    }
+}
+
+/// Find mode owns typing, but leaves the app's own shortcuts alone.
+#[test]
+fn find_mode_owns_typing_but_not_app_shortcuts() {
+    let mut view = TranscriptView::default();
+    view.begin_search();
+    assert!(view.owns_interaction_key(key(KeyCode::Char('n'))));
+    assert!(view.owns_interaction_key(key(KeyCode::Backspace)));
+    assert!(view.owns_interaction_key(key(KeyCode::Esc)));
+    assert!(view.owns_interaction_key(key(KeyCode::Enter)));
+    assert!(view.owns_interaction_key(key_with(KeyCode::Char('n'), KeyModifiers::CONTROL)));
+    assert!(
+        !view.owns_interaction_key(key_with(KeyCode::Char('t'), KeyModifiers::CONTROL)),
+        "Ctrl+T still opens the transcript overlay"
+    );
+
+    // Accepted query: typing is released, navigation still belongs to the view.
+    view.cancel_search();
+    assert!(!view.owns_interaction_key(key(KeyCode::Char('n'))));
+}
+
+/// A selection keeps the copy keys and motion keys even with a draft on screen.
+#[test]
+fn selection_claims_its_keys() {
+    let mut view = TranscriptView::default();
+    assert!(!view.owns_interaction_key(key(KeyCode::Enter)));
+
+    let cells = vec![cell("alpha beta")];
+    render(&mut view, &cells, Rect::new(0, 0, 20, 4));
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 0), &cells);
+
+    assert!(view.owns_interaction_key(key(KeyCode::Enter)));
+    assert!(view.owns_interaction_key(key(KeyCode::Esc)));
+    assert!(view.owns_interaction_key(key(KeyCode::Down)));
+    assert!(view.owns_interaction_key(key_with(KeyCode::Down, KeyModifiers::SHIFT)));
+    assert!(!view.owns_interaction_key(key(KeyCode::Char('a'))));
+}
+
+/// Find walks the loaded history in bounded batches and jumps the viewport to a match.
+#[test]
+fn find_jumps_to_a_match_and_reports_progress() {
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![
+        cell("alpha"),
+        cell("needle one"),
+        cell("beta"),
+        cell("needle two"),
+        cell("gamma"),
+    ];
+    let area = Rect::new(0, 0, 20, 6);
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, area);
+
+    view.begin_search();
+    for ch in "needle".chars() {
+        view.push_search_char(ch);
+    }
+    // One step covers the whole loaded history.
+    assert!(!view.search_step(&cells));
+    let status = view.search_status().expect("find status");
+    assert!(status.contains("2/2"), "{status}");
+
+    // The cursor starts on the newest match.
+    let Position::Reading(anchor) = view.position else {
+        panic!("find moves the reader to the match");
+    };
+    assert_eq!(anchor.key, EntryKey::cell(&cells[3]));
+
+    assert!(view.search_advance(&cells, /*newer*/ false));
+    let Position::Reading(anchor) = view.position else {
+        panic!("still reading");
+    };
+    assert_eq!(anchor.key, EntryKey::cell(&cells[1]));
+
+    // Esc closes find and leaves the reader where the last match was.
+    view.handle_key(key(KeyCode::Esc), &cells, &pager());
+    assert!(!view.search_active());
+    assert!(!view.is_following());
+}
+
+/// One find step never wraps the whole loaded history.
+#[test]
+fn find_scan_is_bounded_per_step() {
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..300)
+        .map(|index| cell(&format!("turn {index} needle")))
+        .collect();
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 40, 8));
+
+    view.begin_search();
+    for ch in "needle".chars() {
+        view.push_search_char(ch);
+    }
+    view.search_step(&cells);
+    assert!(
+        view.search_match_count() <= 24,
+        "one step formats a bounded number of entries, saw {}",
+        view.search_match_count()
+    );
+
+    let mut steps = 1;
+    while view.search_step(&cells) {
+        steps += 1;
+        assert!(steps < 100, "the scan must terminate");
+    }
+    assert_eq!(
+        view.search_match_count(),
+        300,
+        "every loaded entry is covered"
+    );
+}
+
+/// Esc unwinds the interaction layers in order: find, then selection, then the reading position.
+#[test]
+fn esc_ladder_unwinds_selection_then_find_then_reading() {
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..6)
+        .map(|index| cell(&format!("row {index}")))
+        .collect();
+    let area = Rect::new(0, 0, 20, 5);
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, area);
+    let pager = pager();
+
+    view.scroll(&cells, -2);
+    assert!(!view.is_following());
+
+    // Find: Esc closes it and keeps the reading position.
+    view.begin_search();
+    assert!(view.handle_key(key(KeyCode::Esc), &cells, &pager).is_some());
+    assert!(!view.search_active());
+    assert!(!view.is_following());
+
+    // Selection: Esc clears it and keeps the reading position.
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 2, 0), &cells);
+    assert!(view.has_selection());
+    assert!(view.handle_key(key(KeyCode::Esc), &cells, &pager).is_some());
+    assert!(!view.has_selection());
+    assert!(!view.is_following());
+
+    // Reading: Esc returns to the newest content.
+    assert!(view.handle_key(key(KeyCode::Esc), &cells, &pager).is_some());
+    assert!(view.is_following());
+
+    // A printable key is never a transcript gesture while the view is only reading.
+    view.scroll(&cells, -2);
+    assert!(view.handle_key(key(KeyCode::Char('x')), &cells, &pager).is_none());
+}
+
+/// Streaming output must not drag a reader who is back in the history.
+#[test]
+fn streaming_keeps_the_reading_anchor() {
+    let cells = vec![cell("turn one"), cell("turn two"), cell("turn three")];
+    let area = Rect::new(0, 0, 20, 4);
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, area);
+    view.scroll(&cells, -2);
+    let Position::Reading(before) = view.position else {
+        panic!("reading");
+    };
+
+    let tail = |text: &str| Some(plain_hyperlink_lines(vec![Line::from(text.to_string())]));
+    view.sync_live_tail(
+        20,
+        Some(ActiveCellTranscriptKey {
+            revision: 1,
+            is_stream_continuation: false,
+            animation_tick: None,
+        }),
+        |_| tail("streaming part one"),
+    );
+    render(&mut view, &cells, area);
+    view.sync_live_tail(
+        20,
+        Some(ActiveCellTranscriptKey {
+            revision: 2,
+            is_stream_continuation: false,
+            animation_tick: None,
+        }),
+        |_| tail("streaming part one and more text"),
+    );
+    render(&mut view, &cells, area);
+
+    let Position::Reading(after) = view.position else {
+        panic!("the reader stays in the history while the tail streams");
+    };
+    assert_eq!(after.key, before.key);
+    assert!(view.has_unseen_activity());
+    assert!(view.needs_return_to_bottom());
 }

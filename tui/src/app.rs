@@ -86,7 +86,6 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseEvent;
-use crossterm::event::MouseEventKind;
 use ody_ansi_escape::ansi_escape_line;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
@@ -520,6 +519,12 @@ pub(crate) struct App {
     ///
     /// Terminal mode never touches this: history there is still written into terminal scrollback.
     pub(crate) transcript_view: TranscriptView,
+
+    /// Last selection handed to the clipboard from the owned transcript.
+    ///
+    /// Kept so the status line and tests can report what was copied without reading the system
+    /// clipboard back, which is unavailable on headless machines.
+    pub(crate) last_transcript_copy: Option<String>,
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
@@ -1015,6 +1020,7 @@ See the Ody keymap documentation for supported actions and examples."
             keymap: runtime_keymap,
             transcript_cells: Vec::new(),
             transcript_view: TranscriptView::new(mouse_scroll_speed),
+            last_transcript_copy: None,
             overlay: None,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
@@ -1286,6 +1292,13 @@ See the Ody keymap documentation for supported actions and examples."
                     }
                     // Allow widgets to process any pending timers before rendering.
                     self.chat_widget.pre_draw_tick();
+                    // Find-in-transcript walks the loaded history in bounded batches; each step
+                    // asks for the next frame, so a long history never scans in one go.
+                    if tui.is_owned_screen() && self.transcript_view.interaction_needs_frame() {
+                        if self.transcript_view.search_step(&self.transcript_cells) {
+                            tui.frame_requester().schedule_frame();
+                        }
+                    }
                     let rendered_area = self.render_chat_widget_frame(tui)?;
                     if self.chat_widget.ambient_pet_image_enabled() {
                         let terminal_size = tui.terminal.size()?;

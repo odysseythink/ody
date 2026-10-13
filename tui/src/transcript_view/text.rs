@@ -162,6 +162,45 @@ impl TextLayout {
             .partition_point(|row| row.source.start <= offset)
             .saturating_sub(/*rhs*/ 1)
     }
+
+    /// Byte range of one display row's content inside `TextLayout::text`.
+    pub(super) fn row_source(&self, row: usize) -> Option<Range<usize>> {
+        self.rows.get(row).map(|row| row.source.clone())
+    }
+
+    /// Width of one row's content, excluding the blanks a wrapped row left unpainted.
+    pub(super) fn row_content_width(&self, row: usize) -> Option<u16> {
+        self.rows.get(row).map(|row| row.content_width)
+    }
+
+    /// Display column of a source offset inside one row.
+    ///
+    /// The inverse of `position_at`, used to turn a stored selection offset back into the column
+    /// range to highlight after a re-wrap.
+    pub(super) fn column_for_offset(&self, row: usize, offset: usize) -> u16 {
+        let Some(row) = self.rows.get(row) else {
+            return 0;
+        };
+        let mut column = 0u16;
+        for (index, grapheme) in self.text[row.source.clone()].grapheme_indices(/*extended*/ true) {
+            if row.source.start + index >= offset {
+                break;
+            }
+            column = column.saturating_add(u16::try_from(grapheme.width()).unwrap_or(0));
+        }
+        column
+    }
+
+    /// Destination of the link covering `column` in `row`, if any.
+    pub(super) fn link_at(&self, row: usize, column: u16) -> Option<&str> {
+        let row = self.rows.get(row)?;
+        let column = usize::from(column);
+        row.line
+            .hyperlinks
+            .iter()
+            .find(|link| link.columns.contains(&column))
+            .map(|link| link.destination.as_str())
+    }
 }
 
 /// Collect the graphemes of one source line, recording columns over the full unwrapped line.

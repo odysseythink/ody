@@ -10,12 +10,17 @@
 //! history therefore never renumbers an anchor, and a terminal width change lands the reader on the
 //! same character instead of an unrelated screen row.
 
+mod disclosure;
 mod follow_control;
+mod input;
 mod layout;
 mod mutations;
+mod search;
+mod selection;
 mod text;
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -28,7 +33,11 @@ use crate::history_cell::HistoryRenderMode;
 use crate::terminal_hyperlinks::HyperlinkLine;
 
 use layout::LayoutCache;
+use search::SearchState;
+use selection::Selection;
 use text::TextLayout;
+
+pub(crate) use input::ViewAction;
 
 /// Identity of a transcript entry that survives index changes.
 ///
@@ -82,10 +91,22 @@ pub(crate) struct TranscriptView {
     live_key: Option<(u16, ActiveCellTranscriptKey)>,
     live_continuation: bool,
     area: Rect,
+    /// `(entry index, row inside the entry)` for each screen row of the last frame.
+    ///
+    /// Recorded rather than recomputed so pointer hit tests and highlights agree with exactly what
+    /// was painted, including the live tail and any entry that scrolled between frames.
+    visible: Vec<(usize, usize)>,
     mode: HistoryRenderMode,
     tail_visible: bool,
     unseen_activity: bool,
     last_tail: Option<EntryKey>,
+    selection: Option<Selection>,
+    search: SearchState,
+    /// Link captured by the last left-click press, opened only if the release is stationary.
+    pressed_link: Option<String>,
+    last_click: Option<(u16, u16, Instant)>,
+    /// Transient feedback (`Copied 128 chars`) shown in the reserved status row.
+    notice: Option<String>,
 }
 
 impl Default for TranscriptView {
@@ -101,10 +122,16 @@ impl Default for TranscriptView {
             live_key: None,
             live_continuation: false,
             area: Rect::default(),
+            visible: Vec::new(),
             mode: HistoryRenderMode::Rich,
             tail_visible: true,
             unseen_activity: false,
             last_tail: None,
+            selection: None,
+            search: SearchState::default(),
+            pressed_link: None,
+            last_click: None,
+            notice: None,
         }
     }
 }
@@ -167,9 +194,22 @@ impl TranscriptView {
         self.live_key = None;
         self.live_continuation = false;
         self.area = Rect::default();
+        self.visible.clear();
         self.tail_visible = true;
         self.unseen_activity = false;
         self.last_tail = None;
+        self.selection = None;
+        self.search = SearchState::default();
+        self.pressed_link = None;
+        self.last_click = None;
+        self.notice = None;
+    }
+
+    /// Set the transient feedback shown in the reserved status row.
+    ///
+    /// Any later input clears it, so no timer is needed to retire the message.
+    pub(crate) fn set_notice(&mut self, notice: impl Into<String>) {
+        self.notice = Some(notice.into());
     }
 
     /// Refresh the cached live tail from the active cell.
@@ -223,15 +263,20 @@ impl TranscriptView {
         Clear.render(area, buf);
 
         // The hint borrows the last row instead of overwriting transcript content, so the history
-        // window shrinks by one row while the reader is away from the bottom.
-        let hint_rows = u16::from(self.needs_return_to_bottom() && area.height > 1);
+        // window shrinks by one row while the reader is away from the bottom or a status is shown.
+        let status = self.status_row(area.width);
+        let reserved = u16::from(
+            area.height > 1
+                && (status.is_some() || self.needs_return_to_bottom()),
+        );
         let body = Rect {
-            height: area.height.saturating_sub(hint_rows),
+            height: area.height.saturating_sub(reserved),
             ..area
         };
         self.area = body;
 
         if !body.is_empty() {
+            self.visible.clear();
             let (mut index, mut row) = self.start(cells);
             let mut y = body.top();
             let mut last_visible: Option<(usize, usize)> = None;
@@ -251,28 +296,55 @@ impl TranscriptView {
                     continue;
                 }
                 layout.render(Rect::new(body.x, y, body.width, /*height*/ 1), buf, row);
+                self.visible.push((index, row));
                 last_visible = Some((index, row));
                 y += 1;
                 row += 1;
             }
             self.tail_visible = self.is_tail_row(cells, last_visible);
         } else {
+            self.visible.clear();
             self.tail_visible = false;
         }
+
+        // Interaction feedback paints over the rows it belongs to, after the content is in place.
+        self.highlight_search(cells, buf);
+        self.highlight_selection(cells, buf);
 
         if self.tail_visible {
             self.unseen_activity = false;
         }
-        if hint_rows == 1 {
-            self.render_return_to_bottom(
-                Rect {
-                    y: area.bottom().saturating_sub(/*rhs*/ 1),
-                    height: 1,
-                    ..area
-                },
-                buf,
-            );
+        if reserved == 1 {
+            let row = Rect {
+                y: area.bottom().saturating_sub(/*rhs*/ 1),
+                height: 1,
+                ..area
+            };
+            match status {
+                Some(label) => self.render_status_row(row, buf, &label),
+                None => self.render_return_to_bottom(row, buf),
+            }
         }
+    }
+
+    /// Label for the reserved row, if any.
+    ///
+    /// One row serves every transient affordance, so the order here decides what the reader sees:
+    /// find status, then the last action's feedback, then the selection hint.
+    fn status_row(&self, width: u16) -> Option<String> {
+        if width == 0 {
+            return None;
+        }
+        if let Some(status) = self.search_status() {
+            return Some(status);
+        }
+        if let Some(notice) = &self.notice {
+            return Some(format!(" {notice}"));
+        }
+        if self.has_selection() {
+            return Some(" selection · enter copies · esc clears".to_string());
+        }
+        None
     }
 
     /// Scroll by `rows` (negative scrolls toward older content).
@@ -334,6 +406,29 @@ impl TranscriptView {
     pub(crate) fn jump_to_latest(&mut self) {
         self.position = Position::Latest;
         self.tail_visible = true;
+        self.unseen_activity = false;
+        self.pending_mouse_scroll = 0.0;
+    }
+
+    /// Move the window to the oldest loaded entry, aligned with its first row.
+    ///
+    /// Unlike scrolling up repeatedly, this leaves the first row of the oldest entry at the top
+    /// instead of keeping the entry's separator in view, which is what "jump to the beginning"
+    /// should show.
+    pub(crate) fn jump_to_beginning(&mut self, cells: &[Arc<dyn HistoryCell>]) {
+        let Some(first) = self.next_nonempty(cells, 0) else {
+            return;
+        };
+        let offset = self
+            .layout(cells, first)
+            .map_or(/*default*/ 0, |layout| layout.position_at(0, 0));
+        self.position = Position::Reading(Anchor {
+            key: self.entry_key(cells, first),
+            index: first,
+            offset,
+            row_bias: 0,
+        });
+        self.tail_visible = false;
         self.unseen_activity = false;
         self.pending_mouse_scroll = 0.0;
     }

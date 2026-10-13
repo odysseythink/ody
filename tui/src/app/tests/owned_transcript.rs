@@ -7,12 +7,17 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::app::input::OwnedTranscriptScroll;
 use crate::app::test_support::make_test_app;
 use crate::custom_terminal::Terminal;
 use crate::history_cell::PlainHistoryCell;
 use crate::test_backend::VT100Backend;
 use crate::tui::test_support::make_test_tui;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
 use pretty_assertions::assert_eq;
 use ratatui::text::Line;
 
@@ -21,6 +26,19 @@ const SCROLLBACK_PURGE: &[u8] = b"\x1b[3J";
 
 fn history_cell(text: &str) -> Arc<dyn HistoryCell> {
     Arc::new(PlainHistoryCell::new(vec![Line::from(text.to_string())]))
+}
+
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+    MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }
+}
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
 }
 
 fn screen_contents(terminal: &Terminal<VT100Backend>) -> String {
@@ -133,7 +151,7 @@ async fn owned_mode_keeps_history_in_source_cells() {
     tui.set_owned_screen(/*owned*/ false).expect("release");
 }
 
-/// The wheel and page keys drive the Owned viewport; Terminal mode is left untouched.
+/// The wheel and navigation keys drive the Owned viewport; Terminal mode is left untouched.
 #[tokio::test]
 async fn owned_transcript_scrolling_follows_and_detaches() {
     let mut app = make_test_app().await;
@@ -143,32 +161,231 @@ async fn owned_transcript_scrolling_follows_and_detaches() {
     }
     let mut tui = make_test_tui().expect("test tui");
 
-    // Terminal mode never routes scroll input to the owned view.
-    assert!(!app.owned_transcript_accepts_scroll(&tui));
+    // Terminal mode never routes input to the owned view.
+    assert!(!app.owned_transcript_accepts_input(&tui));
 
     tui.set_owned_screen(/*owned*/ true).expect("owned screen");
-    assert!(app.owned_transcript_accepts_scroll(&tui));
+    assert!(app.owned_transcript_accepts_input(&tui));
 
     // The viewport size is only known after a frame, so paint one first.
     draw_owned_frame(&mut app, /*width*/ 40, /*height*/ 8);
     assert!(app.transcript_view.is_following());
 
-    app.scroll_owned_transcript(&mut tui, OwnedTranscriptScroll::Wheel(/*direction*/ -1.0));
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3));
     assert!(
         !app.transcript_view.is_following(),
         "scrolling up leaves the live tail"
     );
 
     // Scrolling back past the bottom reattaches to the live tail.
-    app.scroll_owned_transcript(
-        &mut tui,
-        OwnedTranscriptScroll::Rows(app.transcript_view.page_rows() * 4),
-    );
+    let page = app.transcript_view.page_rows();
+    for _ in 0..4 {
+        assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::PageDown)));
+    }
+    assert!(page > 0);
     assert!(app.transcript_view.is_following());
 
-    app.scroll_owned_transcript(&mut tui, OwnedTranscriptScroll::Wheel(/*direction*/ -1.0));
-    app.scroll_owned_transcript(&mut tui, OwnedTranscriptScroll::Latest);
+    // Home detaches, End reattaches.
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::Home)));
+    assert!(!app.transcript_view.is_following());
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::End)));
+    assert!(app.transcript_view.is_following());
+
+    // A wheel notch followed by Esc-in-reading returns to the newest content.
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::ScrollUp, /*column*/ 5, /*row*/ 3));
+    assert!(!app.transcript_view.is_following());
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::Esc)));
     assert!(app.transcript_view.is_following());
 
     tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+// ---------------------------------------------------------------------------------------------
+// P3: interaction routing, priority, copy/link delivery and Ctrl+T.
+// ---------------------------------------------------------------------------------------------
+
+/// Draw the owned frame, then run one gesture through the app's routing entry points.
+fn owned_terminal(app: &mut App) -> (crate::tui::Tui, Terminal<VT100Backend>) {
+    let mut tui = make_test_tui().expect("test tui");
+    tui.set_owned_screen(/*owned*/ true).expect("owned screen");
+    let terminal = draw_owned_frame(app, /*width*/ 40, /*height*/ 10);
+    (tui, terminal)
+}
+
+/// A drag plus Enter copies the selected text through the app and reattaches to the tail.
+#[tokio::test]
+async fn owned_transcript_selection_copy_reaches_the_app() {
+    let mut app = make_test_app().await;
+    app.transcript_cells.push(history_cell("alpha beta"));
+    app.transcript_cells.push(history_cell("gamma delta"));
+    let (mut tui, _terminal) = owned_terminal(&mut app);
+
+    // Rows: 0 "alpha beta", 1 separator, 2 "gamma delta".
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 2));
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2));
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Up(MouseButton::Left), 5, 2));
+    assert!(app.transcript_view.has_selection());
+
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::Enter)));
+    assert_eq!(
+        app.last_transcript_copy.as_deref(),
+        Some("gamma"),
+        "the app received exactly the selected characters"
+    );
+    assert!(!app.transcript_view.has_selection());
+    assert!(
+        app.transcript_view.is_following(),
+        "Enter copies and returns to the newest content"
+    );
+
+    tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+/// A draft keeps every navigation key; a selection still gets the copy keys.
+#[tokio::test]
+async fn owned_transcript_priority_draft_then_selection() {
+    let mut app = make_test_app().await;
+    for index in 0..30 {
+        app.transcript_cells
+            .push(history_cell(&format!("turn {index}")));
+    }
+    let (mut tui, _terminal) = owned_terminal(&mut app);
+
+    app.chat_widget
+        .apply_external_edit("a draft that stays editable".to_string());
+    assert!(
+        !app.route_owned_transcript_key(&mut tui, key(KeyCode::PageDown)),
+        "navigation stays with the composer while a draft is present"
+    );
+    assert!(app.transcript_view.is_following());
+
+    // Selecting with the mouse still works while the draft is present, and so do its keys.
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 0));
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Drag(MouseButton::Left), 4, 0));
+    assert!(app.transcript_view.has_selection());
+    assert!(
+        app.route_owned_transcript_key(&mut tui, key(KeyCode::Esc)),
+        "Esc clears the selection even with a draft on screen"
+    );
+    assert!(!app.transcript_view.has_selection());
+
+    tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+/// A popup or approval modal keeps the transcript out of the input path.
+#[tokio::test]
+async fn owned_transcript_yields_to_popups() {
+    let mut app = make_test_app().await;
+    for index in 0..30 {
+        app.transcript_cells
+            .push(history_cell(&format!("turn {index}")));
+    }
+    let (mut tui, _terminal) = owned_terminal(&mut app);
+    assert!(app.owned_transcript_accepts_input(&tui));
+
+    let keymap = app.keymap.clone();
+    app.chat_widget.open_keymap_debug(&keymap);
+    assert!(
+        !app.owned_transcript_accepts_input(&tui),
+        "an open popup owns the input"
+    );
+    assert!(!app.route_owned_transcript_key(&mut tui, key(KeyCode::PageDown)));
+
+    // Mouse input is not routed either: a click must not select behind a popup.
+    app.handle_mouse_event(&mut tui, mouse(MouseEventKind::Down(MouseButton::Left), 0, 0));
+    assert!(!app.transcript_view.has_selection());
+
+    tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+/// A printable key is not a transcript gesture: it belongs to the composer.
+#[tokio::test]
+async fn owned_transcript_leaves_typing_to_the_composer() {
+    let mut app = make_test_app().await;
+    app.transcript_cells.push(history_cell("alpha beta"));
+    let (mut tui, _terminal) = owned_terminal(&mut app);
+
+    assert!(!app.route_owned_transcript_key(&mut tui, key(KeyCode::Char('x'))));
+
+    tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+/// Ctrl+T reuses the detailed overlay and keeps the reader where they were on exit.
+#[tokio::test]
+async fn owned_transcript_overlay_keeps_the_reading_position() {
+    let mut app = make_test_app().await;
+    for index in 0..40 {
+        app.transcript_cells
+            .push(history_cell(&format!("turn {index}")));
+    }
+    let (mut tui, _terminal) = owned_terminal(&mut app);
+
+    // Read back into the history, then open and close the detailed overlay.
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::PageUp)));
+    assert!(!app.transcript_view.is_following());
+
+    app.open_transcript_overlay(&mut tui);
+    assert!(app.overlay.is_some());
+    app.close_transcript_overlay(&mut tui);
+
+    assert!(
+        app.overlay.is_none(),
+        "closing the overlay returns to the owned view"
+    );
+    assert!(
+        tui.is_owned_screen(),
+        "closing the overlay must not release the owned screen"
+    );
+    assert!(
+        !app.transcript_view.is_following(),
+        "the reader keeps their place after Ctrl+T"
+    );
+
+    tui.set_owned_screen(/*owned*/ false).expect("release");
+}
+
+/// Find mode is entered from the owned view and owns typing until Esc.
+#[tokio::test]
+async fn owned_transcript_find_mode_owns_typing_then_closes() -> Result<()> {
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
+        app.chat_widget.config_ref(),
+    ))
+    .await?;
+    for index in 0..12 {
+        app.transcript_cells
+            .push(history_cell(&format!("turn {index} needle")));
+    }
+    let mut tui = make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    draw_owned_frame(&mut app, /*width*/ 40, /*height*/ 10);
+
+    app.handle_key_event(&mut tui, &mut app_server, key(KeyCode::F(3)))
+        .await;
+    assert!(app.transcript_view.search_active());
+
+    for ch in "needle".chars() {
+        app.handle_key_event(&mut tui, &mut app_server, key(KeyCode::Char(ch)))
+            .await;
+    }
+    assert_eq!(
+        app.chat_widget.composer_text_with_pending(),
+        "",
+        "find owns typing"
+    );
+
+    // The query, its match count and the hint render on the reserved status row.
+    let terminal = draw_owned_frame(&mut app, /*width*/ 40, /*height*/ 10);
+    let screen = screen_contents(&terminal);
+    assert!(screen.contains("Find: needle"), "{screen}");
+
+    app.handle_key_event(&mut tui, &mut app_server, key(KeyCode::Esc))
+        .await;
+    assert!(!app.transcript_view.search_active());
+
+    // Esc while merely reading still belongs to the transcript, not to backtracking.
+    assert!(!app.backtrack.primed);
+    tui.set_owned_screen(/*owned*/ false)?;
+    Ok(())
 }

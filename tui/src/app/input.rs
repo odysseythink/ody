@@ -5,21 +5,7 @@
 
 use super::*;
 use crate::app_backtrack::SIDE_EDIT_PREVIOUS_UNAVAILABLE_MESSAGE;
-
-/// Read-only transcript navigation for the owned full-screen view.
-///
-/// P2 wires only "follow the newest content" and scrolling back through history. The rest of the
-/// interaction set (selection, link clicks, jump-to-top/bottom keys) arrives with the later
-/// interaction pass, so this stays deliberately small.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum OwnedTranscriptScroll {
-    /// Move whole rows; negative rows move toward older content.
-    Rows(isize),
-    /// Apply one mouse-wheel notch; negative moves toward older content.
-    Wheel(f64),
-    /// Reattach the viewport to the live tail.
-    Latest,
-}
+use crate::transcript_view::ViewAction;
 
 impl App {
     pub(super) async fn launch_external_editor(&mut self, tui: &mut tui::Tui) {
@@ -158,7 +144,22 @@ impl App {
         }
 
         let app_keymap_shortcuts_available = self.app_keymap_shortcuts_available();
-        let owned_transcript_scroll_available = self.owned_transcript_accepts_scroll(tui);
+        let owned_transcript_input_available = self.owned_transcript_accepts_input(tui);
+
+        // With a selection up, the copy binding copies what the reader selected instead of the last
+        // agent message. Without one it keeps its usual meaning further down.
+        if app_keymap_shortcuts_available
+            && self.transcript_view.has_selection()
+            && self.keymap.app.copy.is_pressed(key_event)
+        {
+            if let Some(text) = self.transcript_view.copy_selection(&self.transcript_cells) {
+                self.copy_view_text(tui, text, /*follow*/ false);
+            } else {
+                self.transcript_view.clear_selection();
+                self.schedule_view_frame(tui);
+            }
+            return;
+        }
 
         if app_keymap_shortcuts_available && self.keymap.app.toggle_vim_mode.is_pressed(key_event) {
             self.chat_widget.toggle_vim_mode_and_notify();
@@ -206,6 +207,24 @@ impl App {
             return;
         }
 
+        // Find-in-transcript. `F3` follows the upstream default and is unused by Ody's keymap, so
+        // it does not take a binding away from the composer or the pager.
+        if owned_transcript_input_available
+            && key_event.kind == KeyEventKind::Press
+            && key_event.code == KeyCode::F(3)
+        {
+            self.transcript_view.begin_search();
+            self.schedule_view_frame(tui);
+            return;
+        }
+
+        // The owned transcript answers its own gestures before the app-level Esc ladder runs: find
+        // mode closes, a selection clears, and reading back returns to the newest content. Only when
+        // it declines the key does Esc keep its existing backtrack meaning.
+        if owned_transcript_input_available && self.route_owned_transcript_key(tui, key_event) {
+            return;
+        }
+
         if matches!(key_event.code, KeyCode::Esc)
             && matches!(key_event.kind, KeyEventKind::Press | KeyEventKind::Repeat)
         {
@@ -239,34 +258,6 @@ impl App {
                     self.queue_clear_ui_header(tui);
                     tui.frame_requester().schedule_frame();
                 }
-            }
-            // Owned mode has no terminal scrollback, so history navigation is answered here.
-            // The bindings mirror the pager overlay, which is the established Ody behavior, and
-            // they are only claimed while the draft is empty — a non-empty composer keeps every
-            // key for editing until the interaction pass arbitrates between the two.
-            _ if owned_transcript_scroll_available
-                && self.chat_widget.composer_is_empty()
-                && self.keymap.pager.page_up.is_pressed(key_event) =>
-            {
-                self.scroll_owned_transcript(
-                    tui,
-                    OwnedTranscriptScroll::Rows(-self.transcript_view.page_rows()),
-                );
-            }
-            _ if owned_transcript_scroll_available
-                && self.chat_widget.composer_is_empty()
-                && self.keymap.pager.page_down.is_pressed(key_event) =>
-            {
-                self.scroll_owned_transcript(
-                    tui,
-                    OwnedTranscriptScroll::Rows(self.transcript_view.page_rows()),
-                );
-            }
-            _ if owned_transcript_scroll_available
-                && self.chat_widget.composer_is_empty()
-                && self.keymap.pager.jump_bottom.is_pressed(key_event) =>
-            {
-                self.scroll_owned_transcript(tui, OwnedTranscriptScroll::Latest);
             }
             // Enter confirms backtrack when primed + count > 0. Otherwise pass to widget.
             KeyEvent {
@@ -323,56 +314,114 @@ impl App {
         self.overlay.is_none() && self.chat_widget.no_modal_or_popup_active()
     }
 
-    /// Whether owned-transcript scrolling owns this event.
+    /// Whether the owned transcript view answers an event.
     ///
     /// Overlays and popups route their own mouse and key input, and Terminal mode keeps using the
     /// terminal's native scrollback, so only the bare owned view answers here.
-    pub(super) fn owned_transcript_accepts_scroll(&self, tui: &tui::Tui) -> bool {
+    pub(super) fn owned_transcript_accepts_input(&self, tui: &tui::Tui) -> bool {
         tui.is_owned_screen()
             && self.overlay.is_none()
             && self.chat_widget.no_modal_or_popup_active()
     }
 
-    /// Apply read-only scrolling to the owned transcript view and schedule a repaint.
-    pub(super) fn scroll_owned_transcript(
+    /// Hand a key to the owned transcript view, returning whether it consumed the key.
+    ///
+    /// Find mode owns typing while the query is being edited. Outside it the view only claims its
+    /// own gestures, and navigation is additionally gated on an empty draft because those keys are
+    /// also legitimate draft text.
+    ///
+    /// The ownership check is repeated here so no caller can route around an overlay or popup.
+    pub(super) fn route_owned_transcript_key(
         &mut self,
         tui: &mut tui::Tui,
-        scroll: OwnedTranscriptScroll,
-    ) {
-        match scroll {
-            OwnedTranscriptScroll::Rows(rows) => {
-                self.transcript_view.scroll(&self.transcript_cells, rows);
-            }
-            OwnedTranscriptScroll::Wheel(direction) => {
-                if !self
+        key_event: KeyEvent,
+    ) -> bool {
+        if !self.owned_transcript_accepts_input(tui) {
+            return false;
+        }
+        let claimed = self.transcript_view.owns_interaction_key(key_event)
+            || (self.chat_widget.composer_is_empty()
+                && self
                     .transcript_view
-                    .scroll_by_wheel(&self.transcript_cells, direction)
-                {
-                    // The accumulated wheel delta has not reached a whole row yet.
-                    return;
-                }
+                    .owns_navigation_key(key_event, &self.keymap.pager));
+        if !claimed {
+            return false;
+        }
+        let action = self.transcript_view.handle_key(
+            key_event,
+            &self.transcript_cells,
+            &self.keymap.pager,
+        );
+        match action {
+            Some(action) => {
+                self.apply_view_action(tui, action);
+                true
             }
-            OwnedTranscriptScroll::Latest => self.transcript_view.jump_to_latest(),
+            None => false,
+        }
+    }
+
+    /// Apply one action the transcript view asked for.
+    ///
+    /// Clipboard and browser access live here because the view cannot reach those services.
+    pub(super) fn apply_view_action(&mut self, tui: &mut tui::Tui, action: ViewAction) {
+        match action {
+            ViewAction::Changed => self.schedule_view_frame(tui),
+            ViewAction::Copy(text) => self.copy_view_text(tui, text, /*follow*/ false),
+            ViewAction::CopyAndFollow(text) => self.copy_view_text(tui, text, /*follow*/ true),
+            ViewAction::OpenLink(destination) => {
+                if let Err(error) = webbrowser::open(&destination) {
+                    self.transcript_view
+                        .set_notice(format!("Failed to open link: {error}"));
+                    tracing::warn!(%error, %destination, "failed to open transcript link");
+                }
+                self.schedule_view_frame(tui);
+            }
+        }
+    }
+
+    fn copy_view_text(&mut self, tui: &mut tui::Tui, text: String, follow: bool) {
+        let characters = text.chars().count();
+        self.last_transcript_copy = Some(text.clone());
+        match crate::clipboard_copy::copy_to_clipboard(&text) {
+            Ok(lease) => {
+                self.chat_widget.store_clipboard_lease(lease);
+                self.transcript_view
+                    .set_notice(format!("Copied {characters} chars to clipboard"));
+            }
+            Err(error) => {
+                self.transcript_view
+                    .set_notice(format!("Copy failed: {error}"));
+                tracing::warn!(%error, "failed to copy transcript selection");
+            }
+        }
+        if follow {
+            self.transcript_view.jump_to_latest();
+        }
+        self.schedule_view_frame(tui);
+    }
+
+    /// Request a repaint, and keep the find scan going while it still has entries to cover.
+    pub(super) fn schedule_view_frame(&mut self, tui: &mut tui::Tui) {
+        if tui.is_owned_screen() && self.transcript_view.interaction_needs_frame() {
+            self.transcript_view.search_step(&self.transcript_cells);
         }
         tui.frame_requester().schedule_frame();
     }
 
     /// Route mouse input that the owned transcript handles itself.
     ///
-    /// Mouse capture is enabled for the owned screen, so wheel events arrive even with no overlay
-    /// present. Buttons, drags, and clicks have no owner until the interaction pass.
+    /// Mouse capture is enabled for the owned screen, so wheel, click and drag events arrive even
+    /// with no overlay present.
     pub(super) fn handle_mouse_event(&mut self, tui: &mut tui::Tui, event: MouseEvent) {
-        if !self.owned_transcript_accepts_scroll(tui) {
+        if !self.owned_transcript_accepts_input(tui) {
             return;
         }
-        match event.kind {
-            MouseEventKind::ScrollUp => {
-                self.scroll_owned_transcript(tui, OwnedTranscriptScroll::Wheel(/*direction*/ -1.0));
-            }
-            MouseEventKind::ScrollDown => {
-                self.scroll_owned_transcript(tui, OwnedTranscriptScroll::Wheel(/*direction*/ 1.0));
-            }
-            _ => {}
+        if let Some(action) = self
+            .transcript_view
+            .handle_mouse(event, &self.transcript_cells)
+        {
+            self.apply_view_action(tui, action);
         }
     }
 
