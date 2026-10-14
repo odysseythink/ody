@@ -49,6 +49,8 @@ const SCROLLBACK_PURGE: &[u8] = b"\x1b[3J";
 const ENTER_ALT_SCREEN: &[u8] = b"\x1b[?1049h";
 /// Leaves the alternate screen buffer.
 const LEAVE_ALT_SCREEN: &[u8] = b"\x1b[?1049l";
+/// Turns off X10 mouse reporting; crossterm's `DisableMouseCapture` ends with it.
+const DISABLE_MOUSE_CAPTURE: &[u8] = b"\x1b[?1000l";
 /// Phase barrier. An OSC 9 notification is ignored by terminals, and nothing else writes it.
 const PHASE_MARK: &[u8] = b"\x1b]9;ody-phase\x07";
 
@@ -553,4 +555,41 @@ async fn owned_frame_bytes_do_not_scale_with_loaded_history() {
              the same frame over 20 ({small} bytes): the cost is the viewport, not the history"
         );
     }
+}
+
+/// Process exit must return the terminal to the primary screen and release pointer capture,
+/// even though `restore_after_exit` runs after the `Tui` that tracked those modes is gone.
+///
+/// Regression test for the multi-emulator matrix finding: quitting an owned session emitted
+/// no `LeaveAlternateScreen` and no `DisableMouseCapture`, so the parent shell came back on
+/// the alternate screen (hiding its scrollback) with mouse reporting still armed.
+#[test]
+#[ignore = "real-PTY smoke test; mutates process stdout"]
+fn exit_restore_leaves_the_alternate_screen_and_releases_the_pointer() {
+    let mut capture = Capture::start(/*columns*/ 80, /*rows*/ 24);
+    capture.attach();
+
+    // The modes an owned session sets while it owns the screen.
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+    )
+    .expect("enter owned modes");
+    let _ = capture.phase("owned-modes");
+
+    // `disable_raw_mode` may fail when the test harness owns no tty on stdin; the byte
+    // contract below does not depend on the returned `Result`.
+    let _ = crate::tui::restore_after_exit();
+    let bytes = capture.phase("exit-restore");
+
+    assert!(
+        contains(&bytes, LEAVE_ALT_SCREEN),
+        "exit restore must leave the alternate screen: {bytes:?}"
+    );
+    assert!(
+        contains(&bytes, DISABLE_MOUSE_CAPTURE),
+        "exit restore must release pointer capture: {bytes:?}"
+    );
+    capture.finish();
 }

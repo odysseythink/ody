@@ -359,7 +359,24 @@ fn restore_common(
 /// Restore the terminal to its original state.
 /// Inverse of `set_modes`.
 pub fn restore() -> Result<()> {
+    release_screen_modes_after_exit()?;
     restore_common(RawModeRestore::Disable, KeyboardRestore::PopStack)
+}
+
+/// Release the alternate screen and pointer capture on the way out.
+///
+/// By the time the exit/panic restore runs, the `Tui` that tracked those modes may already
+/// be gone, so they cannot be gated on live state: both sequences are no-ops when the modes
+/// were never entered. Mid-session restores (`restore_keep_raw`, editor handoff) manage the
+/// screen themselves and must not take this path.
+fn release_screen_modes_after_exit() -> Result<()> {
+    execute!(
+        stdout(),
+        DisableMouseCapture,
+        DisableAlternateScroll,
+        LeaveAlternateScreen
+    )
+    .map_err(Into::into)
 }
 
 /// Force crossterm's cached raw-mode state back in sync with the terminal after `fg`.
@@ -379,8 +396,9 @@ pub(super) fn reapply_raw_mode_after_resume() -> Result<()> {
 /// Uses a stronger keyboard reset than [`restore`] so the parent shell recovers even if a
 /// terminal missed the stack pop that normally pairs with [`set_modes`].
 pub fn restore_after_exit() -> Result<()> {
-    let mut first_error =
-        restore_common(RawModeRestore::Disable, KeyboardRestore::ResetAfterExit).err();
+    let mut first_error = release_screen_modes_after_exit()
+        .and_then(|()| restore_common(RawModeRestore::Disable, KeyboardRestore::ResetAfterExit))
+        .err();
     if let Err(err) = terminal_stderr::finish() {
         first_error.get_or_insert(err);
     }
