@@ -276,7 +276,7 @@ async fn owned_page_for_another_thread_is_ignored() -> Result<()> {
 async fn owned_resume_ignores_a_disabled_terminal_cap() -> Result<()> {
     use crate::legacy_core::config::TerminalResizeReflowMaxRows;
 
-    let mut app = make_test_app().await;
+    let app = make_test_app().await;
     let mut config = app.chat_widget.config_ref().clone();
     // Terminal mode treats this as "replay everything"; Owned must not.
     config.tui_fullscreen_transcript = true;

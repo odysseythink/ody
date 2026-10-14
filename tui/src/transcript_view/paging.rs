@@ -60,11 +60,16 @@ impl TranscriptView {
     /// until it is reached even though the window is far from the top of what is loaded. Find
     /// counts while parked, because a query that has scanned every loaded entry has nothing left to
     /// do until an older page arrives.
+    ///
+    /// The state gate lives in `wants_older_history`, and that is what excludes `Failed`: a failed
+    /// page keeps `has_unloaded_history()` true, so without the guard every frame would re-request
+    /// it and a persistent failure would become a request storm. The reader retries explicitly —
+    /// `Home` and find's `^P` both clear the state before asking again.
     pub(crate) fn needs_history(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
-        if !self.history.has_unloaded_history() {
+        if !self.wants_older_history() {
             return false;
         }
-        if self.history == TranscriptHistoryState::LoadingBeginning {
+        if self.beginning_needs_more() {
             return true;
         }
         if self.search_awaiting_history() {
@@ -164,7 +169,9 @@ impl TranscriptView {
     /// Whether a page is worth requesting for this thread right now.
     ///
     /// Trivial predicate kept here so the app can express "should I ask?" without duplicating the
-    /// state rules.
+    /// state rules. `Failed` is excluded for the same reason `needs_history` short-circuits on it:
+    /// a failed page keeps `has_unloaded_history()` true, so answering `true` here would invite a
+    /// request on every frame.
     pub(crate) fn wants_older_history(&self) -> bool {
         self.history.has_unloaded_history() && self.history != TranscriptHistoryState::Failed
     }

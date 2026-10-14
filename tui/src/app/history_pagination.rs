@@ -13,7 +13,6 @@
 
 use super::*;
 use crate::app_server_session::INITIAL_HISTORY_TURN_LIMIT;
-use crate::transcript_history::TranscriptHistoryState;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::SortDirection;
 use ody_app_server_protocol::ThreadTurnsListParams;
@@ -219,10 +218,5 @@ impl App {
             self.transcript_view.mark_history_loading();
         }
         tui.frame_requester().schedule_frame();
-    }
-
-    /// Reset owned paging state, e.g. on thread switch or `/clear`.
-    pub(super) fn reset_owned_history_state(&mut self) {
-        self.transcript_view.history = TranscriptHistoryState::Idle;
     }
 }

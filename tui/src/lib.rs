@@ -1997,7 +1997,7 @@ mod tests {
             )
         };
 
-        // Default (false): always Terminal regardless of alt-screen policy.
+        // Explicit opt-out (false): always Terminal regardless of alt-screen policy.
         assert_eq!(
             resolve(false, false, AltScreenMode::Auto),
             TranscriptMode::Terminal

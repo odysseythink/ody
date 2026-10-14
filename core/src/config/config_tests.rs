@@ -897,7 +897,7 @@ fn config_toml_deserializes_model_availability_nux() {
             raw_output_mode: false,
             mouse_scroll_speed: None,
             alternate_screen: AltScreenMode::default(),
-            fullscreen_transcript: false,
+            fullscreen_transcript: true,
             status_line: None,
             status_line_use_colors: true,
             terminal_title: None,
@@ -1058,13 +1058,13 @@ async fn runtime_config_uses_tui_raw_output_mode() {
 }
 
 #[test]
-fn test_tui_fullscreen_transcript_defaults_to_false() {
+fn test_tui_fullscreen_transcript_defaults_to_true() {
     let toml = r#"
         [tui]
     "#;
     let parsed: ConfigToml = toml::from_str(toml).expect("deserialize empty [tui] table");
     assert!(
-        !parsed
+        parsed
             .tui
             .expect("config should include tui section")
             .fullscreen_transcript
@@ -3805,7 +3805,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
             raw_output_mode: false,
             mouse_scroll_speed: None,
             alternate_screen: AltScreenMode::Auto,
-            fullscreen_transcript: false,
+            fullscreen_transcript: true,
             status_line: None,
             status_line_use_colors: true,
             terminal_title: None,

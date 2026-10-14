@@ -163,6 +163,11 @@ impl App {
         self.backtrack = BacktrackState::default();
         self.backtrack_render_pending = false;
         self.skill_load_warnings.clear();
+        // The paging gate describes the *previous* transcript. `/clear` and thread switches both
+        // come through here; leaving it set would let the owned view ask the newly selected thread
+        // for pages it is not missing. Whichever replay follows re-seeds it from the new thread
+        // when that thread has unloaded history.
+        self.scrollback_has_older_history = false;
     }
 }
 

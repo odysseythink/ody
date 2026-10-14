@@ -3,7 +3,9 @@
 mod buffered_replay;
 mod drain_deadline;
 mod model_catalog;
+mod owned_lifecycle;
 mod owned_paging;
+mod owned_pty;
 mod owned_transcript;
 mod paginated_resume;
 mod plugin_catalog;

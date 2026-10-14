@@ -148,9 +148,12 @@ pub(super) fn turn_user_texts(turns: &[Turn]) -> Vec<String> {
 
 #[tokio::test]
 async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
-    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
+    // This suite pins the Terminal transcript: the Owned budget is `terminal_height * 3`, which
+    // would relax the row cap this test relies on.
+    config.tui_fullscreen_transcript = false;
     // 小 cap 让 hydration 在初始页即停：每 turn 渲染数行，5 turn 远超 10 行预算。
     config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Limit(10);
     let thread_id = ThreadId::new();
@@ -187,6 +190,8 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
+    // Terminal-mode budget on purpose; see `resume_returns_bounded_initial_turns_page`.
+    config.tui_fullscreen_transcript = false;
     // 预算：每 turn 数行，Limit(60) 强制 hydration 翻数页后停，不拉完全部 30 turn。
     config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Limit(60);
     let thread_id = ThreadId::new();
@@ -256,9 +261,11 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
 
 #[tokio::test]
 async fn resume_without_cap_degrades_to_full_history() -> Result<()> {
-    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
+    // Terminal-mode fallback on purpose; see `resume_returns_bounded_initial_turns_page`.
+    config.tui_fullscreen_transcript = false;
     config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Disabled;
     let thread_id = ThreadId::new();
     write_multi_turn_rollout(config.ody_home.as_path(), thread_id, /*turn_count*/ 12).await;
@@ -290,9 +297,12 @@ async fn resume_without_cap_degrades_to_full_history() -> Result<()> {
 async fn resume_baseline_1000_turns_terminal_mode() -> Result<()> {
     use std::time::Instant;
 
-    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
+    // The Terminal path is the P0 baseline; the Owned counterpart is
+    // `resume_baseline_1000_turns_owned_mode`.
+    config.tui_fullscreen_transcript = false;
     config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Disabled;
     let thread_id = ThreadId::new();
 
@@ -344,6 +354,83 @@ async fn resume_baseline_1000_turns_terminal_mode() -> Result<()> {
         line_count,
         terminal.backend().write_count(),
         terminal.backend().byte_count(),
+    );
+    Ok(())
+}
+
+/// P6 performance gate for the fullscreen-transcript roadmap
+/// (`.ody-code/roadmaps/2026-10-13-tui-fullscreen-transcript-port.md`), Owned counterpart of
+/// `resume_baseline_1000_turns_terminal_mode`.
+///
+/// The gate is "the first frame is bounded by the viewport, not by the thread". The run reports:
+/// how many turns Owned hydration actually loaded out of 1000, the resume RPC cost, and the cost of
+/// one full-screen owned frame (wall time, backend write calls, bytes written). Compare the byte
+/// count with the Terminal baseline, which writes every loaded row.
+///
+/// Run manually with:
+/// `cargo test -p ody-tui --lib resume_baseline_1000_turns -- --ignored --nocapture`
+#[tokio::test]
+#[ignore = "manual performance baseline; not part of CI"]
+async fn resume_baseline_1000_turns_owned_mode() -> Result<()> {
+    use std::time::Instant;
+
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut config = app.chat_widget.config_ref().clone();
+    config.tui_fullscreen_transcript = true;
+    // Owned must ignore the terminal row cap: `Disabled` means "replay everything" in Terminal mode.
+    config.terminal_resize_reflow.max_rows = TerminalResizeReflowMaxRows::Disabled;
+    let thread_id = ThreadId::new();
+
+    let fixture_start = Instant::now();
+    write_multi_turn_rollout(config.ody_home.as_path(), thread_id, /*turn_count*/ 1000).await;
+    let fixture_elapsed = fixture_start.elapsed();
+
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(&config)).await?;
+
+    let resume_start = Instant::now();
+    let started = Box::pin(app_server.resume_thread(config, thread_id))
+        .await
+        .expect("resume synthetic rollout");
+    let resume_elapsed = resume_start.elapsed();
+
+    let hydrated = started.turns.len();
+    let cells_start = Instant::now();
+    app.transcript_cells = crate::thread_transcript::turns_to_transcript_cells(
+        started.session.cwd.as_path(),
+        &started.turns,
+        crate::thread_transcript::RawReasoningVisibility::Hidden,
+    );
+    let cells_elapsed = cells_start.elapsed();
+
+    let width = 80;
+    let height = 24;
+    let mut terminal = crate::custom_terminal::Terminal::with_options(
+        crate::test_backend::VT100Backend::new(width, height),
+    )
+    .expect("terminal");
+    terminal.set_viewport_area(ratatui::layout::Rect::new(0, 0, width, height));
+    terminal.backend_mut().clear_output();
+    let frame_start = Instant::now();
+    terminal
+        .draw(|frame| {
+            let area = frame.area();
+            app.render_owned_transcript_frame(area, frame);
+        })
+        .expect("draw owned frame");
+    let frame_elapsed = frame_start.elapsed();
+
+    eprintln!(
+        "OWNED_BASELINE turns=1000 hydrated={hydrated} fixture={fixture_elapsed:?} \
+         resume={resume_elapsed:?} cells={} format={cells_elapsed:?} frame={frame_elapsed:?} \
+         writes={} bytes={}",
+        app.transcript_cells.len(),
+        terminal.backend().write_count(),
+        terminal.backend().byte_count(),
+    );
+    assert!(
+        hydrated < 1000,
+        "the owned first page must stay bounded: hydrated {hydrated} of 1000 turns"
     );
     Ok(())
 }

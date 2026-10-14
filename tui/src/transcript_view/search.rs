@@ -13,7 +13,6 @@
 //! scrolling and survives prepends and resizes.
 
 use super::*;
-use crate::transcript_history::TranscriptHistoryState;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 
@@ -26,15 +25,6 @@ const CELLS_PER_STEP: usize = 24;
 /// The counter bounds only the entries scanned within one continuous run, which is what keeps a
 /// pathological query from wrapping an unbounded history in a single gesture.
 const MAX_SCANNED_CELLS: usize = 400;
-
-/// Which way the scan is walking.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ScanDirection {
-    /// Toward older entries, prepending as pages arrive.
-    Older,
-    /// Toward newer entries; never crosses a page boundary because the tail is always loaded.
-    Newer,
-}
 
 /// Where the incremental scan stands.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -72,7 +62,6 @@ pub(super) struct SearchState {
     /// over a freshly prepended page: everything from this entry onward was covered before the
     /// page arrived, so the leg stops here instead of re-scanning it and duplicating its matches.
     scan_stop: Option<SearchMatch>,
-    direction: Option<ScanDirection>,
     /// Set by `Enter`: the query stays highlighted but stops accepting characters.
     accepted: bool,
 }
@@ -85,11 +74,6 @@ impl SearchState {
         self.progress = SearchProgress::Idle;
         self.resume = None;
         self.scan_stop = None;
-        self.direction = None;
-    }
-
-    fn query_is_set(&self) -> bool {
-        !self.query.is_empty()
     }
 }
 
@@ -214,7 +198,6 @@ impl TranscriptView {
         }
         .min(stop);
         self.search.progress = SearchProgress::Scanning;
-        self.search.direction = Some(ScanDirection::Older);
         let end = start.saturating_add(CELLS_PER_STEP).min(stop);
         for index in start..end {
             let Some(layout) = self.layout(cells, index) else {
@@ -312,14 +295,6 @@ impl TranscriptView {
     /// Force a fresh scan of the whole loaded window, e.g. after cells were removed.
     pub(crate) fn restart_search(&mut self) {
         self.search.reset_scan();
-    }
-
-    /// Whether find should keep scanning with no further page available.
-    pub(super) fn search_found_nothing(&self) -> bool {
-        self.search.active
-            && self.search.query_is_set()
-            && self.search.progress == SearchProgress::Exhausted
-            && self.search.matches.is_empty()
     }
 
     /// Move to the next (newer) or previous (older) match.

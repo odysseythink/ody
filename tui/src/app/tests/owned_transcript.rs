@@ -22,13 +22,13 @@ use pretty_assertions::assert_eq;
 use ratatui::text::Line;
 
 /// Byte sequence that purges the terminal's scrollback. Owned mode must never emit it.
-const SCROLLBACK_PURGE: &[u8] = b"\x1b[3J";
+pub(super) const SCROLLBACK_PURGE: &[u8] = b"\x1b[3J";
 
-fn history_cell(text: &str) -> Arc<dyn HistoryCell> {
+pub(super) fn history_cell(text: &str) -> Arc<dyn HistoryCell> {
     Arc::new(PlainHistoryCell::new(vec![Line::from(text.to_string())]))
 }
 
-fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+pub(super) fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
     MouseEvent {
         kind,
         column,
@@ -37,11 +37,11 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
     }
 }
 
-fn key(code: KeyCode) -> KeyEvent {
+pub(super) fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
-fn screen_contents(terminal: &Terminal<VT100Backend>) -> String {
+pub(super) fn screen_contents(terminal: &Terminal<VT100Backend>) -> String {
     terminal.backend().vt100().screen().contents()
 }
 
@@ -49,7 +49,7 @@ fn screen_contents(terminal: &Terminal<VT100Backend>) -> String {
 ///
 /// Recorded output is scoped to the frame itself, so the no-purge assertion cannot be satisfied
 /// by bytes written before the draw.
-fn draw_owned_frame(app: &mut App, width: u16, height: u16) -> Terminal<VT100Backend> {
+pub(super) fn draw_owned_frame(app: &mut App, width: u16, height: u16) -> Terminal<VT100Backend> {
     let mut terminal =
         Terminal::with_options(VT100Backend::new(width, height)).expect("test terminal");
     terminal.set_viewport_area(Rect::new(0, 0, width, height));
@@ -230,7 +230,7 @@ fn owned_terminal(app: &mut App) -> (crate::tui::Tui, Terminal<VT100Backend>) {
 /// Mouse routing is passed through `App::handle_mouse_event`, which also asks the view whether it
 /// wants older history; the server is only ever touched on that path, so these tests use a real
 /// embedded one rather than a stub.
-async fn owned_terminal_with_server(
+pub(super) async fn owned_terminal_with_server(
     app: &mut App,
 ) -> Result<(crate::tui::Tui, Terminal<VT100Backend>, AppServerSession)> {
     let app_server =
