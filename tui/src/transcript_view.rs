@@ -354,7 +354,7 @@ impl TranscriptView {
             return Some(format!(" {notice}"));
         }
         if self.has_selection() {
-            return Some(" selection · enter copies · esc clears".to_string());
+            return Some(" selection · enter/right-click copies · esc clears".to_string());
         }
         None
     }

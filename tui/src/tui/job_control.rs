@@ -10,6 +10,7 @@ use std::sync::atomic::Ordering;
 use crossterm::cursor::MoveTo;
 use crossterm::cursor::Show;
 use crossterm::event::KeyCode;
+use crossterm::style::Print;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use ratatui::crossterm::execute;
@@ -217,8 +218,14 @@ impl PreparedResumeAction {
 
 /// Deliver SIGTSTP after restoring terminal state, then re-applies terminal modes once resumed.
 fn suspend_process() -> Result<()> {
-    super::restore()?;
+    // `suspend` already released the screen and pointer capture, so restore everything else
+    // directly: the exit-time screen reset in `restore`/`restore_after_exit` would only emit a
+    // redundant LeaveAlternateScreen here.
+    super::restore_common(super::RawModeRestore::Disable, super::KeyboardRestore::PopStack)?;
     super::terminal_stderr::pause()?;
+    // The shell only prints "suspended", which reads like "exited" when the full-screen UI
+    // disappears; tell the reader how to come back (P6 acceptance feedback).
+    let _ = execute!(stdout(), Print("Suspended — run `fg` to return to ody.\n"));
     unsafe {
         libc::kill(/*pid*/ 0, libc::SIGTSTP)
     };

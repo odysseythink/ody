@@ -876,3 +876,23 @@ fn cross_page_resume_does_not_rescan_or_duplicate_matches() {
         "the already-scanned window must not be scanned again"
     );
 }
+
+/// The selection hint names every copy affordance, not just Enter: a reader who never
+/// discovered right-click could not copy at all in VS Code's terminal (P6 acceptance).
+#[test]
+fn selection_hint_lists_every_copy_affordance() {
+    let cells = vec![cell("alpha beta")];
+    let mut view = TranscriptView::default();
+    let area = Rect::new(0, 0, 60, 4);
+    render(&mut view, &cells, area);
+
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 5, 0), &cells);
+    assert!(view.has_selection());
+
+    let status = view.status_row(area.width).expect("selection hint");
+    assert!(status.contains("enter"), "{status}");
+    assert!(status.contains("right-click"), "{status}");
+    assert!(status.contains("esc"), "{status}");
+}
