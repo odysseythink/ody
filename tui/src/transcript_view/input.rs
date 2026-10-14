@@ -154,7 +154,13 @@ impl TranscriptView {
     ) -> Option<ViewAction> {
         let inside = self.contains(event.column, event.row);
         let dragging = self.is_selecting();
-        if !inside && !dragging {
+        // A wheel notch on the reserved gap/status row still scrolls: that row is visually
+        // part of the transcript even though the painted body excludes it.
+        let wheel_on_frame = matches!(
+            event.kind,
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+        ) && self.frame_contains(event.column, event.row);
+        if !inside && !dragging && !wheel_on_frame {
             return None;
         }
         self.notice = None;

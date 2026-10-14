@@ -246,6 +246,13 @@ impl TranscriptView {
         self.area.contains(ScreenPosition::new(column, row))
     }
 
+    /// Whether a screen position is inside the whole transcript frame, including the reserved
+    /// gap/status row. Wheel input is routed by this: the gap row is visually part of the
+    /// transcript even though no content paints there.
+    pub(super) fn frame_contains(&self, column: u16, row: u16) -> bool {
+        self.frame_area.contains(ScreenPosition::new(column, row))
+    }
+
     /// Destination of the link under a screen position.
     pub(super) fn link_at(
         &mut self,

@@ -896,3 +896,51 @@ fn selection_hint_lists_every_copy_affordance() {
     assert!(status.contains("right-click"), "{status}");
     assert!(status.contains("esc"), "{status}");
 }
+
+/// Following the live tail must leave one blank row between the last transcript row and the
+/// composer (upstream's ComposerGap); otherwise the final message visually touches the input
+/// box. The reserved row is also the one hints borrow, so this costs nothing when reading back.
+#[test]
+fn tail_follow_reserves_a_gap_row_above_the_composer() {
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..10)
+        .map(|index| cell(&format!("turn {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    let area = Rect::new(0, 0, 20, 5);
+    let buf = render(&mut view, &cells, area);
+
+    assert!(
+        row_text(&buf, area.height - 1).is_empty(),
+        "the row above the composer stays blank while following the tail: {}",
+        screen_text(&buf)
+    );
+    assert!(
+        !row_text(&buf, area.height - 2).is_empty(),
+        "content still fills up to the gap row: {}",
+        screen_text(&buf)
+    );
+}
+
+/// The reserved gap row is visually part of the transcript: a wheel notch landing on it must
+/// still scroll, even though no content paints there.
+#[test]
+fn wheel_over_the_gap_row_still_scrolls() {
+    let cells: Vec<Arc<dyn HistoryCell>> = (0..10)
+        .map(|index| cell(&format!("turn {index}")))
+        .collect();
+    let mut view = TranscriptView::default();
+    let area = Rect::new(0, 0, 20, 5);
+    render(&mut view, &cells, area);
+    assert!(view.is_following());
+
+    let action = view.handle_mouse(
+        mouse(MouseEventKind::ScrollUp, 0, area.height - 1),
+        &cells,
+    );
+    assert_eq!(action, Some(ViewAction::Changed));
+    assert!(
+        !view.is_following(),
+        "a wheel notch on the gap row leaves the live tail"
+    );
+}
+

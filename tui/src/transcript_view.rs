@@ -94,6 +94,10 @@ pub(crate) struct TranscriptView {
     live_key: Option<(u16, ActiveCellTranscriptKey)>,
     live_continuation: bool,
     area: Rect,
+    /// The full rect handed to `render`, including the reserved gap/status row that the
+    /// painted body borrows. Wheel events are routed by this frame so a notch landing on the
+    /// gap row still scrolls.
+    frame_area: Rect,
     /// `(entry index, row inside the entry)` for each screen row of the last frame.
     ///
     /// Recorded rather than recomputed so pointer hit tests and highlights agree with exactly what
@@ -128,6 +132,7 @@ impl Default for TranscriptView {
             live_key: None,
             live_continuation: false,
             area: Rect::default(),
+            frame_area: Rect::default(),
             visible: Vec::new(),
             mode: HistoryRenderMode::Rich,
             tail_visible: true,
@@ -201,6 +206,7 @@ impl TranscriptView {
         self.live_key = None;
         self.live_continuation = false;
         self.area = Rect::default();
+        self.frame_area = Rect::default();
         self.visible.clear();
         self.tail_visible = true;
         self.unseen_activity = false;
@@ -262,6 +268,7 @@ impl TranscriptView {
 
     /// Paint the visible window of the transcript, plus a return-to-bottom hint when reading back.
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer, cells: &[Arc<dyn HistoryCell>]) {
+        self.frame_area = area;
         self.cache.begin_frame();
         self.cache.retain_live_sources();
         self.sync_history_tail(cells);
@@ -270,13 +277,11 @@ impl TranscriptView {
         // written even when it is unchanged. Clearing first also erases rows that scrolled away.
         Clear.render(area, buf);
 
-        // The hint borrows the last row instead of overwriting transcript content, so the history
-        // window shrinks by one row while the reader is away from the bottom or a status is shown.
+        // The bottom row is always reserved: hints and status paint into it when needed, and
+        // otherwise it stays blank as the visual gap between the transcript tail and the
+        // composer (upstream's ComposerGap), so the final message never touches the input box.
         let status = self.status_row(area.width);
-        let reserved = u16::from(
-            area.height > 1
-                && (status.is_some() || self.needs_return_to_bottom()),
-        );
+        let reserved = u16::from(area.height > 1);
         let body = Rect {
             height: area.height.saturating_sub(reserved),
             ..area
