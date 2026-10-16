@@ -264,6 +264,58 @@ async fn releasing_ownership_leaves_no_owned_residue() -> Result<()> {
     Ok(())
 }
 
+/// Plain Up/Down stay with the composer's prompt history; the embedded view scrolls by page.
+///
+/// This mirrors upstream's split: the pager's `scroll_up`/`scroll_down` bindings (Up/Down, `k`/`j`)
+/// drive the transcript *overlay*, while the embedded view claims only page and jump keys. The
+/// composer's shell-style recall fires on an empty draft or at a line boundary — exactly the state
+/// where the view's navigation gate opens — so claiming Up/Down there silently disables recall for
+/// every reader who has not started typing yet.
+#[tokio::test]
+async fn arrow_keys_belong_to_the_composer_not_the_transcript() -> Result<()> {
+    let mut app = make_test_app().await;
+    for index in 0..40 {
+        app.transcript_cells
+            .push(history_cell(&format!("turn {index}")));
+    }
+
+    let mut tui = make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    draw_owned_frame(&mut app, /*width*/ 40, /*height*/ 10);
+
+    // The draft is empty, which is where recall lives and where the old gate handed the key over.
+    assert!(app.chat_widget.composer_is_empty());
+    for code in [KeyCode::Up, KeyCode::Down] {
+        assert!(
+            !app.route_owned_transcript_key(&mut tui, key(code)),
+            "{code:?} must reach the composer for prompt recall"
+        );
+        assert!(
+            app.transcript_view.is_following(),
+            "{code:?} must not move the reading window"
+        );
+    }
+
+    // Page keys are still the embedded view's own gesture, and are consumed rather than leaked.
+    assert!(app.route_owned_transcript_key(&mut tui, key(KeyCode::PageUp)));
+    assert!(
+        !app.transcript_view.is_following(),
+        "PageUp scrolls the owned window"
+    );
+    // Reading back does not change the owner: Up keeps recalling instead of stepping one row.
+    assert!(
+        !app.route_owned_transcript_key(&mut tui, key(KeyCode::Up)),
+        "Up belongs to the composer while reading back, too"
+    );
+    assert!(!app.transcript_view.is_following());
+
+    // Terminal mode keeps the terminal's own scrollback: the view claims nothing at all.
+    tui.set_owned_screen(/*owned*/ false)?;
+    assert!(!app.route_owned_transcript_key(&mut tui, key(KeyCode::PageUp)));
+    assert!(!app.route_owned_transcript_key(&mut tui, key(KeyCode::Up)));
+    Ok(())
+}
+
 /// The wheel scrolls the owned window and never edits the draft; in Terminal mode it is inert.
 #[tokio::test]
 async fn pointer_input_does_not_cross_the_mode_boundary() -> Result<()> {

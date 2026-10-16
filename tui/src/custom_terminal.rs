@@ -165,6 +165,9 @@ where
     pub last_known_cursor_pos: Position,
     /// Count of visible history rows rendered above the viewport in inline mode.
     visible_history_rows: u16,
+    /// Test-only pinned screen size. See `with_screen_size_and_cursor_position_for_test`.
+    #[cfg(test)]
+    screen_size_override: Option<Size>,
 }
 
 impl<B> Drop for Terminal<B>
@@ -242,7 +245,31 @@ where
             last_known_screen_size: screen_size,
             last_known_cursor_pos: cursor_pos,
             visible_history_rows: 0,
+            #[cfg(test)]
+            screen_size_override: None,
         }
+    }
+
+    /// Creates a [`Terminal`] whose reported size is pinned to `screen_size` for the whole test.
+    ///
+    /// A synthetic terminal is given a size that has nothing to do with the window this test
+    /// process happens to run in. Without the pin, the first `size()` that disagreed with
+    /// `last_known_screen_size` would look like a resize and make the draw path send a cursor
+    /// position report request (`ESC[6n`) to a stream no terminal is answering, which blocks the
+    /// frame until the request times out — or forever, as it did for the two owned-screen draw
+    /// tests. Pinning the size keeps the resize heuristic out of tests that never resized
+    /// anything, and makes the viewport geometry they assert on independent of the developer's
+    /// window.
+    #[cfg(test)]
+    pub(crate) fn with_screen_size_and_cursor_position_for_test(
+        backend: B,
+        screen_size: Size,
+        cursor_pos: Position,
+    ) -> Self {
+        let mut terminal =
+            Self::with_screen_size_and_cursor_position(backend, screen_size, cursor_pos);
+        terminal.screen_size_override = Some(screen_size);
+        terminal
     }
 
     /// Get a Frame object which provides a consistent view into the terminal state for rendering.
@@ -560,7 +587,15 @@ where
     }
 
     /// Queries the real size of the backend.
+    ///
+    /// A test terminal built through
+    /// `Terminal::with_screen_size_and_cursor_position_for_test` instead reports the size it was
+    /// pinned to, so tests never depend on the window they run in.
     pub fn size(&self) -> io::Result<Size> {
+        #[cfg(test)]
+        if let Some(size) = self.screen_size_override {
+            return Ok(size);
+        }
         self.backend.size()
     }
 }

@@ -496,13 +496,14 @@ fn click_on_the_collapse_hint_toggles_that_cell() {
 }
 
 /// Navigation only claims keys that cannot be draft text.
+///
+/// Plain Up/Down are excluded on purpose: the composer uses them for prompt recall on an empty
+/// draft, which is exactly when this gate opens.
 #[test]
 fn navigation_keys_leave_draft_text_alone() {
     let view = TranscriptView::default();
     let pager = pager();
     for code in [
-        KeyCode::Up,
-        KeyCode::Down,
         KeyCode::PageUp,
         KeyCode::PageDown,
         KeyCode::Home,
@@ -513,6 +514,10 @@ fn navigation_keys_leave_draft_text_alone() {
     }
     assert!(view.owns_navigation_key(key_with(KeyCode::Char('u'), KeyModifiers::CONTROL), &pager));
     assert!(view.owns_navigation_key(key_with(KeyCode::Char('f'), KeyModifiers::CONTROL), &pager));
+    // Up/Down carry the composer's prompt history, even though the pager binds them.
+    for code in [KeyCode::Up, KeyCode::Down] {
+        assert!(!view.owns_navigation_key(key(code), &pager), "{code:?}");
+    }
     // Typing keys are never claimed, even though the pager binds them.
     for code in [KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Char(' ')] {
         assert!(!view.owns_navigation_key(key(code), &pager), "{code:?}");

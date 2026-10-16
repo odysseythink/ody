@@ -209,6 +209,35 @@ mod tests {
         );
     }
 
+    /// The test terminal must report the size it was pinned to, not the process's real window.
+    ///
+    /// `pending_viewport_area` only queries the cursor when the backend disagrees with
+    /// `last_known_screen_size`. If the fixture let those diverge, the first draw would read
+    /// `ESC[6n` from a stream nothing answers and block the frame forever. The equality check comes
+    /// first so a pin regression fails here on any window that is not 80x24, instead of hanging.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_terminal_reports_a_pinned_screen_size_and_never_probes_for_resize() {
+        let mut tui = crate::tui::test_support::make_test_tui().expect("test tui");
+        assert_eq!(
+            tui.terminal.last_known_screen_size,
+            tui.terminal.size().expect("pinned size"),
+            "a synthetic terminal must not look resized against its own seed size"
+        );
+        assert_eq!(
+            tui.terminal.size().expect("pinned size"),
+            ratatui::layout::Size {
+                width: 80,
+                height: 24
+            }
+        );
+        assert!(
+            tui.pending_viewport_area()
+                .expect("viewport probe")
+                .is_none(),
+            "a pinned terminal never needs the cursor-position resize heuristic"
+        );
+    }
+
     #[test]
     fn first_viewport_change_clears_from_new_viewport_when_old_viewport_is_empty() {
         let width = 12;

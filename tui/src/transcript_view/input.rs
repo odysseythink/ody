@@ -87,6 +87,13 @@ impl TranscriptView {
     ///
     /// Only keys that cannot be draft text are claimed here, so a configured `j`/`k` binding and
     /// plain space keep typing a space instead of paging.
+    ///
+    /// Plain Up/Down are deliberately *not* claimed. The composer owns them for shell-style prompt
+    /// recall, which only fires on an empty draft or at a line boundary — exactly the state where
+    /// this gate would otherwise steal them. Losing that recall to a one-row scroll is a bad trade,
+    /// and upstream keeps the same split: the pager's `scroll_up`/`scroll_down` bindings apply to
+    /// the transcript overlay, while the embedded view scrolls by page. PageUp/PageDown, Home/End
+    /// and the wheel remain the embedded view's own navigation.
     pub(crate) fn owns_navigation_key(&self, key: KeyEvent, _pager: &PagerKeymap) -> bool {
         if key.kind == KeyEventKind::Release {
             return false;
@@ -95,13 +102,7 @@ impl TranscriptView {
         match modifiers {
             KeyModifiers::NONE => matches!(
                 code,
-                KeyCode::Up
-                    | KeyCode::Down
-                    | KeyCode::PageUp
-                    | KeyCode::PageDown
-                    | KeyCode::Home
-                    | KeyCode::End
-                    | KeyCode::Esc
+                KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End | KeyCode::Esc
             ),
             KeyModifiers::CONTROL => matches!(code, KeyCode::Char('b' | 'f' | 'u' | 'd')),
             _ => false,
@@ -359,12 +360,13 @@ impl TranscriptView {
             self.jump_to_latest();
             return Some(ViewAction::Changed);
         }
-        // Full and half pages keep the pager's one-row overlap so a jump is readable.
+        // Full and half pages keep the pager's one-row overlap so a jump is readable. The pager's
+        // single-row `scroll_up`/`scroll_down` bindings are intentionally absent here: their default
+        // keys are Up/Down, which belong to the composer's prompt recall in the embedded view. The
+        // transcript overlay still honors them through its own pager routing.
         let page = self.page_rows();
         let half = (page + 1) / 2;
         let delta = [
-            (&pager.scroll_up, -1),
-            (&pager.scroll_down, 1),
             (&pager.page_up, -page),
             (&pager.page_down, page),
             (&pager.half_page_up, -half),
