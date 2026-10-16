@@ -52,6 +52,19 @@ impl TextRow {
             content_width: 0,
         }
     }
+
+    /// A contentless row anchored at `offset` in the source text.
+    ///
+    /// Blank rows carry no graphemes, but their source range still has to sit at the right
+    /// position: `row_for_offset` binary-searches rows by `source.start`, which only works while
+    /// the ranges stay ordered. A blank row that reports `0..0` mid-entry breaks that ordering
+    /// and resolves the *previous* text row's offsets to the blank row instead.
+    fn empty_at(offset: usize) -> Self {
+        Self {
+            source: offset..offset,
+            ..Self::empty()
+        }
+    }
 }
 
 /// One grapheme of a source line, with the display column it occupied before wrapping.
@@ -78,7 +91,7 @@ impl TextLayout {
                 text.push_str(&span.content);
             }
             let graphemes = line_graphemes(line, base);
-            wrap_source_line(&mut rows, graphemes, width, &line.hyperlinks);
+            wrap_source_line(&mut rows, graphemes, width, &line.hyperlinks, base);
         }
 
         Self {
@@ -235,6 +248,7 @@ fn wrap_source_line(
     graphemes: Vec<Grapheme>,
     width: u16,
     links: &[TerminalHyperlink],
+    line_base: usize,
 ) {
     if width == 0 {
         return;
@@ -315,7 +329,10 @@ fn wrap_source_line(
     }
 
     if pending_line.is_empty() && pending_word.is_empty() && !pending_whitespace.is_empty() {
-        rows.push(TextRow::empty());
+        let offset = pending_whitespace
+            .front()
+            .map_or(line_base, |whitespace| whitespace.start);
+        rows.push(TextRow::empty_at(offset));
     }
     pending_line.extend(pending_whitespace.drain(..));
     pending_line.append(&mut pending_word);
@@ -323,7 +340,7 @@ fn wrap_source_line(
         push_row(rows, pending_line, links);
     }
     if rows.len() == first_row {
-        rows.push(TextRow::empty());
+        rows.push(TextRow::empty_at(line_base));
     }
 }
 

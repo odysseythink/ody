@@ -4,6 +4,7 @@ use std::io;
 use std::sync::atomic::Ordering;
 
 use super::test_support::make_test_tui;
+#[cfg(unix)]
 use crate::tui::job_control::PreparedResumeAction;
 use ratatui::text::Line;
 
@@ -175,6 +176,7 @@ async fn handoff_releases_pointer_capture_without_losing_ownership() -> io::Resu
     Ok(())
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "current_thread")]
 async fn resume_action_restores_alt_screen_with_pointer_capture() -> io::Result<()> {
     let mut tui = make_test_tui()?;
@@ -241,6 +243,7 @@ async fn terminal_mode_editor_handoff_and_reentry() -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "current_thread")]
 async fn resume_realign_viewport_keeps_pointer_capture_off() -> io::Result<()> {
     let mut tui = make_test_tui()?;

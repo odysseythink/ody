@@ -16,7 +16,7 @@ Ody CLI is an open-source, terminal-based coding assistant. It provides an agent
 
 ## Multi-provider support
 
-In addition to the default provider, Ody ships with built-in support for Kimi, DeepSeek, and GLM (all OpenAI-compatible Chat Completions endpoints). See [docs/multi_provider.md](docs/multi_provider.md) for configuration details and provider-specific notes.
+In addition to the default provider, Ody ships with built-in support for Kimi, DeepSeek, and GLM (all OpenAI-compatible Chat Completions endpoints). See [docs/multi\_provider.md](docs/multi_provider.md) for configuration details and provider-specific notes.
 
 ## Web search
 
@@ -45,11 +45,11 @@ cargo build --release -p ody-cli
 
 Flow skills support three carriers; the loader discovers exactly one of `flow.yaml` (declarative), `flow.star` (Starlark script), or `workflow.js` (V8 script) per skill:
 
-| Carrier | Cargo feature | Default |
-|---|---|---|
-| `flow.yaml` | (always available) | on |
-| `flow.star` | `flow-starlark` (pure Rust) | on |
-| `workflow.js` | `flow-v8` (implies `v8`, compiles/links V8) | off |
+| Carrier       | Cargo feature                               | Default |
+| ------------- | ------------------------------------------- | ------- |
+| `flow.yaml`   | (always available)                          | on      |
+| `flow.star`   | `flow-starlark` (pure Rust)                 | on      |
+| `workflow.js` | `flow-v8` (implies `v8`, compiles/links V8) | off     |
 
 Release builds that need `workflow.js` support must enable it explicitly:
 
@@ -195,6 +195,9 @@ auto_redesign_high_risk = false        # Critical/High findings return to redesi
 usability_lens = "off"
 ```
 
+
+````
+
 `usability_lens` adds an optional user-facing Skeptic turn (mode confusion, workflow friction, missing feedback, accessibility). It is most valuable for designs with a direct user-facing surface (TUI commands, interactive flows, on-screen text/layout) and has minimal value for internal refactors, data migrations, or pure API changes, so `"ask"` lets you decide per design.
 
 Example configurations:
@@ -214,6 +217,6 @@ usability_lens = "off"
 [design_review.debate]
 enable = true
 usability_lens = "ask"
-```
+````
 
 Set `auto_redesign_high_risk = true` to enable the full-auto convergence path for debate: confirmed Critical or High findings are automatically marked `Needs redesign` and keep the session in Design mode; the user is not asked to approve them. Medium and Low findings still use the normal audit-level sign-off prompt, so only non-high-risk tradeoffs require confirmation.

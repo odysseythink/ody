@@ -100,3 +100,34 @@ pub(super) fn app_enabled_in_effective_config(config: &Config, app_id: &str) -> 
         .and_then(|app| app.get("enabled"))
         .and_then(TomlValue::as_bool)
 }
+
+/// Run an async test body on a thread with an explicit large stack.
+///
+/// The owned-mode paging acceptance tests (`owned_paging`, `paginated_resume`) drive the real
+/// embedded app server over a 200-turn rollout, so the whole future tree is polled synchronously
+/// on the test thread. That poll chain slightly exceeds the default 8 MiB test-thread stack on
+/// Windows MSVC debug builds (Linux fits in 8 MiB, which is why CI never saw the overflow).
+/// Run these tests on a stack with real headroom instead of weakening the assertions. The future
+/// is created *inside* the spawned thread, so it never has to be `Send`.
+pub(super) fn run_async_test_on_big_stack<F, Fut>(test: F)
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = color_eyre::eyre::Result<()>>,
+{
+    let join = std::thread::Builder::new()
+        .name("big-stack-test".to_string())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("build test runtime")
+                .block_on(test())
+        })
+        .expect("spawn big-stack test thread")
+        .join();
+    match join {
+        Ok(result) => result.expect("async test body failed"),
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}

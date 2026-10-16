@@ -438,6 +438,37 @@ fn right_click_copies_the_selection() {
     assert_eq!(action, Some(ViewAction::Copy("alpha".to_string())));
 }
 
+/// Blank lines inside an entry must not corrupt source-offset bookkeeping: a selection on a
+/// text row that a blank row follows still extracts the selected characters. Blank rows used
+/// to share a `0..0` source range, which broke the `row_for_offset` binary search and made
+/// `selected_text` silently return `None` (Enter/right-click then copied nothing).
+#[test]
+fn selection_on_a_row_before_a_blank_line_extracts_text() {
+    let cells = vec![cell("first line\n\nthird line")];
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 20, 6));
+
+    // Rows: 0 "first line", 1 blank, 2 "third line".
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 5, 0), &cells);
+
+    assert!(view.has_selection());
+    assert_eq!(view.selected_text(&cells).as_deref(), Some("first"));
+
+    // Selecting across the blank row keeps both text rows. A fresh view keeps the second
+    // gesture from looking like a double click at the same position.
+    let mut view = TranscriptView::default();
+    render(&mut view, &cells, Rect::new(0, 0, 20, 6));
+    view.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 0, 0), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 5, 2), &cells);
+    view.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left), 5, 2), &cells);
+    assert_eq!(
+        view.selected_text(&cells).as_deref(),
+        Some("first line\nthird")
+    );
+}
+
 /// Clicking the collapsed-form hint toggles that cell and only that cell.
 #[test]
 fn click_on_the_collapse_hint_toggles_that_cell() {

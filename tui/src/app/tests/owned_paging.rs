@@ -14,6 +14,7 @@ use std::time::Duration;
 use super::paginated_resume::{turn_user_texts, write_multi_turn_rollout};
 use super::*;
 use crate::app::test_support::make_test_app;
+use crate::app::test_support::run_async_test_on_big_stack;
 use crate::custom_terminal::Terminal;
 use crate::test_backend::VT100Backend;
 use crate::transcript_history::TranscriptHistoryState;
@@ -131,8 +132,12 @@ async fn drain_until_exhausted(
 }
 
 /// Reaching the top chains real pages; the loaded window grows in stable order with no repeats.
-#[tokio::test]
-async fn owned_paging_reaches_the_oldest_turn_in_stable_order() -> Result<()> {
+#[test]
+fn owned_paging_reaches_the_oldest_turn_in_stable_order() {
+    run_async_test_on_big_stack(owned_paging_reaches_the_oldest_turn_in_stable_order_async);
+}
+
+async fn owned_paging_reaches_the_oldest_turn_in_stable_order_async() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     let (thread_id, mut app_server) =
         resume_owned_thread(&mut app, &mut app_event_rx, /*turn_count*/ 200).await?;
@@ -179,8 +184,12 @@ async fn owned_paging_reaches_the_oldest_turn_in_stable_order() -> Result<()> {
 }
 
 /// A page that fails surfaces as `Failed`, stops auto-paging, and retries from Home.
-#[tokio::test]
-async fn owned_failed_page_is_retryable_and_unwedges_loading() -> Result<()> {
+#[test]
+fn owned_failed_page_is_retryable_and_unwedges_loading() {
+    run_async_test_on_big_stack(owned_failed_page_is_retryable_and_unwedges_loading_async);
+}
+
+async fn owned_failed_page_is_retryable_and_unwedges_loading_async() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     let (thread_id, mut app_server) =
         resume_owned_thread(&mut app, &mut app_event_rx, /*turn_count*/ 200).await?;
@@ -232,8 +241,12 @@ async fn owned_failed_page_is_retryable_and_unwedges_loading() -> Result<()> {
 }
 
 /// A page for a thread the app is no longer on is dropped and does not disturb the view.
-#[tokio::test]
-async fn owned_page_for_another_thread_is_ignored() -> Result<()> {
+#[test]
+fn owned_page_for_another_thread_is_ignored() {
+    run_async_test_on_big_stack(owned_page_for_another_thread_is_ignored_async);
+}
+
+async fn owned_page_for_another_thread_is_ignored_async() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     let (thread_id, mut app_server) =
         resume_owned_thread(&mut app, &mut app_event_rx, /*turn_count*/ 200).await?;
@@ -272,8 +285,12 @@ async fn owned_page_for_another_thread_is_ignored() -> Result<()> {
 }
 
 /// The Owned budget bounds the first page even when the *terminal* row cap is disabled.
-#[tokio::test]
-async fn owned_resume_ignores_a_disabled_terminal_cap() -> Result<()> {
+#[test]
+fn owned_resume_ignores_a_disabled_terminal_cap() {
+    run_async_test_on_big_stack(owned_resume_ignores_a_disabled_terminal_cap_async);
+}
+
+async fn owned_resume_ignores_a_disabled_terminal_cap_async() -> Result<()> {
     use crate::legacy_core::config::TerminalResizeReflowMaxRows;
 
     let app = make_test_app().await;

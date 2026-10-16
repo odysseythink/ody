@@ -2,6 +2,7 @@
 //! hydration, and scrollback top-up against a real embedded app server.
 
 use super::*;
+use crate::app::test_support::run_async_test_on_big_stack;
 use ody_protocol::ThreadId;
 use pretty_assertions::assert_eq;
 
@@ -146,8 +147,12 @@ pub(super) fn turn_user_texts(turns: &[Turn]) -> Vec<String> {
         .collect()
 }
 
-#[tokio::test]
-async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
+#[test]
+fn resume_returns_bounded_initial_turns_page() {
+    run_async_test_on_big_stack(resume_returns_bounded_initial_turns_page_async);
+}
+
+async fn resume_returns_bounded_initial_turns_page_async() -> Result<()> {
     let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
@@ -185,8 +190,12 @@ async fn resume_returns_bounded_initial_turns_page() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
+#[test]
+fn hydration_respects_budget_and_top_up_reaches_oldest() {
+    run_async_test_on_big_stack(hydration_respects_budget_and_top_up_reaches_oldest_async);
+}
+
+async fn hydration_respects_budget_and_top_up_reaches_oldest_async() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
@@ -259,8 +268,12 @@ async fn hydration_respects_budget_and_top_up_reaches_oldest() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn resume_without_cap_degrades_to_full_history() -> Result<()> {
+#[test]
+fn resume_without_cap_degrades_to_full_history() {
+    run_async_test_on_big_stack(resume_without_cap_degrades_to_full_history_async);
+}
+
+async fn resume_without_cap_degrades_to_full_history_async() -> Result<()> {
     let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     while app_event_rx.try_recv().is_ok() {}
     let mut config = app.chat_widget.config_ref().clone();
@@ -292,9 +305,13 @@ async fn resume_without_cap_degrades_to_full_history() -> Result<()> {
 ///
 /// Run manually with:
 /// `cargo test -p ody-tui --lib resume_baseline_1000_turns -- --ignored --nocapture`
-#[tokio::test]
+#[test]
 #[ignore = "manual performance baseline; not part of CI"]
-async fn resume_baseline_1000_turns_terminal_mode() -> Result<()> {
+fn resume_baseline_1000_turns_terminal_mode() {
+    run_async_test_on_big_stack(resume_baseline_1000_turns_terminal_mode_async);
+}
+
+async fn resume_baseline_1000_turns_terminal_mode_async() -> Result<()> {
     use std::time::Instant;
 
     let (app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
@@ -369,9 +386,13 @@ async fn resume_baseline_1000_turns_terminal_mode() -> Result<()> {
 ///
 /// Run manually with:
 /// `cargo test -p ody-tui --lib resume_baseline_1000_turns -- --ignored --nocapture`
-#[tokio::test]
+#[test]
 #[ignore = "manual performance baseline; not part of CI"]
-async fn resume_baseline_1000_turns_owned_mode() -> Result<()> {
+fn resume_baseline_1000_turns_owned_mode() {
+    run_async_test_on_big_stack(resume_baseline_1000_turns_owned_mode_async);
+}
+
+async fn resume_baseline_1000_turns_owned_mode_async() -> Result<()> {
     use std::time::Instant;
 
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
