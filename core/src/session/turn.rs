@@ -120,6 +120,7 @@ use ody_protocol::protocol::PlanDeltaEvent;
 use ody_protocol::protocol::ReasoningContentDeltaEvent;
 use ody_protocol::protocol::ReasoningRawContentDeltaEvent;
 use ody_protocol::protocol::SafetyBufferingEvent;
+use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TurnDiffEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
@@ -166,12 +167,35 @@ const MAX_TURN_CONTINUATION_RETRIES: u8 = 3;
 /// its artifact or requested user input.
 const MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES: u8 = 3;
 
+/// Maximum number of times a single turn will continue after the provider
+/// reports `finish_reason=length` while leaving most of the requested output
+/// budget unused. That combination is not a real token-limit hit: chat-wire
+/// providers (notably Kimi) occasionally truncate a response mid-sentence,
+/// report `length`, and bill only a few hundred output tokens. Continuing the
+/// response recovers the truncated tail instead of leaving the user with a
+/// half-written answer.
+const MAX_OUTPUT_TRUNCATION_RETRIES: u8 = 2;
+
+/// An output budget at least this large is worth checking against the tokens a
+/// `finish_reason=length` completion actually produced. Smaller budgets (a model
+/// genuinely capped at, say, 4k) make a low output count unremarkable.
+const MIN_REQUESTED_OUTPUT_TOKENS_FOR_TRUNCATION_CHECK: i64 = 4096;
+
+/// No output continuation is attempted unless at least this much context
+/// headroom remains, so we never fight a genuinely full context window.
+const MIN_OUTPUT_TRUNCATION_RETRY_HEADROOM_TOKENS: i64 = 4096;
+
 /// User-visible nudge appended when the model returns an empty completion, to
 /// coax it into either finishing with a message or issuing the tool call it
 /// omitted.
 const EMPTY_COMPLETION_NUDGE: &str = "Your previous response was empty — no message and no tool call. Continue the task: \
 either take the next concrete action (call the appropriate tool) or, if the task is \
 already complete, reply with a short summary of what you did.";
+
+/// User-visible nudge appended when the provider truncated a response without
+/// exhausting the output budget, to coax out the missing remainder.
+const OUTPUT_TRUNCATION_NUDGE: &str = "Your previous response was cut off mid-stream before it was complete. \
+Continue exactly where it stopped; do not repeat what you already wrote and do not start over.";
 
 const PLAN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without completing the required Plan Mode action. \
 Continue the current planning task now. End this turn by calling exactly one of \
@@ -360,6 +384,7 @@ pub(crate) async fn run_turn(
     let mut stop_hook_active = false;
     let mut empty_completion_retries: u8 = 0;
     let mut session_mode_terminal_action_retries: u8 = 0;
+    let mut output_truncation_retries: u8 = 0;
     // Although from the perspective of ody.rs, TurnDiffTracker has the lifecycle of a Task which contains
     // many turns, from the perspective of the user, it is a single turn.
     let display_roots = turn_diff_display_roots(turn_context.as_ref()).await;
@@ -460,6 +485,7 @@ pub(crate) async fn run_turn(
                     has_submit_plan_call,
                     has_submit_design_call,
                     has_request_user_input_call,
+                    output_truncation,
                 } = sampling_request_output;
                 can_drain_pending_input = true;
                 let (has_pending_input, token_status, estimated_token_count) = async {
@@ -558,6 +584,69 @@ pub(crate) async fn run_turn(
                     tokens_until_compaction,
                 )
                 .await;
+
+                // Providers can end a response with `finish_reason=length` after
+                // burning only a fraction of the requested output budget. That is an
+                // upstream truncation rather than a real limit hit, and continuing
+                // the response recovers the truncated tail. When the budget *was*
+                // exhausted (or unknown), report the limit and let the turn end.
+                if let Some(truncation) = output_truncation {
+                    let has_headroom =
+                        full_context_remaining > MIN_OUTPUT_TRUNCATION_RETRY_HEADROOM_TOKENS;
+                    let should_continue = !model_needs_follow_up
+                        && has_headroom
+                        && truncation.is_upstream_truncation()
+                        && output_truncation_retries < MAX_OUTPUT_TRUNCATION_RETRIES;
+                    if should_continue {
+                        output_truncation_retries += 1;
+                        warn!(
+                            turn_id = %turn_context.sub_id,
+                            attempt = output_truncation_retries,
+                            max = MAX_OUTPUT_TRUNCATION_RETRIES,
+                            output_tokens = truncation.output_tokens,
+                            requested_max_output_tokens = ?truncation.requested_max_output_tokens,
+                            finish_reason = %truncation.reason,
+                            "provider truncated the response without exhausting the output budget; continuing with nudge"
+                        );
+                        sess.send_event(
+                            &turn_context,
+                            EventMsg::Warning(WarningEvent {
+                                message: truncation.retry_message(output_truncation_retries),
+                            }),
+                        )
+                        .await;
+                        let nudge = ResponseItem::Message {
+                            id: Some(uuid::Uuid::new_v4().to_string()),
+                            role: "user".to_string(),
+                            content: vec![ContentItem::InputText {
+                                text: OUTPUT_TRUNCATION_NUDGE.to_string(),
+                            }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        };
+                        sess.record_conversation_items(&turn_context, std::slice::from_ref(&nudge))
+                            .await;
+                        can_drain_pending_input = false;
+                        continue;
+                    }
+                    warn!(
+                        turn_id = %turn_context.sub_id,
+                        output_tokens = truncation.output_tokens,
+                        requested_max_output_tokens = ?truncation.requested_max_output_tokens,
+                        finish_reason = %truncation.reason,
+                        remaining_context_tokens = full_context_remaining,
+                        retries = output_truncation_retries,
+                        max_retries = MAX_OUTPUT_TRUNCATION_RETRIES,
+                        "response ended on the provider's output limit"
+                    );
+                    sess.send_event(
+                        &turn_context,
+                        EventMsg::Warning(WarningEvent {
+                            message: truncation.warning_message(),
+                        }),
+                    )
+                    .await;
+                }
 
                 let started_new_context_window = sess
                     .maybe_start_new_context_window(turn_context.as_ref())
@@ -2174,6 +2263,91 @@ struct SamplingRequestResult {
     has_submit_plan_call: bool,
     has_submit_design_call: bool,
     has_request_user_input_call: bool,
+    /// Set when the provider ended the response on its output limit, so the turn
+    /// loop can decide between reporting a real limit hit and continuing a
+    /// response that the upstream truncated early.
+    output_truncation: Option<OutputTruncation>,
+}
+
+/// What a completed response reported about the provider's output limit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OutputTruncation {
+    /// The provider's raw finish reason (`length` or `max_tokens`).
+    reason: String,
+    /// Output tokens the completion actually produced, reasoning included.
+    output_tokens: i64,
+    /// Output budget Ody asked for, when the model catalog declares one.
+    requested_max_output_tokens: Option<i64>,
+}
+
+impl OutputTruncation {
+    /// Builds the truncation record for a completed response.
+    ///
+    /// Returns `None` for every other finish reason, so callers keep the
+    /// pre-existing behavior for responses that ended normally.
+    fn from_completed(
+        finish_reason: Option<&str>,
+        token_usage: Option<&TokenUsage>,
+        requested_max_output_tokens: Option<i64>,
+    ) -> Option<Self> {
+        let reason = match finish_reason? {
+            reason @ ("length" | "max_tokens") => reason,
+            _ => return None,
+        };
+        Some(Self {
+            reason: reason.to_string(),
+            output_tokens: token_usage.map_or(0, |usage| usage.output_tokens),
+            requested_max_output_tokens,
+        })
+    }
+
+    /// True when the response stopped nowhere near the requested output budget.
+    ///
+    /// Chat-wire providers occasionally truncate a stream mid-sentence, report
+    /// `finish_reason=length`, and bill only a few hundred output tokens. A real
+    /// limit hit lands at (or just under) the requested budget, so a completion
+    /// that used less than a quarter of it is an upstream truncation instead.
+    fn is_upstream_truncation(&self) -> bool {
+        let Some(requested) = self.requested_max_output_tokens else {
+            return false;
+        };
+        requested >= MIN_REQUESTED_OUTPUT_TOKENS_FOR_TRUNCATION_CHECK
+            && self.output_tokens.saturating_mul(4) < requested
+    }
+
+    fn budget_summary(&self) -> String {
+        match self.requested_max_output_tokens {
+            Some(requested) => {
+                format!(
+                    "{} of {requested} requested output tokens",
+                    self.output_tokens
+                )
+            }
+            None => format!("{} output tokens", self.output_tokens),
+        }
+    }
+
+    /// Warning shown when the response really did reach the output limit (or the
+    /// budget is unknown), where continuing would only burn another request.
+    fn warning_message(&self) -> String {
+        format!(
+            "Model hit the provider's max output token limit (finish_reason={reason}, {budget}); \
+             the response may be incomplete.",
+            reason = self.reason,
+            budget = self.budget_summary(),
+        )
+    }
+
+    /// Warning shown instead of [`Self::warning_message`] when the provider
+    /// truncated early and the turn loop is about to continue the response.
+    fn retry_message(&self, attempt: u8) -> String {
+        format!(
+            "The provider truncated the response early (finish_reason={reason} after only {budget}), \
+             which is far under the requested output budget; continuing ({attempt}/{MAX_OUTPUT_TRUNCATION_RETRIES})…",
+            reason = self.reason,
+            budget = self.budget_summary(),
+        )
+    }
 }
 
 /// Ephemeral per-response state for streaming a single proposed plan.
@@ -2802,6 +2976,7 @@ async fn try_run_sampling_request(
                         has_submit_plan_call,
                         has_submit_design_call,
                         has_request_user_input_call,
+                        output_truncation: None,
                     });
                 }
             }
@@ -2956,18 +3131,15 @@ async fn try_run_sampling_request(
                 if let Err(err) = budget_result {
                     break Err(err);
                 }
-                if let Some(reason @ ("length" | "max_tokens")) = finish_reason.as_deref() {
-                    sess.send_event(
-                        &turn_context,
-                        EventMsg::Warning(WarningEvent {
-                            message: format!(
-                                "Model hit the provider's max output token limit \
-                                 (finish_reason={reason}); the response may be incomplete."
-                            ),
-                        }),
-                    )
-                    .await;
-                }
+                // Report the output-limit stop to the turn loop rather than here:
+                // the loop knows the retry budget and the remaining context
+                // headroom, which decide whether this was a real limit hit or an
+                // upstream truncation worth continuing.
+                let output_truncation = OutputTruncation::from_completed(
+                    finish_reason.as_deref(),
+                    token_usage.as_ref(),
+                    turn_context.model_info.capabilities.max_output_tokens,
+                );
                 if let Some(false) = end_turn {
                     needs_follow_up = true;
                 }
@@ -2977,6 +3149,7 @@ async fn try_run_sampling_request(
                     has_submit_plan_call,
                     has_submit_design_call,
                     has_request_user_input_call,
+                    output_truncation,
                 });
             }
             ResponseEvent::OutputTextDelta(delta) => {

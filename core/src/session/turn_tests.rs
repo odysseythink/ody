@@ -509,3 +509,101 @@ async fn drain_records_a_failure_output_for_a_failed_tool_future() -> anyhow::Re
     );
     Ok(())
 }
+
+fn token_usage_with_output(output_tokens: i64) -> TokenUsage {
+    TokenUsage {
+        input_tokens: 36_277,
+        cached_input_tokens: 36_221,
+        output_tokens,
+        reasoning_output_tokens: 0,
+        total_tokens: 36_277 + output_tokens,
+    }
+}
+
+#[test]
+fn output_truncation_ignores_non_limit_finish_reasons() {
+    let usage = token_usage_with_output(256);
+    for reason in [None, Some("stop"), Some("tool_calls")] {
+        assert_eq!(
+            OutputTruncation::from_completed(reason, Some(&usage), Some(131_072)),
+            None,
+            "finish_reason {reason:?} must not be treated as a limit hit"
+        );
+    }
+}
+
+#[test]
+fn output_truncation_flags_a_budget_that_was_barely_used() {
+    // The observed failure: finish_reason=length after 256 of 131072 tokens.
+    let usage = token_usage_with_output(256);
+    let truncation = OutputTruncation::from_completed(Some("length"), Some(&usage), Some(131_072))
+        .expect("length must produce a truncation record");
+    assert!(truncation.is_upstream_truncation());
+    assert_eq!(truncation.output_tokens, 256);
+    assert_eq!(truncation.requested_max_output_tokens, Some(131_072));
+}
+
+#[test]
+fn output_truncation_accepts_a_real_limit_hit() {
+    let usage = token_usage_with_output(131_000);
+    let truncation = OutputTruncation::from_completed(Some("length"), Some(&usage), Some(131_072))
+        .expect("length must produce a truncation record");
+    assert!(!truncation.is_upstream_truncation());
+}
+
+#[test]
+fn output_truncation_ignores_undeclared_or_small_budgets() {
+    let usage = token_usage_with_output(64);
+    let undeclared = OutputTruncation::from_completed(Some("max_tokens"), Some(&usage), None)
+        .expect("max_tokens must produce a truncation record");
+    assert!(
+        !undeclared.is_upstream_truncation(),
+        "without a declared budget we cannot claim the provider truncated early"
+    );
+
+    let small_budget = OutputTruncation::from_completed(Some("length"), Some(&usage), Some(2_048))
+        .expect("length must produce a truncation record");
+    assert!(
+        !small_budget.is_upstream_truncation(),
+        "a model genuinely capped at 2k output tokens is not a truncation suspect"
+    );
+}
+
+#[test]
+fn output_truncation_messages_report_the_real_numbers() {
+    let usage = token_usage_with_output(256);
+    let truncation = OutputTruncation::from_completed(Some("length"), Some(&usage), Some(131_072))
+        .expect("length must produce a truncation record");
+
+    let retry = truncation.retry_message(1);
+    assert!(
+        retry.contains("256 of 131072 requested output tokens"),
+        "retry notice must carry the token counts: {retry}"
+    );
+    assert!(
+        retry.contains("continuing (1/"),
+        "retry notice must show the attempt count: {retry}"
+    );
+
+    let warning = truncation.warning_message();
+    assert!(
+        warning.contains("256 of 131072 requested output tokens"),
+        "limit warning must carry the token counts: {warning}"
+    );
+    assert!(
+        !warning.contains("truncated the response early"),
+        "the limit warning must not reuse the retry wording: {warning}"
+    );
+}
+
+#[test]
+fn output_truncation_handles_a_missing_usage_record() {
+    let truncation = OutputTruncation::from_completed(Some("length"), None, Some(131_072))
+        .expect("length must produce a truncation record");
+    assert_eq!(truncation.output_tokens, 0);
+    assert!(
+        truncation.is_upstream_truncation(),
+        "a length stop with no usage reported should still be treated as suspect"
+    );
+    assert!(truncation.warning_message().contains("0 of 131072"));
+}
