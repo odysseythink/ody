@@ -127,6 +127,9 @@ enum Subcommand {
     /// Start Ody as an MCP server (stdio).
     McpServer(McpServerCommand),
 
+    /// Start Ody as an ACP (Agent Client Protocol) agent over stdio.
+    Acp(AcpCommand),
+
     /// [experimental] Run the app server or related tooling.
     AppServer(AppServerCommand),
 
@@ -291,6 +294,13 @@ struct ReviewCommand {
 
 #[derive(Debug, Parser)]
 struct McpServerCommand {
+    /// Error out when config.toml contains fields that are not recognized by this version of Ody.
+    #[arg(long = "strict-config", default_value_t = false)]
+    strict_config: bool,
+}
+
+#[derive(Debug, Parser)]
+struct AcpCommand {
     /// Error out when config.toml contains fields that are not recognized by this version of Ody.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
@@ -945,6 +955,19 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 "mcp-server",
             )?;
             ody_mcp_server::run_main(
+                arg0_paths.clone(),
+                root_config_overrides,
+                strict_config || root_strict_config,
+            )
+            .await?;
+        }
+        Some(Subcommand::Acp(AcpCommand { strict_config })) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "acp",
+            )?;
+            ody_acp::run_main(
                 arg0_paths.clone(),
                 root_config_overrides,
                 strict_config || root_strict_config,
@@ -1914,6 +1937,7 @@ fn unsupported_subcommand_name_for_strict_config(
         | Some(Subcommand::Exec(_))
         | Some(Subcommand::Review(_))
         | Some(Subcommand::McpServer(_))
+        | Some(Subcommand::Acp(_))
         | Some(Subcommand::ExecServer(_))
         | Some(Subcommand::Resume(_))
         | Some(Subcommand::Archive(_))

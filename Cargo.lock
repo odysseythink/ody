@@ -6665,6 +6665,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ody-acp"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ody-app-server-client",
+ "ody-app-server-protocol",
+ "ody-arg0",
+ "ody-client",
+ "ody-config",
+ "ody-core",
+ "ody-exec-server",
+ "ody-feedback",
+ "ody-protocol",
+ "ody-utils-absolute-path",
+ "ody-utils-cli",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ody-agent-graph-store"
 version = "0.1.0-alpha.2"
 dependencies = [
@@ -7064,6 +7090,7 @@ dependencies = [
  "http 1.4.2",
  "insta",
  "libc",
+ "ody-acp",
  "ody-api",
  "ody-app-server",
  "ody-app-server-protocol",

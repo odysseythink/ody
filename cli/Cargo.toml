@@ -47,6 +47,7 @@ windows-sandbox = ["ody-core/windows-sandbox", "dep:ody_windows_sandbox"]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
+ody-acp = { workspace = true }
 ody-app-server = { workspace = true }
 ody-app-server-protocol = { workspace = true }
 ody-app-server-test-client = { workspace = true, optional = true }

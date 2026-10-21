@@ -1,0 +1,43 @@
+[package]
+name = "ody-acp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ody_acp"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-app-server-client = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-client = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-feedback = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-cli = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "sync",
+] }
+tracing = { workspace = true, features = ["log"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+ody-utils-absolute-path = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "acp",
     "analytics",
     "agent-graph-store",
     "bwrap",
@@ -126,6 +127,7 @@ ody-analytics = { path = "analytics" }
 ody-agent-graph-store = { path = "agent-graph-store" }
 ody-ansi-escape = { path = "ansi-escape" }
 ody-api = { path = "ody-api" }
+ody-acp = { path = "acp" }
 ody-app-server = { path = "app-server" }
 ody-app-server-transport = { path = "app-server-transport" }
 ody-app-server-client = { path = "app-server-client" }
