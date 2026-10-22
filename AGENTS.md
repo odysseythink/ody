@@ -10,6 +10,14 @@
 - The filter runs in `SkillsService::build_skill_outcome` via `filter_skill_load_outcome_for_game` and only removes System-scope skills whose names are on the embedded game list — user- or repo-installed skills with the same name are unaffected.
 - `ody-skills::tests::game_skill_classification_partitions_embedded_skills` enforces that every embedded skill is classified as game or non-game; update the lists when adding embedded skills.
 
+### Frontend-design mode (`--frontend`)
+
+- The frontend bundle is the two embedded craft skills `make-interfaces-feel-better` and `motion-design` (`ody-skills::EMBEDDED_FRONTEND_SKILL_NAMES`). It is opt-in per invocation: `ody --frontend` / `ody exec --frontend` layers `skills.bundled.frontend = true` onto the config stack through the same `SharedCliOptions::implied_config_overrides` path as `--game`.
+- Unlike `--game` (additive), frontend mode is **exclusive**. `filter_skill_load_outcome_for_frontend` (called from `SkillsService::build_skill_outcome` right after the game filter) retains only skills whose names are on the frontend list, whatever scope they were installed in — user, repo, plugin and the rest of the bundled set all disappear so the model works from the two craft skills alone. `frontend-design` is deliberately not a member.
+- Name-based matching means a repo- or user-installed copy of either skill still survives the filter.
+- `--frontend` also overrides `skills.bundled.enabled = false` for the system root: the mode's only skill source is the bundled set, so honouring that switch would leave the mode empty.
+- `ody-skills::tests::frontend_bundle_names_exist_in_the_embedded_set` fails if either bundled name is renamed, and asserts the two bundles stay disjoint.
+
 ### Migration note
 
 `legacy_host_skill_injection` defaults to `true` in T3.1.1. When the unified extension is fully validated, it will default to `false` in T3.1.2 and be removed in T3.1.3.

@@ -285,13 +285,31 @@ pub fn filter_skill_load_outcome_for_game(
     })
 }
 
+/// Narrows a load outcome down to the bundled frontend-design craft bundle when
+/// the user opted in via the `--frontend` CLI flag or
+/// `skills.bundled.frontend = true`.
+///
+/// Unlike [`filter_skill_load_outcome_for_game`] (additive), frontend mode is
+/// exclusive: every skill outside the bundle is dropped, regardless of scope.
+/// Matching is by name, so a repo- or user-installed copy of
+/// `make-interfaces-feel-better` / `motion-design` still survives.
+pub fn filter_skill_load_outcome_for_frontend(
+    outcome: SkillLoadOutcome,
+    frontend_mode_enabled: bool,
+) -> SkillLoadOutcome {
+    if !frontend_mode_enabled {
+        return outcome;
+    }
+    retain_skills_matching(outcome, |skill| {
+        ody_skills::is_embedded_frontend_skill(&skill.name)
+    })
+}
+
 fn retain_skills_matching(
     mut outcome: SkillLoadOutcome,
     keep: impl Fn(&SkillMetadata) -> bool,
 ) -> SkillLoadOutcome {
-    outcome
-        .skills
-        .retain(|skill| keep(skill));
+    outcome.skills.retain(|skill| keep(skill));
     let retained_paths: HashSet<AbsolutePathBuf> = outcome
         .skills
         .iter()

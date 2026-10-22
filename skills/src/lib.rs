@@ -131,6 +131,30 @@ pub fn is_embedded_game_skill(name: &str) -> bool {
     EMBEDDED_GAME_SKILL_NAMES.contains(&name)
 }
 
+/// Names of embedded system skills that make up the frontend-design bundle.
+///
+/// These two are the craft skills with reference material (design details,
+/// motion values); `frontend-design` deliberately stays out so the bundle is
+/// exactly what the `--frontend` flag promises.
+///
+/// Unlike [`EMBEDDED_GAME_SKILL_NAMES`] (additive), opting in is exclusive:
+/// `--frontend` hides every other skill, so the model works from this set
+/// alone. Matching is by name, which lets a repo- or user-installed copy of
+/// either skill survive the filter.
+const EMBEDDED_FRONTEND_SKILL_NAMES: &[&str] = &["make-interfaces-feel-better", "motion-design"];
+
+/// Returns whether `name` belongs to the embedded frontend-design bundle that
+/// the `--frontend` CLI flag narrows the skill catalog down to.
+pub fn is_embedded_frontend_skill(name: &str) -> bool {
+    EMBEDDED_FRONTEND_SKILL_NAMES.contains(&name)
+}
+
+/// The names that survive `--frontend`. Exposed so callers can render or test
+/// the allowlist without duplicating it.
+pub fn embedded_frontend_skill_names() -> &'static [&'static str] {
+    EMBEDDED_FRONTEND_SKILL_NAMES
+}
+
 pub use remote_sync::remote_builtin_cache_root_dir;
 
 /// Names of the skills bundled in the embedded system-skills set.
@@ -600,6 +624,47 @@ mod tests {
         assert!(!super::is_embedded_game_skill("debt-ledger"));
         assert!(!super::is_embedded_game_skill("motion-design"));
         assert!(!super::is_embedded_game_skill("no-such-skill"));
+    }
+
+    #[test]
+    fn is_embedded_frontend_skill_matches_only_the_frontend_bundle() {
+        assert!(super::is_embedded_frontend_skill(
+            "make-interfaces-feel-better"
+        ));
+        assert!(super::is_embedded_frontend_skill("motion-design"));
+        assert!(
+            !super::is_embedded_frontend_skill("frontend-design"),
+            "frontend-design stays out of the --frontend bundle"
+        );
+        assert!(!super::is_embedded_frontend_skill("game"));
+        assert!(!super::is_embedded_frontend_skill("no-such-skill"));
+    }
+
+    #[test]
+    fn frontend_bundle_names_exist_in_the_embedded_set() {
+        // A rename of either bundled skill must fail here rather than silently
+        // shipping a `--frontend` mode with an empty (or half-empty) catalog.
+        let embedded: std::collections::HashSet<String> =
+            super::embedded_system_skill_names().into_iter().collect();
+        for name in super::embedded_frontend_skill_names() {
+            assert!(
+                embedded.contains(*name),
+                "frontend bundle references a missing embedded skill: {name}"
+            );
+        }
+        assert_eq!(
+            super::embedded_frontend_skill_names().len(),
+            super::EMBEDDED_FRONTEND_SKILL_NAMES.len(),
+            "frontend bundle must not contain duplicate names"
+        );
+        // The two bundles are independent: the frontend bundle is not gated by
+        // the game flag, so its members must not be game skills.
+        for name in super::embedded_frontend_skill_names() {
+            assert!(
+                !super::is_embedded_game_skill(name),
+                "{name} cannot belong to both the game and frontend bundles"
+            );
+        }
     }
 
     #[test]

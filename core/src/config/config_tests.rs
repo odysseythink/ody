@@ -362,7 +362,8 @@ enabled = false
         Some(SkillsConfig {
             bundled: Some(BundledSkillsConfig {
                 enabled: false,
-                game: None
+                game: None,
+                frontend: None,
             }),
             include_instructions: Some(false),
             config: Vec::new(),
@@ -383,6 +384,7 @@ fn skills_config_roundtrip() {
             bundled: Some(BundledSkillsConfig {
                 enabled: false,
                 game: None,
+                frontend: None,
             }),
             include_instructions: Some(false),
             config: vec![SkillConfig {

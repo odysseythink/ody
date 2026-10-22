@@ -131,8 +131,13 @@ impl SkillsService {
         let roots = self.skill_roots_for_config(input, fs).await;
         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
         let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
-        let cache_key =
-            config_skills_cache_key(&roots, &skill_config_rules, game_skills_enabled);
+        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
+        let cache_key = config_skills_cache_key(
+            &roots,
+            &skill_config_rules,
+            game_skills_enabled,
+            frontend_mode_enabled,
+        );
         if let Some(snapshot) = self.cached_snapshot_for_config(&cache_key) {
             return snapshot;
         }
@@ -162,7 +167,12 @@ impl SkillsService {
             self.extra_roots(),
         )
         .await;
-        if !input.bundled_skills_enabled {
+        // Frontend mode takes its skills from the bundled system root, so
+        // honouring `bundled.enabled = false` there would silently produce an
+        // empty catalog. The explicit per-invocation flag wins.
+        if !input.bundled_skills_enabled
+            && !frontend_mode_enabled_from_stack(&input.config_layer_stack)
+        {
             roots.retain(|root| root.scope != SkillScope::System);
         }
         roots
@@ -176,9 +186,11 @@ impl SkillsService {
     ) -> HostSkillsSnapshot {
         let use_cwd_cache = fs.is_some();
         let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
+        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
         if use_cwd_cache
             && !force_reload
-            && let Some(snapshot) = self.cached_snapshot_for_cwd(&input.cwd, game_skills_enabled)
+            && let Some(snapshot) =
+                self.cached_snapshot_for_cwd(&input.cwd, game_skills_enabled, frontend_mode_enabled)
         {
             return snapshot;
         }
@@ -191,7 +203,7 @@ impl SkillsService {
             self.extra_roots(),
         )
         .await;
-        if !bundled_skills_enabled_from_stack(&input.config_layer_stack) {
+        if !bundled_skills_enabled_from_stack(&input.config_layer_stack) && !frontend_mode_enabled {
             roots.retain(|root| root.scope != SkillScope::System);
         }
         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
@@ -208,6 +220,7 @@ impl SkillsService {
                 CwdSkillsCacheKey {
                     cwd: input.cwd.clone(),
                     game_skills_enabled,
+                    frontend_mode_enabled,
                 },
                 snapshot.clone(),
             );
@@ -229,6 +242,15 @@ impl SkillsService {
             outcome,
             game_skills_enabled_from_stack(&input.config_layer_stack),
         );
+        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
+        let outcome = crate::filter_skill_load_outcome_for_frontend(outcome, frontend_mode_enabled);
+        if frontend_mode_enabled {
+            info!(
+                skills = outcome.skills.len(),
+                visible = ?ody_skills::embedded_frontend_skill_names(),
+                "frontend mode: skill catalog restricted to the bundled frontend craft skills"
+            );
+        }
         let disabled_paths = resolve_disabled_skill_paths(&outcome.skills, skill_config_rules);
         finalize_skill_outcome(outcome, disabled_paths)
     }
@@ -260,10 +282,12 @@ impl SkillsService {
         &self,
         cwd: &AbsolutePathBuf,
         game_skills_enabled: bool,
+        frontend_mode_enabled: bool,
     ) -> Option<HostSkillsSnapshot> {
         let key = CwdSkillsCacheKey {
             cwd: cwd.clone(),
             game_skills_enabled,
+            frontend_mode_enabled,
         };
         match self.cache_by_cwd.read() {
             Ok(cache) => cache.get(&key).cloned(),
@@ -294,12 +318,14 @@ struct ConfigSkillsCacheKey {
     roots: Vec<(AbsolutePathBuf, u8, Option<String>, Option<String>)>,
     skill_config_rules: SkillConfigRules,
     game_skills_enabled: bool,
+    frontend_mode_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CwdSkillsCacheKey {
     cwd: AbsolutePathBuf,
     game_skills_enabled: bool,
+    frontend_mode_enabled: bool,
 }
 
 pub fn bundled_skills_enabled_from_stack(
@@ -351,10 +377,41 @@ pub fn game_skills_enabled_from_stack(config_layer_stack: &ody_config::ConfigLay
         .unwrap_or_default()
 }
 
+/// Returns whether the skill catalog is narrowed to the bundled frontend-design
+/// craft skills (`make-interfaces-feel-better` and `motion-design`). Defaults to
+/// `false`; `ody --frontend` layers `skills.bundled.frontend = true` onto the
+/// config stack for one invocation.
+///
+/// Fails safe: a malformed `skills` table leaves the full catalog visible
+/// rather than hiding everything the user installed.
+pub fn frontend_mode_enabled_from_stack(config_layer_stack: &ody_config::ConfigLayerStack) -> bool {
+    let effective_config = config_layer_stack.effective_config();
+    let Some(skills_value) = effective_config
+        .as_table()
+        .and_then(|table| table.get("skills"))
+    else {
+        return false;
+    };
+
+    let skills: SkillsConfig = match skills_value.clone().try_into() {
+        Ok(skills) => skills,
+        Err(err) => {
+            warn!("invalid skills config: {err}");
+            return false;
+        }
+    };
+
+    skills
+        .bundled
+        .and_then(|bundled| bundled.frontend)
+        .unwrap_or_default()
+}
+
 fn config_skills_cache_key(
     roots: &[SkillRoot],
     skill_config_rules: &SkillConfigRules,
     game_skills_enabled: bool,
+    frontend_mode_enabled: bool,
 ) -> ConfigSkillsCacheKey {
     ConfigSkillsCacheKey {
         roots: roots
@@ -376,6 +433,7 @@ fn config_skills_cache_key(
             .collect(),
         skill_config_rules: skill_config_rules.clone(),
         game_skills_enabled,
+        frontend_mode_enabled,
     }
 }
 

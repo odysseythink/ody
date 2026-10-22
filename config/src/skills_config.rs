@@ -100,6 +100,17 @@ pub struct BundledSkillsConfig {
     /// the config stack for one invocation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<bool>,
+
+    /// Whether to restrict the visible skill set to the bundled frontend craft
+    /// skills (`make-interfaces-feel-better` and `motion-design`). Defaults to
+    /// `false`; the `ody --frontend` CLI flag layers
+    /// `skills.bundled.frontend = true` on top of the config stack for one
+    /// invocation.
+    ///
+    /// Unlike [`Self::game`] (additive), this is exclusive: every skill outside
+    /// the frontend bundle is hidden, whatever scope it was installed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frontend: Option<bool>,
 }
 
 impl Default for BundledSkillsConfig {
@@ -107,6 +118,7 @@ impl Default for BundledSkillsConfig {
         Self {
             enabled: true,
             game: None,
+            frontend: None,
         }
     }
 }
@@ -154,5 +166,40 @@ mod tests {
         let config: SkillsConfig =
             toml::from_str("[bundled]\nenabled = true\ngame = true\n").expect("bundled with game");
         assert_eq!(config.bundled.and_then(|bundled| bundled.game), Some(true));
+    }
+
+    #[test]
+    fn bundled_frontend_flag_defaults_to_absent() {
+        let config: SkillsConfig = toml::from_str("").expect("empty skills config");
+        let bundled = config.bundled.unwrap_or_default();
+        assert_eq!(bundled.frontend, None, "frontend mode is opt-in");
+        assert!(!BundledSkillsConfig::default().frontend.unwrap_or_default());
+    }
+
+    #[test]
+    fn bundled_frontend_flag_parses() {
+        let config: SkillsConfig = toml::from_str("[bundled]\nenabled = true\nfrontend = true\n")
+            .expect("bundled with frontend");
+        let bundled = config.bundled.expect("bundled section");
+        assert_eq!(bundled.frontend, Some(true));
+        assert_eq!(bundled.game, None, "frontend must not imply the game flag");
+    }
+
+    #[test]
+    fn bundled_frontend_flag_roundtrips() {
+        let config = SkillsConfig {
+            bundled: Some(BundledSkillsConfig {
+                enabled: true,
+                game: None,
+                frontend: Some(true),
+            }),
+            ..SkillsConfig::default()
+        };
+        let encoded = toml::to_string(&config).expect("serialize skills config");
+        let decoded: SkillsConfig = toml::from_str(&encoded).expect("deserialize skills config");
+        assert_eq!(
+            decoded.bundled.and_then(|bundled| bundled.frontend),
+            Some(true)
+        );
     }
 }

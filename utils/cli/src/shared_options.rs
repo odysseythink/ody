@@ -57,19 +57,33 @@ pub struct SharedCliOptions {
     /// the skills context budget small.
     #[arg(long = "game", default_value_t = false)]
     pub game: bool,
+
+    /// Restrict this invocation to the bundled frontend-design craft skills
+    /// (`make-interfaces-feel-better` and `motion-design`). Exclusive: every
+    /// other skill, from any scope, is hidden while the flag is set.
+    #[arg(long = "frontend", default_value_t = false)]
+    pub frontend: bool,
 }
 
 impl SharedCliOptions {
     /// Extra `-c`-style config overrides implied by dedicated flags, in
     /// addition to the user's own `-c key=value` overrides. The [`--game`]
-    /// flag layers `skills.bundled.game = true` onto the config stack.
+    /// flag layers `skills.bundled.game = true` onto the config stack, and
+    /// [`--frontend`] layers `skills.bundled.frontend = true`.
     ///
     /// [`--game`]: Self::game
+    /// [`--frontend`]: Self::frontend
     pub fn implied_config_overrides(&self) -> Vec<(String, toml::Value)> {
         let mut overrides = Vec::new();
         if self.game {
             overrides.push((
                 "skills.bundled.game".to_string(),
+                toml::Value::Boolean(true),
+            ));
+        }
+        if self.frontend {
+            overrides.push((
+                "skills.bundled.frontend".to_string(),
                 toml::Value::Boolean(true),
             ));
         }
@@ -89,6 +103,7 @@ impl SharedCliOptions {
             cwd,
             add_dir,
             game,
+            frontend,
         } = self;
         let Self {
             images: root_images,
@@ -100,6 +115,7 @@ impl SharedCliOptions {
             cwd: root_cwd,
             add_dir: root_add_dir,
             game: root_game,
+            frontend: root_frontend,
         } = root;
 
         if model.is_none() {
@@ -134,6 +150,9 @@ impl SharedCliOptions {
         if !*game {
             *game = *root_game;
         }
+        if !*frontend {
+            *frontend = *root_frontend;
+        }
     }
 
     pub fn apply_subcommand_overrides(&mut self, subcommand: Self) {
@@ -149,6 +168,7 @@ impl SharedCliOptions {
             cwd,
             add_dir,
             game,
+            frontend,
         } = subcommand;
 
         if let Some(model) = model {
@@ -177,6 +197,9 @@ impl SharedCliOptions {
         if game {
             self.game = true;
         }
+        if frontend {
+            self.frontend = true;
+        }
     }
 }
 
@@ -195,6 +218,7 @@ mod tests {
     fn game_flag_defaults_to_off() {
         let cli = TestCli::try_parse_from(["test"]).expect("parse");
         assert!(!cli.shared.game);
+        assert!(!cli.shared.frontend);
         assert!(cli.shared.implied_config_overrides().is_empty());
     }
 
@@ -238,5 +262,66 @@ mod tests {
             ..Default::default()
         });
         assert!(root.game);
+    }
+
+    #[test]
+    fn frontend_flag_generates_skills_config_override() {
+        let cli = TestCli::try_parse_from(["test", "--frontend"]).expect("parse");
+        assert!(cli.shared.frontend);
+        assert!(!cli.shared.game, "--frontend must not imply --game");
+        assert_eq!(
+            cli.shared.implied_config_overrides(),
+            vec![(
+                "skills.bundled.frontend".to_string(),
+                toml::Value::Boolean(true),
+            )]
+        );
+    }
+
+    #[test]
+    fn frontend_and_game_flags_compose() {
+        let cli = TestCli::try_parse_from(["test", "--game", "--frontend"]).expect("parse");
+        assert_eq!(
+            cli.shared.implied_config_overrides(),
+            vec![
+                (
+                    "skills.bundled.game".to_string(),
+                    toml::Value::Boolean(true),
+                ),
+                (
+                    "skills.bundled.frontend".to_string(),
+                    toml::Value::Boolean(true),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn inherit_exec_root_options_merges_frontend_flag() {
+        let mut child = SharedCliOptions::default();
+        let root = SharedCliOptions {
+            frontend: true,
+            ..Default::default()
+        };
+        child.inherit_exec_root_options(&root);
+        assert!(child.frontend);
+
+        // An explicit child selection is never clobbered by the root.
+        let mut child = SharedCliOptions {
+            frontend: true,
+            ..Default::default()
+        };
+        child.inherit_exec_root_options(&SharedCliOptions::default());
+        assert!(child.frontend);
+    }
+
+    #[test]
+    fn apply_subcommand_overrides_merges_frontend_flag() {
+        let mut root = SharedCliOptions::default();
+        root.apply_subcommand_overrides(SharedCliOptions {
+            frontend: true,
+            ..Default::default()
+        });
+        assert!(root.frontend);
     }
 }

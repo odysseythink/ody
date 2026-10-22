@@ -817,7 +817,10 @@ fn game_skills_enabled_from_stack_defaults_to_false() {
     let enabled_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
     assert!(game_skills_enabled_from_stack(&enabled_stack));
 
-    let disabled_stack = config_stack(&ody_home, "[skills.bundled]\nenabled = true\ngame = false\n");
+    let disabled_stack = config_stack(
+        &ody_home,
+        "[skills.bundled]\nenabled = true\ngame = false\n",
+    );
     assert!(!game_skills_enabled_from_stack(&disabled_stack));
 }
 
@@ -825,7 +828,8 @@ fn game_skills_enabled_from_stack_defaults_to_false() {
 async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
     let ody_home = tempfile::tempdir().expect("tempdir");
     let cwd = tempfile::tempdir().expect("tempdir");
-    let skills_service = SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+    let skills_service =
+        SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
 
     let default_stack = config_stack(&ody_home, "");
     let default_outcome =
@@ -848,8 +852,7 @@ async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
     // Same roots and skill rules, only the game flag differs: the config cache
     // must not serve the game-hidden snapshot for a game-enabled stack.
     let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
-    let game_outcome =
-        skills_for_config_with_stack(&skills_service, &cwd, &game_stack, &[]).await;
+    let game_outcome = skills_for_config_with_stack(&skills_service, &cwd, &game_stack, &[]).await;
     assert!(
         game_outcome.skills.iter().any(|skill| skill.name == "game"),
         "/game skill must be visible when the game flag is on"
@@ -867,7 +870,8 @@ async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
 async fn snapshot_for_cwd_cache_separates_game_flag() {
     let ody_home = tempfile::tempdir().expect("tempdir");
     let cwd = tempfile::tempdir().expect("tempdir");
-    let skills_service = SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+    let skills_service =
+        SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
 
     let default_stack = config_stack(&ody_home, "");
     let default_input = SkillsLoadInput::new(
@@ -914,5 +918,164 @@ async fn snapshot_for_cwd_cache_separates_game_flag() {
             .iter()
             .any(|skill| skill.name == "game"),
         "cwd cache must be keyed by the game flag"
+    );
+}
+
+#[test]
+fn frontend_mode_enabled_from_stack_defaults_to_false() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let default_stack = config_stack(&ody_home, "");
+    assert!(!frontend_mode_enabled_from_stack(&default_stack));
+
+    let enabled_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
+    assert!(frontend_mode_enabled_from_stack(&enabled_stack));
+
+    let disabled_stack = config_stack(
+        &ody_home,
+        "[skills.bundled]\nenabled = true\nfrontend = false\n",
+    );
+    assert!(!frontend_mode_enabled_from_stack(&disabled_stack));
+
+    // The game flag must not switch frontend mode on.
+    let game_only = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
+    assert!(!frontend_mode_enabled_from_stack(&game_only));
+}
+
+#[tokio::test]
+async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let cwd = tempfile::tempdir().expect("tempdir");
+    write_user_skill(&ody_home, "my-notes", "my-notes", "user skill");
+    let skills_service =
+        SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+
+    // Baseline: the catalog is broad.
+    let default_stack = config_stack(&ody_home, "");
+    let default_outcome =
+        skills_for_config_with_stack(&skills_service, &cwd, &default_stack, &[]).await;
+    assert!(
+        default_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "debt-ledger"),
+        "bundled skills are visible by default"
+    );
+    assert!(
+        default_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "my-notes"),
+        "user skills are visible by default"
+    );
+
+    // Frontend mode is exclusive: only the two craft skills survive, and the
+    // user-installed skill is hidden even though no config rule targeted it.
+    let frontend_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
+    let frontend_outcome =
+        skills_for_config_with_stack(&skills_service, &cwd, &frontend_stack, &[]).await;
+    let mut visible: Vec<&str> = frontend_outcome
+        .skills
+        .iter()
+        .map(|skill| skill.name.as_str())
+        .collect();
+    visible.sort_unstable();
+    let mut expected = ody_skills::embedded_frontend_skill_names().to_vec();
+    expected.sort_unstable();
+    assert_eq!(
+        visible, expected,
+        "frontend mode exposes exactly make-interfaces-feel-better and motion-design"
+    );
+    assert!(
+        frontend_outcome
+            .skills
+            .iter()
+            .all(|skill| skill.name != "frontend-design"),
+        "frontend-design stays out of the frontend bundle"
+    );
+}
+
+#[tokio::test]
+async fn frontend_mode_keeps_the_system_root_when_bundled_skills_are_disabled() {
+    // `--frontend` takes its skills from the bundled system root; honouring
+    // `bundled.enabled = false` would leave the mode with an empty catalog.
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let cwd = tempfile::tempdir().expect("tempdir");
+    let skills_service =
+        SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+
+    let stack = config_stack(
+        &ody_home,
+        "[skills.bundled]\nenabled = false\nfrontend = true\n",
+    );
+    let outcome = skills_for_config_with_stack(&skills_service, &cwd, &stack, &[]).await;
+    assert_eq!(
+        outcome.skills.len(),
+        ody_skills::embedded_frontend_skill_names().len(),
+        "frontend mode must still load its two skills: {:?}",
+        outcome
+            .skills
+            .iter()
+            .map(|skill| skill.name.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn snapshot_for_cwd_cache_separates_frontend_mode() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let cwd = tempfile::tempdir().expect("tempdir");
+    let skills_service =
+        SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
+
+    let default_stack = config_stack(&ody_home, "");
+    let default_input = SkillsLoadInput::new(
+        cwd.path().abs(),
+        Vec::new(),
+        default_stack.clone(),
+        bundled_skills_enabled_from_stack(&default_stack),
+    );
+    let default_snapshot = skills_service
+        .snapshot_for_cwd(
+            &default_input,
+            /*force_reload*/ false,
+            Some(Arc::clone(&LOCAL_FS)),
+        )
+        .await;
+    assert!(
+        default_snapshot
+            .outcome()
+            .skills
+            .iter()
+            .any(|skill| skill.name == "debt-ledger")
+    );
+
+    // A second session in the same cwd with the frontend flag on must not
+    // reuse the unrestricted snapshot.
+    let frontend_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
+    let frontend_input = SkillsLoadInput::new(
+        cwd.path().abs(),
+        Vec::new(),
+        frontend_stack.clone(),
+        bundled_skills_enabled_from_stack(&frontend_stack),
+    );
+    let frontend_snapshot = skills_service
+        .snapshot_for_cwd(
+            &frontend_input,
+            /*force_reload*/ false,
+            Some(Arc::clone(&LOCAL_FS)),
+        )
+        .await;
+    let mut visible: Vec<&str> = frontend_snapshot
+        .outcome()
+        .skills
+        .iter()
+        .map(|skill| skill.name.as_str())
+        .collect();
+    visible.sort_unstable();
+    let mut expected = ody_skills::embedded_frontend_skill_names().to_vec();
+    expected.sort_unstable();
+    assert_eq!(
+        visible, expected,
+        "cwd cache must be keyed by the frontend flag"
     );
 }
