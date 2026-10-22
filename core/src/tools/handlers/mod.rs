@@ -79,6 +79,7 @@ pub use file_tools::ReadFileHandler;
 pub use file_tools::WriteFileHandler;
 pub use get_context_remaining::GetContextRemainingHandler;
 pub use human_acceptance::HumanAcceptanceHandler;
+pub use human_acceptance::supports_human_acceptance;
 pub use list_available_plugins_to_install::ListAvailablePluginsToInstallHandler;
 pub use mcp::McpHandler;
 pub use mcp_resource::ListMcpResourceTemplatesHandler;

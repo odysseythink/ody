@@ -19,6 +19,18 @@ use uuid::Uuid;
 
 pub struct HumanAcceptanceHandler;
 
+/// Modes in which a human can be asked to look at the result and sign off.
+///
+/// `Default` is the general-purpose mode. `Frontend` is here because its
+/// evidence is visual: the mode's whole contract is "show me the screenshot",
+/// and a screenshot a human can mark approved is the only thing that ends the
+/// loop. Every other mode either has no artifact to inspect (`Plan`) or checks
+/// itself against a different standard (`Game` ships to a title screen, not a
+/// reviewer at a desk).
+pub fn supports_human_acceptance(mode: ModeKind) -> bool {
+    matches!(mode, ModeKind::Default | ModeKind::Frontend)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Action {
@@ -138,11 +150,11 @@ impl ToolExecutor<ToolInvocation> for HumanAcceptanceHandler {
     #[allow(clippy::await_holding_invalid_type)] // Serialize listener replacement using an async mutex; never held while launching the browser.
     fn handle(&self, invocation: ToolInvocation) -> ody_tools::ToolExecutorFuture<'_> {
         Box::pin(async move {
-            if invocation.turn.collaboration_mode.mode != ModeKind::Default
+            if !supports_human_acceptance(invocation.turn.collaboration_mode.mode)
                 || invocation.turn.session_source.is_non_root_agent()
             {
                 return Err(error(
-                    "human_acceptance is only available to the root thread in Default mode",
+                    "human_acceptance is only available to the root thread in Default or Frontend mode",
                 ));
             }
             let ToolPayload::Function { arguments } = &invocation.payload else {

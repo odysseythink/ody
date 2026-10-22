@@ -383,11 +383,20 @@ async fn request_user_input_tool_respects_experimental_config_gate() {
 }
 
 #[tokio::test]
-async fn human_acceptance_is_only_exposed_to_default_root_threads() {
-    let enabled = probe(|turn| turn.collaboration_mode.mode = ModeKind::Default).await;
-    enabled.assert_visible_contains(&["human_acceptance"]);
-    enabled.assert_registered_contains(&["human_acceptance"]);
-    for mode in [ModeKind::Plan, ModeKind::Design, ModeKind::Product] {
+async fn human_acceptance_is_only_exposed_to_default_and_frontend_root_threads() {
+    for mode in [ModeKind::Default, ModeKind::Frontend] {
+        let enabled = probe(|turn| turn.collaboration_mode.mode = mode).await;
+        enabled.assert_visible_contains(&["human_acceptance"]);
+        enabled.assert_registered_contains(&["human_acceptance"]);
+    }
+    // Frontend is here because its evidence is visual: a screenshot a human can
+    // approve is the only thing that closes the mode's verification loop.
+    for mode in [
+        ModeKind::Plan,
+        ModeKind::Design,
+        ModeKind::Product,
+        ModeKind::Game,
+    ] {
         let disabled = probe(|turn| turn.collaboration_mode.mode = mode).await;
         disabled.assert_visible_lacks(&["human_acceptance"]);
         disabled.assert_registered_lacks(&["human_acceptance"]);
@@ -397,6 +406,12 @@ async fn human_acceptance_is_only_exposed_to_default_root_threads() {
     })
     .await;
     child.assert_registered_lacks(&["human_acceptance"]);
+    let frontend_child = probe(|turn| {
+        turn.collaboration_mode.mode = ModeKind::Frontend;
+        turn.session_source = SessionSource::SubAgent(SubAgentSource::Other("test".to_string()));
+    })
+    .await;
+    frontend_child.assert_registered_lacks(&["human_acceptance"]);
     let no_environment = probe(|turn| {
         turn.environments.turn_environments.clear();
     })

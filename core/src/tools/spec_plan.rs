@@ -15,6 +15,7 @@ use crate::tools::handlers::GetContextRemainingHandler;
 use crate::tools::handlers::GlobHandler;
 use crate::tools::handlers::GrepHandler;
 use crate::tools::handlers::HumanAcceptanceHandler;
+use crate::tools::handlers::supports_human_acceptance;
 use crate::tools::handlers::ListAvailablePluginsToInstallHandler;
 use crate::tools::handlers::ListMcpResourceTemplatesHandler;
 use crate::tools::handlers::ListMcpResourcesHandler;
@@ -779,7 +780,7 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         planned_tools.add(CurrentTimeHandler);
     }
 
-    if turn_context.collaboration_mode.mode == ModeKind::Default
+    if supports_human_acceptance(turn_context.collaboration_mode.mode)
         && !turn_context.session_source.is_non_root_agent()
         && turn_context
             .environments
