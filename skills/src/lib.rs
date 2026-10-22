@@ -107,6 +107,7 @@ const EMBEDDED_NON_GAME_SKILL_NAMES: &[&str] = &[
     "executing-plans",
     "finishing-a-development-branch",
     "frontend-design",
+    "frontend-style",
     "frontend-verification",
     "idea-evaluator",
     "idea-generator",
@@ -149,8 +150,16 @@ pub fn is_embedded_game_skill(name: &str) -> bool {
 /// Frontend mode hides every other skill, so the model works from this set
 /// alone. Matching is by name, which lets a repo- or user-installed copy of any
 /// member survive the filter.
+/// `frontend-style` is the fifth member and the only one that carries fixed
+/// identities: ten visual directions under its `references/`, plus the
+/// procedure that makes picking one a user decision instead of a model
+/// default — design read, three rendered candidates, one popup, a recorded
+/// choice. It is one skill rather than ten on purpose: ten entries would add
+/// ~6,100 characters to the metadata budget that `core-skills` caps at 2% of
+/// the context window, and the model only ever reads the pack that won.
 const EMBEDDED_FRONTEND_SKILL_NAMES: &[&str] = &[
     "frontend-design",
+    "frontend-style",
     "frontend-verification",
     "make-interfaces-feel-better",
     "motion-design",

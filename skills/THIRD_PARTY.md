@@ -104,3 +104,56 @@ Skills surfaced via the SkillForge marketplace but excluded from embedding due
 to unclear provenance/licensing: `interaction-design` (Owl-Listener),
 `design-taste-frontend` (leonxlnx, appears derived from a Lovable built-in
 skill). Consulted only as inspiration; no content copied.
+
+> Not to be confused with the section below. `design-taste-frontend`
+> (leonxlnx) is still not imported. The vendored packs come from a different
+> repository, `design-taste`, whose root `LICENSE` is MIT and is quoted there.
+
+## design-taste genre packs (MIT License)
+
+- **Upstream**: local checkout at `~/workspace/frontend_work/design-taste-main`,
+  README points at <https://github.com/> (repository has no `.git`, so there is
+  no commit to pin — see *Sync policy* below).
+- **License**: MIT. Root `LICENSE` reads `Copyright (c) 2026 Mustafa`.
+- **Used by**: `frontend-style` (added 2026-10-22)
+
+Ten fixed identity packs are vendored under
+`frontend-style/references/<pack>.md`. In the profile the packs are selected by
+design-taste's own core skill; here the selector is `frontend-style/SKILL.md`,
+which renders three candidates on the caller's page and lets the user pick.
+
+| Embedded file | Upstream path | Upstream sha256 (12) |
+|---|---|---|
+| `frontend-style/references/editorial-minimal.md` | `skills/editorial-minimal/SKILL.md` | `fd6c52053a99` |
+| `frontend-style/references/brutalist-industrial.md` | `skills/brutalist-industrial/SKILL.md` | `7e16d97e74a3` |
+| `frontend-style/references/quiet-luxury.md` | `skills/quiet-luxury/SKILL.md` | `3f439a21dbb2` |
+| `frontend-style/references/dark-tech.md` | `skills/dark-tech/SKILL.md` | `6b856e651ba2` |
+| `frontend-style/references/playful-color.md` | `skills/playful-color/SKILL.md` | `4e0b86bd1842` |
+| `frontend-style/references/retro-print.md` | `skills/retro-print/SKILL.md` | `9036bd4daf53` |
+| `frontend-style/references/japanese-minimal.md` | `skills/japanese-minimal/SKILL.md` | `7b96ba5a48af` |
+| `frontend-style/references/neo-brutalism.md` | `skills/neo-brutalism/SKILL.md` | `bc71fa3bba39` |
+| `frontend-style/references/corporate-trust.md` | `skills/corporate-trust/SKILL.md` | `4b692ddc70c6` |
+| `frontend-style/references/cinematic-motion.md` | `skills/cinematic-motion/SKILL.md` | `b5e4b30e362c` |
+
+Adaptations applied on import (bodies otherwise verbatim):
+
+- YAML frontmatter dropped (these are reference files, not skills); an
+  attribution header and a scope line added to each file.
+- `cinematic-motion` referred to upstream's `taste-gsap` four times for
+  execution values; those references now point at `motion-design`, which is
+  this bundle's motion authority.
+- `cinematic-motion` is documented as a **modifier layer** in `SKILL.md` rather
+  than a peer identity, because its content is choreography, not palette/type.
+
+Deliberately not imported: design-taste's `design-taste` core skill (its
+design-read procedure is reimplemented in `frontend-style/SKILL.md`) and the ten
+`taste-*` craft/code skills (overlap `frontend-design`,
+`make-interfaces-feel-better`, `motion-design`, `frontend-verification`; the
+accessibility gap is tracked separately).
+
+### Sync policy
+
+The checkout carries no git metadata, so pinning is by content digest above.
+When syncing, re-copy each upstream `SKILL.md`, recompute the twelve-character
+sha256 prefixes in this table, and re-apply the three adaptations listed here.
+
