@@ -107,6 +107,7 @@ const EMBEDDED_NON_GAME_SKILL_NAMES: &[&str] = &[
     "executing-plans",
     "finishing-a-development-branch",
     "frontend-design",
+    "frontend-verification",
     "idea-evaluator",
     "idea-generator",
     "legal-contract",
@@ -139,12 +140,18 @@ pub fn is_embedded_game_skill(name: &str) -> bool {
 /// direction instead of a blank canvas — without it the model only had polish
 /// guidance and defaulted to generic layouts.
 ///
+/// `frontend-verification` is the fourth member and the only one that is not
+/// about craft: it owns the capture → judge → fix → re-capture loop, the
+/// coverage tiers, and the report shape. Without it the other three describe a
+/// target the model has no procedure for confirming it reached.
+///
 /// Unlike [`EMBEDDED_GAME_SKILL_NAMES`] (additive), opting in is exclusive:
 /// Frontend mode hides every other skill, so the model works from this set
 /// alone. Matching is by name, which lets a repo- or user-installed copy of any
 /// member survive the filter.
 const EMBEDDED_FRONTEND_SKILL_NAMES: &[&str] = &[
     "frontend-design",
+    "frontend-verification",
     "make-interfaces-feel-better",
     "motion-design",
 ];

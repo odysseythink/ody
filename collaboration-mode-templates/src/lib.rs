@@ -459,16 +459,90 @@ mod template_tests {
         for requirement in [
             "**Frontend Mode**",
             "frontend-design",
+            "frontend-verification",
             "make-interfaces-feel-better",
             "motion-design",
             "Design before markup",
             "Real content",
             "prefers-reduced-motion",
             "Never claim a visual verification you did not perform",
+            // The loop: without a baseline, "better" is unanswerable; without a
+            // re-capture, a fix is unverified.
+            "Look before you change",
+            "capture → look → fix → re-capture",
+            "Not verified",
         ] {
             assert!(
                 FRONTEND.contains(requirement),
                 "FRONTEND must contain {requirement:?}"
+            );
+        }
+    }
+
+    /// The template must name the tools the loop depends on, by their real
+    /// names. A template that says "take a screenshot" without naming the tool,
+    /// or names a tool that does not exist, sends the model looking for
+    /// something that is not there — the same failure `plan_templates_only_name_tools_that_exist`
+    /// was written for.
+    #[test]
+    fn frontend_template_names_the_browser_tools_that_exist() {
+        // Mirrors `ody_browser_control::all_tools`. Extending the browser
+        // namespace means updating this list, which is the point: the template
+        // may only advertise capabilities the runtime actually registers.
+        const REGISTERED_BROWSER_TOOLS: &[&str] = &[
+            "browser__navigate",
+            "browser__go_back",
+            "browser__go_forward",
+            "browser__reload",
+            "browser__screenshot",
+            "browser__set_viewport",
+            "browser__evaluate",
+            "browser__click",
+            "browser__type",
+            "browser__get_dom",
+            "browser__read_logs",
+            "browser__execute_raw_cdp",
+        ];
+
+        for required in [
+            "browser__screenshot",
+            "browser__set_viewport",
+            "browser__click",
+            "browser__read_logs",
+            "view_image",
+        ] {
+            assert!(
+                FRONTEND.contains(required),
+                "FRONTEND must name `{required}`: the loop cannot be run without it"
+            );
+        }
+
+        for token in FRONTEND.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+            if let Some(tool) = token.strip_prefix("browser__") {
+                let full = format!("browser__{tool}");
+                assert!(
+                    REGISTERED_BROWSER_TOOLS.contains(&full.as_str()),
+                    "FRONTEND names `{full}`, which ody-browser-control does not register"
+                );
+            }
+        }
+
+        // `view_image` is the only way a file-backed screenshot reaches the
+        // model, so the template has to pair the two tools explicitly.
+        assert!(
+            FRONTEND.contains("path") && FRONTEND.contains("view_image"),
+            "FRONTEND must tie the screenshot path form to view_image"
+        );
+    }
+
+    /// The loop belongs to the bundle's fourth skill, not to the mode template:
+    /// the contract names the entry points, the skill carries the procedure.
+    #[test]
+    fn frontend_template_defers_the_loop_procedure_to_the_skill() {
+        for requirement in ["coverage tiers", "references/checks.md", "frontend-verification"] {
+            assert!(
+                FRONTEND.contains(requirement),
+                "FRONTEND must point at {requirement:?} instead of restating it"
             );
         }
     }
