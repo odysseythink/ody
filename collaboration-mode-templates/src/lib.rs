@@ -471,6 +471,12 @@ mod template_tests {
             "Look before you change",
             "capture → look → fix → re-capture",
             "Not verified",
+            // Craft alone does not make a claim checkable: the mode needs the
+            // two engineering skills that demand proof and a root cause, and it
+            // needs the sign-off path for a judgement only a human can make.
+            "verification-before-completion",
+            "systematic-debugging",
+            "human_acceptance",
         ] {
             assert!(
                 FRONTEND.contains(requirement),
@@ -545,6 +551,28 @@ mod template_tests {
                 "FRONTEND must point at {requirement:?} instead of restating it"
             );
         }
+    }
+
+    /// `human_acceptance` is the one non-namespaced tool the frontend template
+    /// names. A template that advertises a sign-off path the runtime does not
+    /// register sends the model looking for a tool that is not there — the same
+    /// failure mode `frontend_template_names_the_browser_tools_that_exist`
+    /// guards against for the browser namespace. The tool is registered by
+    /// `HumanAcceptanceHandler` (`core/src/tools/handlers/human_acceptance.rs`).
+    #[test]
+    fn frontend_template_names_the_sign_off_tool_and_its_limits() {
+        assert!(
+            FRONTEND.contains("`human_acceptance`"),
+            "FRONTEND must name human_acceptance as a tool, not describe sign-off in prose"
+        );
+        // The mode is only usable when the handler is planned, which requires a
+        // local (non-remote) primary environment. Promising sign-off without
+        // that caveat turns a capability into a broken promise.
+        assert!(
+            !FRONTEND.contains("always open a case"),
+            "FRONTEND must not promise sign-off unconditionally: the tool is \
+             unavailable for remote environments"
+        );
     }
 
     #[test]
