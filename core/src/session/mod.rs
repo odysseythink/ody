@@ -606,15 +606,7 @@ impl Ody {
         };
         // TODO (aibrahim): Consolidate config.model and config.model_reasoning_effort into config.collaboration_mode
         // to avoid extracting these fields separately and constructing CollaborationMode here.
-        let collaboration_mode = CollaborationMode {
-            mode: ModeKind::Default,
-            settings: Settings {
-                model: model.clone(),
-                reasoning_effort: config.model_reasoning_effort.clone(),
-                developer_instructions: None,
-                design_audit_level: None,
-            },
-        };
+        let collaboration_mode = initial_collaboration_mode(&config, model.clone());
         let service_tier = get_service_tier(
             config.service_tier.clone(),
             config.features.enabled(Feature::FastMode),
@@ -876,6 +868,29 @@ fn get_service_tier(
         service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE
             || model_info.supports_service_tier(service_tier)
     })
+}
+
+/// The collaboration mode a fresh session starts in.
+///
+/// Opting into `Game` or `Frontend` (`--game` / `--frontend`) is an explicit
+/// request to *work in that mode*, so the session starts there rather than in
+/// `Default` and carries the mode's contract from the bundled preset. Clients
+/// that set their own initial mode (the TUI) derive it from the same
+/// [`ModeAvailability`], so the two cannot disagree.
+fn initial_collaboration_mode(config: &Config, model: String) -> CollaborationMode {
+    let mode = config.collaboration_mode_availability().initial_mode();
+    let developer_instructions =
+        ody_models_manager::collaboration_mode_presets::preset_for_mode(mode)
+            .and_then(|mask| mask.developer_instructions.flatten());
+    CollaborationMode {
+        mode,
+        settings: Settings {
+            model,
+            reasoning_effort: config.model_reasoning_effort.clone(),
+            developer_instructions,
+            design_audit_level: None,
+        },
+    }
 }
 
 fn session_permission_profile_state_from_config(

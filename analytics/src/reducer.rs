@@ -2726,6 +2726,8 @@ fn collaboration_mode_mode(mode: ModeKind) -> &'static str {
         ModeKind::Plan => "plan",
         ModeKind::Design => "design",
         ModeKind::Product => "product",
+        ModeKind::Game => "game",
+        ModeKind::Frontend => "frontend",
         ModeKind::Default | ModeKind::PairProgramming | ModeKind::Execute => "default",
     }
 }

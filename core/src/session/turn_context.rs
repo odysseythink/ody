@@ -837,8 +837,12 @@ impl Session {
             .services
             .plugins_manager
             .plugin_skill_snapshots_for_config(&plugins_input);
-        let skills_input = skills_load_input_from_config(&per_turn_config, effective_skill_roots)
-            .with_plugin_skill_snapshots(plugin_skill_snapshots);
+        let skills_input = skills_load_input_from_config(
+            &per_turn_config,
+            effective_skill_roots,
+            session_configuration.collaboration_mode.mode,
+        )
+        .with_plugin_skill_snapshots(plugin_skill_snapshots);
         let fs = primary_turn_environment
             .map(|turn_environment| turn_environment.environment.get_filesystem());
         let skills_snapshot = self

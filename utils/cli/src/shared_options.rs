@@ -52,15 +52,18 @@ pub struct SharedCliOptions {
     #[arg(long = "add-dir", value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     pub add_dir: Vec<PathBuf>,
 
-    /// Enable the bundled game-development skills (the `/game` command and the
-    /// vendored gamedev skill set) for this invocation. Off by default to keep
-    /// the skills context budget small.
+    /// Opt in to Game mode for this invocation. The session starts in Game mode
+    /// and the bundled game-development skills (the `/game` entry skill and the
+    /// vendored gamedev set) are listed only while that mode is active. Off by
+    /// default to keep the skills context budget small.
     #[arg(long = "game", default_value_t = false)]
     pub game: bool,
 
-    /// Restrict this invocation to the bundled frontend-design craft skills
-    /// (`make-interfaces-feel-better` and `motion-design`). Exclusive: every
-    /// other skill, from any scope, is hidden while the flag is set.
+    /// Opt in to Frontend mode for this invocation. The session starts in
+    /// Frontend mode, whose catalog is exactly the bundled frontend craft
+    /// skills (`frontend-design`, `make-interfaces-feel-better`,
+    /// `motion-design`); every other skill, from any scope, is hidden while
+    /// that mode is active.
     #[arg(long = "frontend", default_value_t = false)]
     pub frontend: bool,
 }

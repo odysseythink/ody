@@ -4386,7 +4386,7 @@ async fn new_default_turn_uses_config_aware_skills_for_role_overrides() {
         .services
         .skills_service
         .snapshot_for_cwd(
-            &crate::skills_load_input_from_config(&parent_config, Vec::new()),
+            &crate::skills_load_input_from_config(&parent_config, Vec::new(), ModeKind::Default),
             /*force_reload*/ true,
             Some(Arc::clone(&skill_fs)),
         )
@@ -4999,9 +4999,12 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let plugin_skill_snapshots = services
         .plugins_manager
         .plugin_skill_snapshots_for_config(&plugins_input);
-    let skills_input =
-        crate::skills_load_input_from_config(&per_turn_config, effective_skill_roots)
-            .with_plugin_skill_snapshots(plugin_skill_snapshots);
+    let skills_input = crate::skills_load_input_from_config(
+        &per_turn_config,
+        effective_skill_roots,
+        ModeKind::Default,
+    )
+    .with_plugin_skill_snapshots(plugin_skill_snapshots);
     let skill_fs = environment.get_filesystem();
     let skills_snapshot = services
         .skills_service
@@ -7053,9 +7056,12 @@ where
     let plugin_skill_snapshots = services
         .plugins_manager
         .plugin_skill_snapshots_for_config(&plugins_input);
-    let skills_input =
-        crate::skills_load_input_from_config(&per_turn_config, effective_skill_roots)
-            .with_plugin_skill_snapshots(plugin_skill_snapshots);
+    let skills_input = crate::skills_load_input_from_config(
+        &per_turn_config,
+        effective_skill_roots,
+        ModeKind::Default,
+    )
+    .with_plugin_skill_snapshots(plugin_skill_snapshots);
     let skill_fs = environment.get_filesystem();
     let skills_snapshot = services
         .skills_service

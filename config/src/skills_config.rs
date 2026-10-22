@@ -94,21 +94,27 @@ pub struct BundledSkillsConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 
-    /// Whether to include the bundled game-development skills (the `/game`
-    /// entry skill and the vendored gamedev skill set). Defaults to `false`;
-    /// the `ody --game` CLI flag layers `skills.bundled.game = true` on top of
-    /// the config stack for one invocation.
+    /// Whether the bundled game-development skills (the `/game` entry skill and
+    /// the vendored gamedev skill set) are offered. Defaults to `false`; the
+    /// `ody --game` CLI flag layers `skills.bundled.game = true` on top of the
+    /// config stack for one invocation.
+    ///
+    /// This enables the `Game` collaboration mode, which the session then starts
+    /// in: the bundle is listed while that mode is active and hidden again when
+    /// the user leaves it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<bool>,
 
-    /// Whether to restrict the visible skill set to the bundled frontend craft
-    /// skills (`make-interfaces-feel-better` and `motion-design`). Defaults to
+    /// Whether the `Frontend` collaboration mode is offered. Defaults to
     /// `false`; the `ody --frontend` CLI flag layers
     /// `skills.bundled.frontend = true` on top of the config stack for one
     /// invocation.
     ///
-    /// Unlike [`Self::game`] (additive), this is exclusive: every skill outside
-    /// the frontend bundle is hidden, whatever scope it was installed in.
+    /// In that mode the catalog is restricted to the bundled craft skills
+    /// (`frontend-design`, `make-interfaces-feel-better`, `motion-design`) —
+    /// unlike [`Self::game`] (additive), this is exclusive: every skill outside
+    /// the bundle is hidden, whatever scope it was installed in. Leaving the
+    /// mode restores the full catalog.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frontend: Option<bool>,
 }

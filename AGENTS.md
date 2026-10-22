@@ -4,19 +4,48 @@
 - `ody-skills-extension` — unified integration surface (`SkillProvider`, catalog, selection, injection, model tools).
 - `ody-skills` / `skills` — builtin system-skill installer; writes embedded samples to `$ODY_HOME/skills/.system`, which `ody-core-skills` discovers as a system-scope root.
 
-### Game-development skill gate (`--game`)
+### Opt-in collaboration modes (`--game`, `--frontend`)
 
-- The embedded game-development bundle (the `/game` flow skill plus the vendored gamedev skill set, listed in `ody-skills::EMBEDDED_GAME_SKILL_NAMES`) is hidden by default to keep the skills context budget small. It becomes visible only when the session config stack has `skills.bundled.game = true`; the `ody --game` / `ody exec --game` CLI flag layers exactly that override (`SharedCliOptions::implied_config_overrides`).
-- The filter runs in `SkillsService::build_skill_outcome` via `filter_skill_load_outcome_for_game` and only removes System-scope skills whose names are on the embedded game list — user- or repo-installed skills with the same name are unaffected.
+Game and Frontend are real `ModeKind` values, not boot-time skill filters. The
+flag only decides whether the mode is *offered*; the mode decides what the
+session does.
+
+- `ModeAvailability` (`protocol/src/config_types.rs`) carries that decision:
+  `is_available(mode)` gates the preset list, the TUI mode ring, the
+  `collaboration mode` label, and whether `request_user_input` is callable
+  (`request_user_input_available_modes(features, availability)` — both opt-in
+  modes do allow it, for the single blocking scoping question their contract
+  asks for). `--game` / `--frontend` (or `skills.bundled.game`
+  / `skills.bundled.frontend`) set it through
+  `Config::collaboration_mode_availability`; `SharedCliOptions::implied_config_overrides`
+  is the CLI path.
+- Both invocations *start* in their mode (`ModeAvailability::initial_mode`), both
+  in `Session::new` (core, so `ody exec` is covered) and in the TUI's
+  `initial_collaboration_mask`. The preset's `developer_instructions`
+  (`collaboration-mode-templates/templates/{game,frontend}.md`) are what make the
+  mode more than a skill filter.
+- Leaving the mode restores the normal catalog: skill visibility is derived from
+  the **active mode** (`SkillsLoadInput::collaboration_mode`), and the mode is
+  part of both skills cache keys, so a mid-session switch cannot serve a stale
+  bundle-only catalog.
+- Presets: `builtin_collaboration_mode_presets()` stays the always-on four
+  (`Plan`, `Design`, `Product`, `Default`); `opt_in_collaboration_mode_presets()`
+  holds `Game` and `Frontend`; `collaboration_mode_presets_for(availability)`
+  combines them for clients.
+
+#### Game bundle (`--game`)
+
+- The embedded game-development bundle (the `/game` flow skill plus the vendored gamedev skill set, listed in `ody-skills::EMBEDDED_GAME_SKILL_NAMES`) is hidden outside Game mode to keep the skills context budget small, even when `skills.bundled.game = true`.
+- The filter runs in `SkillsService::build_skill_outcome` via `filter_skill_load_outcome_for_game` and only removes System-scope skills whose names are on the embedded game list — user- or repo-installed skills with the same name are unaffected. Game mode is additive: the rest of the catalog stays visible.
 - `ody-skills::tests::game_skill_classification_partitions_embedded_skills` enforces that every embedded skill is classified as game or non-game; update the lists when adding embedded skills.
 
-### Frontend-design mode (`--frontend`)
+#### Frontend bundle (`--frontend`)
 
-- The frontend bundle is the two embedded craft skills `make-interfaces-feel-better` and `motion-design` (`ody-skills::EMBEDDED_FRONTEND_SKILL_NAMES`). It is opt-in per invocation: `ody --frontend` / `ody exec --frontend` layers `skills.bundled.frontend = true` onto the config stack through the same `SharedCliOptions::implied_config_overrides` path as `--game`.
-- Unlike `--game` (additive), frontend mode is **exclusive**. `filter_skill_load_outcome_for_frontend` (called from `SkillsService::build_skill_outcome` right after the game filter) retains only skills whose names are on the frontend list, whatever scope they were installed in — user, repo, plugin and the rest of the bundled set all disappear so the model works from the two craft skills alone. `frontend-design` is deliberately not a member.
-- Name-based matching means a repo- or user-installed copy of either skill still survives the filter.
+- The frontend bundle is the three embedded skills `frontend-design` (the entry skill: design direction and composition), `make-interfaces-feel-better` (interaction detail) and `motion-design` (timing/easing) — `ody-skills::EMBEDDED_FRONTEND_SKILL_NAMES`. It is opt-in per invocation: `ody --frontend` / `ody exec --frontend` layers `skills.bundled.frontend = true` onto the config stack through the same path as `--game`.
+- Unlike `--game` (additive), Frontend mode is **exclusive**. `filter_skill_load_outcome_for_frontend` (called from `SkillsService::build_skill_outcome` right after the game filter) retains only skills whose names are on the frontend list, whatever scope they were installed in — user, repo, plugin and the rest of the bundled set all disappear so the model works from the bundled craft skills alone.
+- Name-based matching means a repo- or user-installed copy of any member still survives the filter.
 - `--frontend` also overrides `skills.bundled.enabled = false` for the system root: the mode's only skill source is the bundled set, so honouring that switch would leave the mode empty.
-- `ody-skills::tests::frontend_bundle_names_exist_in_the_embedded_set` fails if either bundled name is renamed, and asserts the two bundles stay disjoint.
+- `ody-skills::tests::frontend_bundle_names_exist_in_the_embedded_set` fails if a bundled name is renamed, and asserts the two bundles stay disjoint.
 
 ### Migration note
 

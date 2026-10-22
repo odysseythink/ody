@@ -1,6 +1,7 @@
 use super::*;
 use ody_features::Feature;
 use ody_features::Features;
+use ody_protocol::config_types::ModeAvailability;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::request_user_input::RequestUserInputQuestion;
 use ody_protocol::request_user_input::RequestUserInputQuestionOption;
@@ -12,11 +13,11 @@ use std::collections::BTreeMap;
 fn default_mode_enabled_available_modes() -> Vec<ModeKind> {
     let mut features = Features::with_defaults();
     features.enable(Feature::DefaultModeRequestUserInput);
-    request_user_input_available_modes(&features)
+    request_user_input_available_modes(&features, ModeAvailability::default())
 }
 
 fn default_available_modes() -> Vec<ModeKind> {
-    request_user_input_available_modes(&Features::with_defaults())
+    request_user_input_available_modes(&Features::with_defaults(), ModeAvailability::default())
 }
 
 #[test]
@@ -236,5 +237,27 @@ fn request_user_input_tool_description_mentions_available_modes() {
     assert_eq!(
         request_user_input_tool_description(&default_mode_enabled_available_modes()),
         "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in modes: Default,Plan,Design,Product.".to_string()
+    );
+}
+
+#[test]
+fn opt_in_modes_are_told_they_may_ask_but_only_when_enabled() {
+    let features = Features::with_defaults();
+    let frontend_modes =
+        request_user_input_available_modes(&features, ModeAvailability::new(false, true));
+
+    assert_eq!(
+        request_user_input_unavailable_message(ModeKind::Frontend, &frontend_modes),
+        None,
+        "frontend mode's contract asks for a single closed-choice design question"
+    );
+    assert_eq!(
+        request_user_input_unavailable_message(ModeKind::Game, &frontend_modes),
+        Some("request_user_input is unavailable in Game mode".to_string()),
+        "game mode was not opted into here, so the tool stays closed to it"
+    );
+    assert_eq!(
+        request_user_input_unavailable_message(ModeKind::Game, &default_available_modes()),
+        Some("request_user_input is unavailable in Game mode".to_string())
     );
 }

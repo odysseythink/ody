@@ -5,6 +5,8 @@ pub const DESIGN_SPARSE_REMINDER: &str = include_str!("../templates/design_spars
 pub const DEFAULT: &str = include_str!("../templates/default.md");
 pub const EXTERNAL_GROUNDING: &str = include_str!("../templates/external_grounding.md");
 pub const EXECUTE: &str = include_str!("../templates/execute.md");
+pub const FRONTEND: &str = include_str!("../templates/frontend.md");
+pub const GAME: &str = include_str!("../templates/game.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
 pub const PRODUCT: &str = include_str!("../templates/product.md");
@@ -446,5 +448,77 @@ mod template_tests {
             .find(|line| line.starts_with("1. **Understand**"))
             .unwrap_or_default()
             .to_string()
+    }
+
+    /// Frontend and Game are opt-in *modes*, not boot-time skill filters: the
+    /// mode contract is what tells the model it may build and how to verify.
+    /// Without these pins the two modes would differ from Default only in which
+    /// skills happen to be listed.
+    #[test]
+    fn frontend_template_pins_build_and_verification_contract() {
+        for requirement in [
+            "**Frontend Mode**",
+            "frontend-design",
+            "make-interfaces-feel-better",
+            "motion-design",
+            "Design before markup",
+            "Real content",
+            "prefers-reduced-motion",
+            "Never claim a visual verification you did not perform",
+        ] {
+            assert!(
+                FRONTEND.contains(requirement),
+                "FRONTEND must contain {requirement:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn game_template_pins_playable_loop_and_tuning_contract() {
+        for requirement in [
+            "**Game Mode**",
+            "Playable beats architecturally tidy",
+            "core loop",
+            "closed-choice question",
+            "one decision that is expensive to reverse",
+            "do not claim it works",
+        ] {
+            assert!(
+                GAME.contains(requirement),
+                "GAME must contain {requirement:?}"
+            );
+        }
+    }
+
+    /// Both opt-in modes narrow the catalog to a bundle, so both must tell the
+    /// model to read the bundle's `SKILL.md` before writing code — that is the
+    /// behaviour the narrowing exists to produce.
+    #[test]
+    fn opt_in_modes_require_reading_the_bundle_first() {
+        for (name, body) in [("FRONTEND", FRONTEND), ("GAME", GAME)] {
+            assert!(
+                body.contains("`SKILL.md`"),
+                "{name} must send the model to the bundle's SKILL.md"
+            );
+            assert!(
+                body.contains("completely"),
+                "{name} must require a complete read, not a skim"
+            );
+        }
+    }
+
+    /// Both modes are allowed to call `request_user_input` (see
+    /// `ModeKind::allows_request_user_input`), and both defer a genuinely
+    /// irreversible decision to the user. The contract has to name the tool:
+    /// a mode that says "ask one question" without naming it invites a
+    /// plain-text question the client renders worse.
+    #[test]
+    fn opt_in_modes_route_their_one_blocking_question_through_the_tool() {
+        for (name, body) in [("FRONTEND", FRONTEND), ("GAME", GAME)] {
+            assert!(
+                body.contains("`request_user_input`"),
+                "{name} must name the request_user_input tool for its blocking question"
+            );
+        }
     }
 }

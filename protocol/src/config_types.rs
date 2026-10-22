@@ -648,6 +648,12 @@ pub enum ModeKind {
         alias = "custom"
     )]
     Default,
+    /// Opt-in mode for game development. Only offered when the invocation
+    /// enabled it (`--game` / `skills.bundled.game`); see [`ModeAvailability`].
+    Game,
+    /// Opt-in mode for interface design. Only offered when the invocation
+    /// enabled it (`--frontend` / `skills.bundled.frontend`).
+    Frontend,
     #[doc(hidden)]
     #[serde(skip_serializing, skip_deserializing)]
     #[schemars(skip)]
@@ -660,12 +666,20 @@ pub enum ModeKind {
     Execute,
 }
 
+/// Modes a client may offer without any opt-in. These are the four modes the
+/// mode ring cycles through in a plain `ody` invocation.
 pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 4] = [
     ModeKind::Default,
     ModeKind::Plan,
     ModeKind::Design,
     ModeKind::Product,
 ];
+
+/// Modes that exist in the enum but are only selectable when the invocation
+/// opted in. Kept out of [`TUI_VISIBLE_COLLABORATION_MODES`] so the always-on
+/// mode list (and the Default-mode prompt naming the available modes) never
+/// advertises a mode the user cannot enter.
+pub const OPT_IN_COLLABORATION_MODES: [ModeKind; 2] = [ModeKind::Game, ModeKind::Frontend];
 
 impl ModeKind {
     pub const fn display_name(self) -> &'static str {
@@ -674,17 +688,93 @@ impl ModeKind {
             Self::Design => "Design",
             Self::Product => "Product",
             Self::Default => "Default",
+            Self::Game => "Game",
+            Self::Frontend => "Frontend",
             Self::PairProgramming => "Pair Programming",
             Self::Execute => "Execute",
         }
     }
 
+    /// The always-on modes. Opt-in modes return `false` here because whether
+    /// they are visible depends on config; ask [`ModeAvailability`] instead.
     pub const fn is_tui_visible(self) -> bool {
-        matches!(self, Self::Plan | Self::Default | Self::Design | Self::Product)
+        matches!(
+            self,
+            Self::Plan | Self::Default | Self::Design | Self::Product
+        )
     }
 
+    /// Whether this mode only exists when the invocation opted in.
+    pub const fn is_opt_in(self) -> bool {
+        matches!(self, Self::Game | Self::Frontend)
+    }
+
+    /// Whether turns in this mode may call `request_user_input`.
+    ///
+    /// The opt-in build modes are included on purpose. They are scoped to
+    /// implementation, but each is expected to resolve at most one blocking
+    /// decision before writing code (engine choice in `Game`, design direction
+    /// in `Frontend`), and their mode contracts tell the model to ask with a
+    /// single closed-choice question rather than guess. Excluding them would
+    /// leave that instruction with no tool to carry it out.
     pub const fn allows_request_user_input(self) -> bool {
-        matches!(self, Self::Plan | Self::Design | Self::Product)
+        matches!(
+            self,
+            Self::Plan | Self::Design | Self::Product | Self::Game | Self::Frontend
+        )
+    }
+}
+
+/// Per-invocation set of collaboration modes a client may offer.
+///
+/// [`ModeKind`] alone cannot answer "is this mode selectable?": `Game` and
+/// `Frontend` are whole modes, not boot-time flags, so they sit in the same
+/// enum as `Plan`/`Design` — but a plain `ody` must not show them. This struct
+/// carries that decision from config to every surface (mode ring, presets,
+/// skill catalog) so they cannot disagree.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ModeAvailability {
+    pub game: bool,
+    pub frontend: bool,
+}
+
+impl ModeAvailability {
+    pub const fn new(game: bool, frontend: bool) -> Self {
+        Self { game, frontend }
+    }
+
+    /// Whether `mode` may be selected in this invocation.
+    pub const fn is_available(self, mode: ModeKind) -> bool {
+        match mode {
+            ModeKind::Game => self.game,
+            ModeKind::Frontend => self.frontend,
+            other => other.is_tui_visible(),
+        }
+    }
+
+    /// Every selectable mode, in ring order: the always-on modes followed by
+    /// whichever opt-in modes this invocation enabled.
+    pub fn available_modes(self) -> Vec<ModeKind> {
+        let mut modes = TUI_VISIBLE_COLLABORATION_MODES.to_vec();
+        modes.extend(
+            OPT_IN_COLLABORATION_MODES
+                .into_iter()
+                .filter(|mode| self.is_available(*mode)),
+        );
+        modes
+    }
+
+    /// The mode a fresh session starts in. An opt-in mode wins over `Default`
+    /// because enabling it is an explicit request to work in it; `--frontend`
+    /// takes precedence when both are set.
+    pub const fn initial_mode(self) -> ModeKind {
+        if self.frontend {
+            ModeKind::Frontend
+        } else if self.game {
+            ModeKind::Game
+        } else {
+            ModeKind::Default
+        }
     }
 }
 
@@ -937,6 +1027,67 @@ mod tests {
 
         assert!(!ModeKind::PairProgramming.is_tui_visible());
         assert!(!ModeKind::Execute.is_tui_visible());
+        // Opt-in modes are real modes, but a plain invocation must not offer
+        // them — `ModeAvailability`, not `is_tui_visible`, answers that.
+        assert!(!ModeKind::Game.is_tui_visible());
+        assert!(!ModeKind::Frontend.is_tui_visible());
+        assert!(ModeKind::Game.is_opt_in());
+        assert!(ModeKind::Frontend.is_opt_in());
+    }
+
+    #[test]
+    fn opt_in_modes_are_offered_only_when_enabled() {
+        let plain = ModeAvailability::default();
+        assert_eq!(plain.available_modes(), TUI_VISIBLE_COLLABORATION_MODES);
+        assert!(!plain.is_available(ModeKind::Game));
+        assert!(!plain.is_available(ModeKind::Frontend));
+        assert_eq!(plain.initial_mode(), ModeKind::Default);
+
+        let game = ModeAvailability::new(/*game*/ true, /*frontend*/ false);
+        assert_eq!(
+            game.available_modes(),
+            vec![
+                ModeKind::Default,
+                ModeKind::Plan,
+                ModeKind::Design,
+                ModeKind::Product,
+                ModeKind::Game,
+            ]
+        );
+        assert!(game.is_available(ModeKind::Game));
+        assert!(!game.is_available(ModeKind::Frontend));
+        assert_eq!(game.initial_mode(), ModeKind::Game);
+
+        let frontend = ModeAvailability::new(/*game*/ false, /*frontend*/ true);
+        assert!(frontend.is_available(ModeKind::Frontend));
+        assert!(!frontend.is_available(ModeKind::Game));
+        assert_eq!(frontend.initial_mode(), ModeKind::Frontend);
+
+        // Both set: Frontend wins the initial mode, but both are offered.
+        let both = ModeAvailability::new(/*game*/ true, /*frontend*/ true);
+        assert_eq!(both.available_modes().len(), 6);
+        assert_eq!(both.initial_mode(), ModeKind::Frontend);
+    }
+
+    #[test]
+    fn opt_in_modes_serialize_under_their_own_names() {
+        for (mode, wire) in [
+            (ModeKind::Game, "\"game\""),
+            (ModeKind::Frontend, "\"frontend\""),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&mode).expect("serialize mode"),
+                wire,
+                "{mode:?} must round-trip over the protocol"
+            );
+            let parsed: ModeKind = serde_json::from_str(wire).expect("deserialize mode");
+            assert_eq!(parsed, mode);
+            assert_eq!(mode.display_name(), {
+                let mut chars = wire.trim_matches('"').chars();
+                let first = chars.next().unwrap().to_ascii_uppercase();
+                format!("{first}{}", chars.as_str())
+            });
+        }
     }
 
     #[test]

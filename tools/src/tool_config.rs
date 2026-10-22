@@ -1,7 +1,7 @@
 use ody_features::Feature;
 use ody_features::Features;
+use ody_protocol::config_types::ModeAvailability;
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::TUI_VISIBLE_COLLABORATION_MODES;
 use ody_protocol::model_metadata::ConfigShellToolType;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -35,8 +35,19 @@ pub enum ToolUserShellType {
     Cmd,
 }
 
-pub fn request_user_input_available_modes(features: &Features) -> Vec<ModeKind> {
-    TUI_VISIBLE_COLLABORATION_MODES
+/// Modes in which a turn may call `request_user_input`.
+///
+/// The answer depends on the invocation, not just on the feature set: opt-in
+/// modes (`Game`, `Frontend`) allow the tool but must not be named when they
+/// are not selectable, or the tool description would advertise a mode the user
+/// cannot be in. `availability` is the same source of truth the mode ring and
+/// the skill catalog read.
+pub fn request_user_input_available_modes(
+    features: &Features,
+    availability: ModeAvailability,
+) -> Vec<ModeKind> {
+    availability
+        .available_modes()
         .into_iter()
         .filter(|mode| {
             mode.allows_request_user_input()

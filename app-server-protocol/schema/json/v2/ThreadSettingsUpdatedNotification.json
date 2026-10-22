@@ -128,13 +128,31 @@
     },
     "ModeKind": {
       "description": "Initial collaboration mode to use when the TUI starts.",
-      "enum": [
-        "plan",
-        "design",
-        "product",
-        "default"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "plan",
+            "design",
+            "product",
+            "default"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Opt-in mode for game development. Only offered when the invocation enabled it (`--game` / `skills.bundled.game`); see [`ModeAvailability`].",
+          "enum": [
+            "game"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Opt-in mode for interface design. Only offered when the invocation enabled it (`--frontend` / `skills.bundled.frontend`).",
+          "enum": [
+            "frontend"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "MultiAgentMode": {
       "description": "Controls whether the model receives multi-agent delegation instructions and, when it does, whether it should only spawn sub-agents after an explicit user request or may delegate proactively when doing so would help. `none` leaves the multi-agent tools available without injecting delegation instructions.",

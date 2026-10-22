@@ -7,6 +7,8 @@
 # Value of CARGO_TARGET_DIR when using .devcontainer/devcontainer.json.
 /target-arm64/
 .ody-code/
+# Local agent workspace state (memory logs); not part of the project.
+.workbuddy/
 
 # insta pending snapshots (review with `cargo insta review`, do not commit)
 *.snap.new

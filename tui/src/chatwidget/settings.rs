@@ -463,11 +463,16 @@ impl ChatWidget {
     }
 
     pub(super) fn initial_collaboration_mask(
-        _config: &Config,
+        config: &Config,
         model_catalog: &ModelCatalog,
         model_override: Option<&str>,
     ) -> Option<CollaborationModeMask> {
-        let mut mask = collaboration_modes::default_mask(model_catalog)?;
+        // An opt-in mode (`--game` / `--frontend`) is an explicit request to work
+        // in that mode, so the session starts there; `Default` otherwise. The
+        // fallback keeps a catalog that somehow lacks the preset usable.
+        let initial_mode = config.collaboration_mode_availability().initial_mode();
+        let mut mask = collaboration_modes::mask_for_kind(model_catalog, initial_mode)
+            .or_else(|| collaboration_modes::default_mask(model_catalog))?;
         if let Some(model_override) = model_override {
             mask.model = Some(model_override.to_string());
         }
@@ -753,8 +758,9 @@ impl ChatWidget {
             return None;
         }
         let active_mode = self.active_mode_kind();
-        active_mode
-            .is_tui_visible()
+        self.model_catalog
+            .mode_availability()
+            .is_available(active_mode)
             .then_some(active_mode.display_name())
     }
 
@@ -766,6 +772,8 @@ impl ChatWidget {
             ModeKind::Plan => Some(CollaborationModeIndicator::Plan),
             ModeKind::Design => Some(CollaborationModeIndicator::Design),
             ModeKind::Product => Some(CollaborationModeIndicator::Product),
+            ModeKind::Game => Some(CollaborationModeIndicator::Game),
+            ModeKind::Frontend => Some(CollaborationModeIndicator::Frontend),
             ModeKind::Default | ModeKind::PairProgramming | ModeKind::Execute => None,
         }
     }

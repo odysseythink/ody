@@ -35,6 +35,7 @@ pub use ody_core_skills::system;
 pub(crate) fn skills_load_input_from_config(
     config: &Config,
     effective_skill_roots: Vec<PluginSkillRoot>,
+    collaboration_mode: ody_protocol::config_types::ModeKind,
 ) -> SkillsLoadInput {
     SkillsLoadInput::new(
         config.cwd.clone(),
@@ -42,6 +43,7 @@ pub(crate) fn skills_load_input_from_config(
         config.config_layer_stack.clone(),
         config.bundled_skills_enabled(),
     )
+    .with_collaboration_mode(collaboration_mode)
 }
 
 pub(crate) async fn maybe_emit_implicit_skill_invocation(

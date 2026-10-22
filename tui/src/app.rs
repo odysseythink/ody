@@ -830,7 +830,10 @@ impl App {
         if let Some(updated_model) = config.model.clone() {
             model = updated_model;
         }
-        let model_catalog = Arc::new(ModelCatalog::new(available_models.clone()));
+        let model_catalog = Arc::new(
+            ModelCatalog::new(available_models.clone())
+                .with_mode_availability(config.collaboration_mode_availability()),
+        );
         let feedback_audience = bootstrap.feedback_audience;
         let api_key_configured = bootstrap.api_key_configured;
         let auth_mode = if api_key_configured {

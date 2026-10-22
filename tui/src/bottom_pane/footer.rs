@@ -94,6 +94,8 @@ pub(crate) enum CollaborationModeIndicator {
     Plan,
     Design,
     Product,
+    Game,
+    Frontend,
     #[allow(dead_code)] // Hidden by current mode filtering; kept for future UI re-enablement.
     PairProgramming,
     #[allow(dead_code)] // Hidden by current mode filtering; kept for future UI re-enablement.
@@ -154,6 +156,8 @@ impl CollaborationModeIndicator {
             CollaborationModeIndicator::Plan => format!("【 📝 Plan {suffix}】"),
             CollaborationModeIndicator::Design => format!("【 ✏️ Design {suffix}】"),
             CollaborationModeIndicator::Product => format!("【 🏢 Product {suffix}】"),
+            CollaborationModeIndicator::Game => format!("【 🎮 Game {suffix}】"),
+            CollaborationModeIndicator::Frontend => format!("【 🎨 Frontend {suffix}】"),
             CollaborationModeIndicator::PairProgramming => {
                 format!("👥 Pair Programming mode{suffix}")
             }
@@ -167,6 +171,8 @@ impl CollaborationModeIndicator {
             CollaborationModeIndicator::Plan => Span::from(label).magenta(),
             CollaborationModeIndicator::Design => Span::from(label).cyan(),
             CollaborationModeIndicator::Product => Span::from(label).yellow(),
+            CollaborationModeIndicator::Game => Span::from(label).green(),
+            CollaborationModeIndicator::Frontend => Span::from(label).blue(),
             CollaborationModeIndicator::PairProgramming => Span::from(label).cyan(),
             CollaborationModeIndicator::Execute => Span::from(label).dim(),
         }

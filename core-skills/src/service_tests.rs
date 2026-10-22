@@ -170,12 +170,33 @@ async fn skills_for_config_with_stack(
     config_layer_stack: &ConfigLayerStack,
     effective_skill_roots: &[PluginSkillRoot],
 ) -> SkillLoadOutcome {
+    skills_for_mode_with_stack(
+        skills_service,
+        cwd,
+        config_layer_stack,
+        effective_skill_roots,
+        ModeKind::Default,
+    )
+    .await
+}
+
+/// Loads the catalog for a specific collaboration mode. The mode — not the
+/// `skills.bundled.*` config keys — decides which opt-in bundle is visible;
+/// the keys only make the mode available.
+async fn skills_for_mode_with_stack(
+    skills_service: &SkillsService,
+    cwd: &TempDir,
+    config_layer_stack: &ConfigLayerStack,
+    effective_skill_roots: &[PluginSkillRoot],
+    mode: ModeKind,
+) -> SkillLoadOutcome {
     let skills_input = SkillsLoadInput::new(
         cwd.path().abs(),
         effective_skill_roots.to_vec(),
         config_layer_stack.clone(),
         bundled_skills_enabled_from_stack(config_layer_stack),
-    );
+    )
+    .with_collaboration_mode(mode);
     skills_service
         .snapshot_for_config(&skills_input, Some(Arc::clone(&LOCAL_FS)))
         .await
@@ -825,21 +846,24 @@ fn game_skills_enabled_from_stack_defaults_to_false() {
 }
 
 #[tokio::test]
-async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
+async fn embedded_game_skills_are_visible_only_in_game_mode() {
     let ody_home = tempfile::tempdir().expect("tempdir");
     let cwd = tempfile::tempdir().expect("tempdir");
     let skills_service =
         SkillsService::new(ody_home.path().abs(), /*bundled_skills_enabled*/ true);
 
-    let default_stack = config_stack(&ody_home, "");
+    // The opt-in flag alone must not leak the bundle into every mode: its only
+    // job is to make Game mode selectable.
+    let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
     let default_outcome =
-        skills_for_config_with_stack(&skills_service, &cwd, &default_stack, &[]).await;
+        skills_for_mode_with_stack(&skills_service, &cwd, &game_stack, &[], ModeKind::Default)
+            .await;
     assert!(
         default_outcome
             .skills
             .iter()
             .all(|skill| skill.name != "game" && skill.name != "godot-shaders"),
-        "game bundle skills must be hidden unless the game flag is on"
+        "game bundle skills must be hidden outside Game mode even when the mode is enabled"
     );
     assert!(
         default_outcome
@@ -849,25 +873,32 @@ async fn embedded_game_skills_hidden_by_default_and_shown_when_enabled() {
         "non-game bundled skills must stay visible"
     );
 
-    // Same roots and skill rules, only the game flag differs: the config cache
-    // must not serve the game-hidden snapshot for a game-enabled stack.
-    let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
-    let game_outcome = skills_for_config_with_stack(&skills_service, &cwd, &game_stack, &[]).await;
+    // Same roots and skill rules, only the mode differs: the config cache must
+    // not serve the game-hidden snapshot for a Game-mode session.
+    let game_outcome =
+        skills_for_mode_with_stack(&skills_service, &cwd, &game_stack, &[], ModeKind::Game).await;
     assert!(
         game_outcome.skills.iter().any(|skill| skill.name == "game"),
-        "/game skill must be visible when the game flag is on"
+        "/game skill must be visible in Game mode"
     );
     assert!(
         game_outcome
             .skills
             .iter()
             .any(|skill| skill.name == "godot-shaders"),
-        "vendored gamedev skills must be visible when the game flag is on"
+        "vendored gamedev skills must be visible in Game mode"
+    );
+    assert!(
+        game_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "debt-ledger"),
+        "Game mode is additive: the rest of the catalog stays visible"
     );
 }
 
 #[tokio::test]
-async fn snapshot_for_cwd_cache_separates_game_flag() {
+async fn snapshot_for_cwd_cache_separates_collaboration_mode() {
     let ody_home = tempfile::tempdir().expect("tempdir");
     let cwd = tempfile::tempdir().expect("tempdir");
     let skills_service =
@@ -879,7 +910,8 @@ async fn snapshot_for_cwd_cache_separates_game_flag() {
         Vec::new(),
         default_stack.clone(),
         bundled_skills_enabled_from_stack(&default_stack),
-    );
+    )
+    .with_collaboration_mode(ModeKind::Default);
     let default_snapshot = skills_service
         .snapshot_for_cwd(
             &default_input,
@@ -895,15 +927,16 @@ async fn snapshot_for_cwd_cache_separates_game_flag() {
             .all(|skill| skill.name != "game")
     );
 
-    // A second session in the same cwd with the game flag on must not reuse
-    // the cached game-hidden snapshot.
+    // A second session in the same cwd in Game mode must not reuse the cached
+    // game-hidden snapshot.
     let game_stack = config_stack(&ody_home, "[skills.bundled]\ngame = true\n");
     let game_input = SkillsLoadInput::new(
         cwd.path().abs(),
         Vec::new(),
         game_stack.clone(),
         bundled_skills_enabled_from_stack(&game_stack),
-    );
+    )
+    .with_collaboration_mode(ModeKind::Game);
     let game_snapshot = skills_service
         .snapshot_for_cwd(
             &game_input,
@@ -917,7 +950,7 @@ async fn snapshot_for_cwd_cache_separates_game_flag() {
             .skills
             .iter()
             .any(|skill| skill.name == "game"),
-        "cwd cache must be keyed by the game flag"
+        "cwd cache must be keyed by the collaboration mode"
     );
 }
 
@@ -968,11 +1001,17 @@ async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
         "user skills are visible by default"
     );
 
-    // Frontend mode is exclusive: only the two craft skills survive, and the
+    // Frontend mode is exclusive: only the craft bundle survives, and the
     // user-installed skill is hidden even though no config rule targeted it.
     let frontend_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
-    let frontend_outcome =
-        skills_for_config_with_stack(&skills_service, &cwd, &frontend_stack, &[]).await;
+    let frontend_outcome = skills_for_mode_with_stack(
+        &skills_service,
+        &cwd,
+        &frontend_stack,
+        &[],
+        ModeKind::Frontend,
+    )
+    .await;
     let mut visible: Vec<&str> = frontend_outcome
         .skills
         .iter()
@@ -983,14 +1022,14 @@ async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
     expected.sort_unstable();
     assert_eq!(
         visible, expected,
-        "frontend mode exposes exactly make-interfaces-feel-better and motion-design"
+        "Frontend mode exposes exactly the bundled craft skills"
     );
     assert!(
         frontend_outcome
             .skills
             .iter()
-            .all(|skill| skill.name != "frontend-design"),
-        "frontend-design stays out of the frontend bundle"
+            .any(|skill| skill.name == "frontend-design"),
+        "frontend-design is the bundle's entry skill and must be visible"
     );
 }
 
@@ -1007,11 +1046,12 @@ async fn frontend_mode_keeps_the_system_root_when_bundled_skills_are_disabled() 
         &ody_home,
         "[skills.bundled]\nenabled = false\nfrontend = true\n",
     );
-    let outcome = skills_for_config_with_stack(&skills_service, &cwd, &stack, &[]).await;
+    let outcome =
+        skills_for_mode_with_stack(&skills_service, &cwd, &stack, &[], ModeKind::Frontend).await;
     assert_eq!(
         outcome.skills.len(),
         ody_skills::embedded_frontend_skill_names().len(),
-        "frontend mode must still load its two skills: {:?}",
+        "frontend mode must still load its bundled skills: {:?}",
         outcome
             .skills
             .iter()
@@ -1033,7 +1073,8 @@ async fn snapshot_for_cwd_cache_separates_frontend_mode() {
         Vec::new(),
         default_stack.clone(),
         bundled_skills_enabled_from_stack(&default_stack),
-    );
+    )
+    .with_collaboration_mode(ModeKind::Default);
     let default_snapshot = skills_service
         .snapshot_for_cwd(
             &default_input,
@@ -1049,15 +1090,16 @@ async fn snapshot_for_cwd_cache_separates_frontend_mode() {
             .any(|skill| skill.name == "debt-ledger")
     );
 
-    // A second session in the same cwd with the frontend flag on must not
-    // reuse the unrestricted snapshot.
+    // A second session in the same cwd in Frontend mode must not reuse the
+    // unrestricted snapshot.
     let frontend_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
     let frontend_input = SkillsLoadInput::new(
         cwd.path().abs(),
         Vec::new(),
         frontend_stack.clone(),
         bundled_skills_enabled_from_stack(&frontend_stack),
-    );
+    )
+    .with_collaboration_mode(ModeKind::Frontend);
     let frontend_snapshot = skills_service
         .snapshot_for_cwd(
             &frontend_input,
@@ -1076,6 +1118,6 @@ async fn snapshot_for_cwd_cache_separates_frontend_mode() {
     expected.sort_unstable();
     assert_eq!(
         visible, expected,
-        "cwd cache must be keyed by the frontend flag"
+        "cwd cache must be keyed by the collaboration mode"
     );
 }

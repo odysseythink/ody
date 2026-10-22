@@ -5,6 +5,7 @@ use std::sync::RwLock;
 
 use ody_config::ConfigLayerStack;
 use ody_exec_server::ExecutorFileSystem;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SkillScope;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -33,6 +34,13 @@ pub struct SkillsLoadInput {
     pub effective_skill_roots: Vec<PluginSkillRoot>,
     pub config_layer_stack: ConfigLayerStack,
     pub bundled_skills_enabled: bool,
+    /// The collaboration mode the catalog is being built for, when the caller
+    /// knows it. `Game` narrows away the bundled game skills (they are only
+    /// listed in that mode) and `Frontend` narrows the catalog down to the
+    /// frontend craft bundle; every other mode leaves the catalog untouched.
+    /// `None` means "no mode context" — the full catalog, which is what the
+    /// skill-browser and watcher paths want.
+    pub collaboration_mode: Option<ModeKind>,
     plugin_skill_snapshots: Option<PluginSkillSnapshots>,
 }
 
@@ -48,8 +56,15 @@ impl SkillsLoadInput {
             effective_skill_roots,
             config_layer_stack,
             bundled_skills_enabled,
+            collaboration_mode: None,
             plugin_skill_snapshots: None,
         }
+    }
+
+    /// Scopes the load to a collaboration mode's skill visibility.
+    pub fn with_collaboration_mode(mut self, mode: ModeKind) -> Self {
+        self.collaboration_mode = Some(mode);
+        self
     }
 
     /// Attaches plugin skill snapshots parsed during plugin loading, when available.
@@ -130,14 +145,8 @@ impl SkillsService {
     ) -> HostSkillsSnapshot {
         let roots = self.skill_roots_for_config(input, fs).await;
         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
-        let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
-        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
-        let cache_key = config_skills_cache_key(
-            &roots,
-            &skill_config_rules,
-            game_skills_enabled,
-            frontend_mode_enabled,
-        );
+        let cache_key =
+            config_skills_cache_key(&roots, &skill_config_rules, input.collaboration_mode);
         if let Some(snapshot) = self.cached_snapshot_for_config(&cache_key) {
             return snapshot;
         }
@@ -168,8 +177,8 @@ impl SkillsService {
         )
         .await;
         // Frontend mode takes its skills from the bundled system root, so
-        // honouring `bundled.enabled = false` there would silently produce an
-        // empty catalog. The explicit per-invocation flag wins.
+        // honouring `bundled.enabled = false` while the mode is selectable
+        // would silently produce an empty catalog. The explicit opt-in wins.
         if !input.bundled_skills_enabled
             && !frontend_mode_enabled_from_stack(&input.config_layer_stack)
         {
@@ -185,12 +194,10 @@ impl SkillsService {
         fs: Option<Arc<dyn ExecutorFileSystem>>,
     ) -> HostSkillsSnapshot {
         let use_cwd_cache = fs.is_some();
-        let game_skills_enabled = game_skills_enabled_from_stack(&input.config_layer_stack);
-        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
         if use_cwd_cache
             && !force_reload
             && let Some(snapshot) =
-                self.cached_snapshot_for_cwd(&input.cwd, game_skills_enabled, frontend_mode_enabled)
+                self.cached_snapshot_for_cwd(&input.cwd, input.collaboration_mode)
         {
             return snapshot;
         }
@@ -203,7 +210,9 @@ impl SkillsService {
             self.extra_roots(),
         )
         .await;
-        if !bundled_skills_enabled_from_stack(&input.config_layer_stack) && !frontend_mode_enabled {
+        if !bundled_skills_enabled_from_stack(&input.config_layer_stack)
+            && !frontend_mode_enabled_from_stack(&input.config_layer_stack)
+        {
             roots.retain(|root| root.scope != SkillScope::System);
         }
         let skill_config_rules = skill_config_rules_from_stack(&input.config_layer_stack);
@@ -219,8 +228,7 @@ impl SkillsService {
             cache.insert(
                 CwdSkillsCacheKey {
                     cwd: input.cwd.clone(),
-                    game_skills_enabled,
-                    frontend_mode_enabled,
+                    collaboration_mode: input.collaboration_mode,
                 },
                 snapshot.clone(),
             );
@@ -240,11 +248,11 @@ impl SkillsService {
             crate::filter_skill_load_outcome_for_product(outcome, self.restriction_product);
         let outcome = crate::filter_skill_load_outcome_for_game(
             outcome,
-            game_skills_enabled_from_stack(&input.config_layer_stack),
+            input.collaboration_mode == Some(ModeKind::Game),
         );
-        let frontend_mode_enabled = frontend_mode_enabled_from_stack(&input.config_layer_stack);
-        let outcome = crate::filter_skill_load_outcome_for_frontend(outcome, frontend_mode_enabled);
-        if frontend_mode_enabled {
+        let frontend_mode_active = input.collaboration_mode == Some(ModeKind::Frontend);
+        let outcome = crate::filter_skill_load_outcome_for_frontend(outcome, frontend_mode_active);
+        if frontend_mode_active {
             info!(
                 skills = outcome.skills.len(),
                 visible = ?ody_skills::embedded_frontend_skill_names(),
@@ -281,13 +289,11 @@ impl SkillsService {
     fn cached_snapshot_for_cwd(
         &self,
         cwd: &AbsolutePathBuf,
-        game_skills_enabled: bool,
-        frontend_mode_enabled: bool,
+        collaboration_mode: Option<ModeKind>,
     ) -> Option<HostSkillsSnapshot> {
         let key = CwdSkillsCacheKey {
             cwd: cwd.clone(),
-            game_skills_enabled,
-            frontend_mode_enabled,
+            collaboration_mode,
         };
         match self.cache_by_cwd.read() {
             Ok(cache) => cache.get(&key).cloned(),
@@ -317,15 +323,15 @@ impl SkillsService {
 struct ConfigSkillsCacheKey {
     roots: Vec<(AbsolutePathBuf, u8, Option<String>, Option<String>)>,
     skill_config_rules: SkillConfigRules,
-    game_skills_enabled: bool,
-    frontend_mode_enabled: bool,
+    /// Opt-in modes narrow the catalog, so the active mode belongs in the key:
+    /// two sessions in the same directory must not share a bundle-only catalog.
+    collaboration_mode: Option<ModeKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CwdSkillsCacheKey {
     cwd: AbsolutePathBuf,
-    game_skills_enabled: bool,
-    frontend_mode_enabled: bool,
+    collaboration_mode: Option<ModeKind>,
 }
 
 pub fn bundled_skills_enabled_from_stack(
@@ -350,10 +356,15 @@ pub fn bundled_skills_enabled_from_stack(
     skills.bundled.unwrap_or_default().enabled
 }
 
-/// Returns whether the embedded game-development skill bundle (the `/game`
-/// entry skill and the vendored gamedev skill set) is visible. Defaults to
-/// `false`; `ody --game` layers `skills.bundled.game = true` onto the config
-/// stack for one invocation.
+/// Returns whether the game-development *mode* is available in this
+/// invocation. Defaults to `false`; `ody --game` layers
+/// `skills.bundled.game = true` onto the config stack.
+///
+/// This is availability, not visibility: the bundled game skills are listed
+/// only while [`ModeKind::Game`] is the active collaboration mode — see
+/// [`SkillsLoadInput::collaboration_mode`]. Before Game became a mode this flag
+/// doubled as the filter, which meant a `--game` session could never leave the
+/// game catalog.
 pub fn game_skills_enabled_from_stack(config_layer_stack: &ody_config::ConfigLayerStack) -> bool {
     let effective_config = config_layer_stack.effective_config();
     let Some(skills_value) = effective_config
@@ -377,13 +388,15 @@ pub fn game_skills_enabled_from_stack(config_layer_stack: &ody_config::ConfigLay
         .unwrap_or_default()
 }
 
-/// Returns whether the skill catalog is narrowed to the bundled frontend-design
-/// craft skills (`make-interfaces-feel-better` and `motion-design`). Defaults to
-/// `false`; `ody --frontend` layers `skills.bundled.frontend = true` onto the
-/// config stack for one invocation.
+/// Returns whether the frontend *mode* is available in this invocation.
+/// Defaults to `false`; `ody --frontend` layers
+/// `skills.bundled.frontend = true` onto the config stack.
 ///
-/// Fails safe: a malformed `skills` table leaves the full catalog visible
-/// rather than hiding everything the user installed.
+/// Like the game flag this is availability: the catalog is narrowed only while
+/// [`ModeKind::Frontend`] is active, so leaving the mode restores every skill.
+///
+/// Fails safe: a malformed `skills` table leaves the mode unavailable rather
+/// than hiding everything the user installed.
 pub fn frontend_mode_enabled_from_stack(config_layer_stack: &ody_config::ConfigLayerStack) -> bool {
     let effective_config = config_layer_stack.effective_config();
     let Some(skills_value) = effective_config
@@ -410,8 +423,7 @@ pub fn frontend_mode_enabled_from_stack(config_layer_stack: &ody_config::ConfigL
 fn config_skills_cache_key(
     roots: &[SkillRoot],
     skill_config_rules: &SkillConfigRules,
-    game_skills_enabled: bool,
-    frontend_mode_enabled: bool,
+    collaboration_mode: Option<ModeKind>,
 ) -> ConfigSkillsCacheKey {
     ConfigSkillsCacheKey {
         roots: roots
@@ -432,8 +444,7 @@ fn config_skills_cache_key(
             })
             .collect(),
         skill_config_rules: skill_config_rules.clone(),
-        game_skills_enabled,
-        frontend_mode_enabled,
+        collaboration_mode,
     }
 }
 

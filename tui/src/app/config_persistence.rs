@@ -864,8 +864,10 @@ impl App {
                     .into_iter()
                     .map(model_preset_from_api_model)
                     .collect::<Vec<_>>();
-                let new_catalog =
-                    Arc::new(crate::model_catalog::ModelCatalog::new(available_models));
+                let new_catalog = Arc::new(
+                    crate::model_catalog::ModelCatalog::new(available_models)
+                        .with_mode_availability(self.config.collaboration_mode_availability()),
+                );
                 self.model_catalog = new_catalog.clone();
                 self.chat_widget.set_model_catalog(new_catalog);
             }

@@ -133,15 +133,21 @@ pub fn is_embedded_game_skill(name: &str) -> bool {
 
 /// Names of embedded system skills that make up the frontend-design bundle.
 ///
-/// These two are the craft skills with reference material (design details,
-/// motion values); `frontend-design` deliberately stays out so the bundle is
-/// exactly what the `--frontend` flag promises.
+/// `frontend-design` is the entry skill: it carries the design-direction
+/// method (typography, palette, composition) that the two craft skills then
+/// implement. Keeping it in the bundle is what lets Frontend mode start from a
+/// direction instead of a blank canvas — without it the model only had polish
+/// guidance and defaulted to generic layouts.
 ///
 /// Unlike [`EMBEDDED_GAME_SKILL_NAMES`] (additive), opting in is exclusive:
-/// `--frontend` hides every other skill, so the model works from this set
-/// alone. Matching is by name, which lets a repo- or user-installed copy of
-/// either skill survive the filter.
-const EMBEDDED_FRONTEND_SKILL_NAMES: &[&str] = &["make-interfaces-feel-better", "motion-design"];
+/// Frontend mode hides every other skill, so the model works from this set
+/// alone. Matching is by name, which lets a repo- or user-installed copy of any
+/// member survive the filter.
+const EMBEDDED_FRONTEND_SKILL_NAMES: &[&str] = &[
+    "frontend-design",
+    "make-interfaces-feel-better",
+    "motion-design",
+];
 
 /// Returns whether `name` belongs to the embedded frontend-design bundle that
 /// the `--frontend` CLI flag narrows the skill catalog down to.
@@ -545,13 +551,19 @@ mod tests {
                 "ody-only {name} must be visible under Product::Ody"
             );
             assert!(
-                !odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                !odybox_filtered
+                    .skills
+                    .iter()
+                    .any(|skill| skill.name == name),
                 "ody-only {name} must be hidden under Product::OdyBox"
             );
         }
         for name in odybox_only {
             assert!(
-                odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                odybox_filtered
+                    .skills
+                    .iter()
+                    .any(|skill| skill.name == name),
                 "odybox-only {name} must be visible under Product::OdyBox"
             );
             assert!(
@@ -565,7 +577,10 @@ mod tests {
                 "shared {name} must be visible under Product::Ody"
             );
             assert!(
-                odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                odybox_filtered
+                    .skills
+                    .iter()
+                    .any(|skill| skill.name == name),
                 "shared {name} must be visible under Product::OdyBox"
             );
         }
@@ -605,7 +620,9 @@ mod tests {
                 .find(|s| s.name == name)
                 .unwrap_or_else(|| panic!("{name} should be installed and loadable"));
             assert!(
-                skill.hidden_in_modes.contains(&ody_protocol::config_types::ModeKind::Product),
+                skill
+                    .hidden_in_modes
+                    .contains(&ody_protocol::config_types::ModeKind::Product),
                 "{name} must be hidden in Product mode; got {:?}",
                 skill.hidden_in_modes
             );
@@ -633,8 +650,9 @@ mod tests {
         ));
         assert!(super::is_embedded_frontend_skill("motion-design"));
         assert!(
-            !super::is_embedded_frontend_skill("frontend-design"),
-            "frontend-design stays out of the --frontend bundle"
+            super::is_embedded_frontend_skill("frontend-design"),
+            "frontend-design is the bundle's entry skill: it carries the \
+             design-direction method the craft skills assume"
         );
         assert!(!super::is_embedded_frontend_skill("game"));
         assert!(!super::is_embedded_frontend_skill("no-such-skill"));
@@ -675,8 +693,7 @@ mod tests {
         // classifying it must fail this test.
         use std::collections::HashSet;
 
-        let embedded: HashSet<String> =
-            super::embedded_system_skill_names().into_iter().collect();
+        let embedded: HashSet<String> = super::embedded_system_skill_names().into_iter().collect();
         let game: HashSet<&str> = super::EMBEDDED_GAME_SKILL_NAMES.iter().copied().collect();
         let non_game: HashSet<&str> = super::EMBEDDED_NON_GAME_SKILL_NAMES
             .iter()
@@ -701,8 +718,7 @@ mod tests {
         let classified: HashSet<&str> = game.union(&non_game).copied().collect();
         let embedded_refs: HashSet<&str> = embedded.iter().map(String::as_str).collect();
         assert_eq!(
-            classified,
-            embedded_refs,
+            classified, embedded_refs,
             "every embedded skill must be classified as game or non-game"
         );
     }

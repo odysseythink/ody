@@ -10,7 +10,10 @@ fn builtin_presets_include_product_mode() {
         .expect("builtin presets must include the product mode");
     assert_eq!(product.name, ModeKind::Product.display_name());
     assert_eq!(product.model, None);
-    assert_eq!(product.reasoning_effort, Some(Some(ReasoningEffort::Medium)));
+    assert_eq!(
+        product.reasoning_effort,
+        Some(Some(ReasoningEffort::Medium))
+    );
     let instructions = product
         .developer_instructions
         .as_ref()
@@ -92,8 +95,8 @@ fn design_mode_instructions_mandate_popup_for_closed_choice_questions() {
         "design instructions must offer Enter Plan mode after submission"
     );
     assert!(
-        design_instructions.contains("Compact and enter Plan mode"),
-        "design instructions must offer Compact and enter Plan mode after submission"
+        design_instructions.contains("Clear context and enter Plan mode"),
+        "design instructions must offer Clear context and enter Plan mode after submission"
     );
     assert!(
         design_instructions.contains("Stay in Design mode"),
@@ -135,4 +138,79 @@ fn default_mode_instructions_replace_mode_names_placeholder() {
     assert!(
         default_instructions.contains("ask the user directly with a concise plain-text question")
     );
+}
+
+#[test]
+fn opt_in_presets_carry_real_mode_contracts() {
+    let presets = opt_in_collaboration_mode_presets();
+    let modes: Vec<Option<ModeKind>> = presets.iter().map(|preset| preset.mode).collect();
+    assert_eq!(
+        modes,
+        vec![Some(ModeKind::Game), Some(ModeKind::Frontend)],
+        "opt-in presets must cover exactly the gated modes"
+    );
+    for preset in presets {
+        assert_eq!(
+            preset.name,
+            preset.mode.expect("mode").display_name(),
+            "preset names must use the mode display name"
+        );
+        let instructions = preset
+            .developer_instructions
+            .expect("opt-in preset should include instructions")
+            .expect("opt-in instructions should be set");
+        // A preset without a contract would make the mode a pure skill filter.
+        assert!(
+            instructions.contains("`SKILL.md`"),
+            "opt-in mode {:?} must send the model to its bundle's SKILL.md",
+            preset.mode
+        );
+    }
+}
+
+#[test]
+fn presets_for_availability_hide_opt_in_modes_by_default() {
+    let plain: Vec<Option<ModeKind>> = collaboration_mode_presets_for(ModeAvailability::default())
+        .into_iter()
+        .map(|preset| preset.mode)
+        .collect();
+    assert_eq!(
+        plain,
+        builtin_collaboration_mode_presets()
+            .into_iter()
+            .map(|preset| preset.mode)
+            .collect::<Vec<_>>(),
+        "a plain invocation must expose exactly the always-on presets"
+    );
+
+    let both: Vec<Option<ModeKind>> = collaboration_mode_presets_for(ModeAvailability::new(
+        /*game*/ true, /*frontend*/ true,
+    ))
+    .into_iter()
+    .map(|preset| preset.mode)
+    .collect();
+    assert_eq!(
+        both,
+        vec![
+            Some(ModeKind::Plan),
+            Some(ModeKind::Design),
+            Some(ModeKind::Product),
+            Some(ModeKind::Default),
+            Some(ModeKind::Game),
+            Some(ModeKind::Frontend),
+        ],
+        "enabled opt-in modes are appended after the always-on presets"
+    );
+}
+
+#[test]
+fn preset_for_mode_ignores_availability() {
+    // The session's initial mode is built from config, never from a client's
+    // preset list, so `preset_for_mode` must not consult availability.
+    for mode in [ModeKind::Game, ModeKind::Frontend] {
+        let preset = preset_for_mode(mode).expect("opt-in mode must have a preset");
+        assert_eq!(preset.mode, Some(mode));
+        assert!(preset.developer_instructions.is_some());
+    }
+    assert!(preset_for_mode(ModeKind::PairProgramming).is_none());
 }

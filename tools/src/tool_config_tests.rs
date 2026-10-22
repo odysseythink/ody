@@ -163,17 +163,56 @@ fn unified_exec_feature_mode_follows_composition_dependencies() {
 
 #[test]
 fn request_user_input_modes_follow_default_mode_feature() {
+    let availability = ModeAvailability::default();
     let mut features = Features::with_defaults();
     features.disable(Feature::DefaultModeRequestUserInput);
     assert_eq!(
-        request_user_input_available_modes(&features),
-        vec![ModeKind::Plan, ModeKind::Design]
+        request_user_input_available_modes(&features, availability),
+        vec![ModeKind::Plan, ModeKind::Design, ModeKind::Product]
     );
 
     features.enable(Feature::DefaultModeRequestUserInput);
     assert_eq!(
-        request_user_input_available_modes(&features),
-        vec![ModeKind::Default, ModeKind::Plan, ModeKind::Design]
+        request_user_input_available_modes(&features, availability),
+        vec![
+            ModeKind::Default,
+            ModeKind::Plan,
+            ModeKind::Design,
+            ModeKind::Product
+        ]
+    );
+}
+
+#[test]
+fn request_user_input_modes_follow_opt_in_availability() {
+    let features = Features::with_defaults();
+    assert_eq!(
+        request_user_input_available_modes(&features, ModeAvailability::default()),
+        vec![ModeKind::Plan, ModeKind::Design, ModeKind::Product],
+        "a plain invocation must not name a mode the user cannot enter"
+    );
+
+    assert_eq!(
+        request_user_input_available_modes(&features, ModeAvailability::new(true, true)),
+        vec![
+            ModeKind::Plan,
+            ModeKind::Design,
+            ModeKind::Product,
+            ModeKind::Game,
+            ModeKind::Frontend
+        ],
+        "each enabled opt-in mode allows one blocking scoping question"
+    );
+
+    assert_eq!(
+        request_user_input_available_modes(&features, ModeAvailability::new(false, true)),
+        vec![
+            ModeKind::Plan,
+            ModeKind::Design,
+            ModeKind::Product,
+            ModeKind::Frontend
+        ],
+        "availability is per mode, not all-or-nothing"
     );
 }
 

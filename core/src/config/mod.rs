@@ -101,6 +101,7 @@ use ody_protocol::config_types::AltScreenMode;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ForcedLoginMethod;
+use ody_protocol::config_types::ModeAvailability;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
@@ -4495,6 +4496,18 @@ impl Config {
 
     pub fn bundled_skills_enabled(&self) -> bool {
         crate::skills::service::bundled_skills_enabled_from_stack(&self.config_layer_stack)
+    }
+
+    /// Which opt-in collaboration modes this invocation may offer.
+    ///
+    /// `--game` / `--frontend` (or the matching `skills.bundled.*` keys) are
+    /// the opt-in: they gate both the mode's presence in the mode ring and the
+    /// skill bundle that mode narrows the catalog down to.
+    pub fn collaboration_mode_availability(&self) -> ModeAvailability {
+        ModeAvailability::new(
+            crate::skills::service::game_skills_enabled_from_stack(&self.config_layer_stack),
+            crate::skills::service::frontend_mode_enabled_from_stack(&self.config_layer_stack),
+        )
     }
 
     /// Returns whether effective requirements allow selecting a concrete profile.
