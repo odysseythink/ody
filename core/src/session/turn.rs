@@ -1538,6 +1538,43 @@ async fn run_plan_staleness_reminder(sess: &Arc<Session>, turn_context: &Arc<Tur
         .await;
 }
 
+/// Re-injects the Frontend-mode evidence contract on the Plan/Design/Product
+/// reminder cadence.
+///
+/// Frontend is a write mode, so it never reaches `run_session_mode_after_turn`
+/// and holds no `PlanArtifact`. Its counters ride on the same
+/// `plan_mode_reminder_turns` tuple the other modes persist: one mode is active
+/// at a time, and a mid-session mode switch should not reset the decay clock.
+///
+/// The counter is written back even when nothing fires — it advances every turn
+/// and is what makes "turn 5" mean the fifth turn rather than the first.
+async fn run_frontend_reminder(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) {
+    if turn_context.collaboration_mode.mode != ModeKind::Frontend {
+        return;
+    }
+    let carried = sess.plan_mode_reminder_turns().await.unwrap_or((0, None, None));
+    let (reminder, turns) = PlanModeInjector::render_frontend_reminder_if_due(
+        carried,
+        turn_context.config.plan_mode.as_ref(),
+    );
+    sess.set_plan_mode_reminder_turns(turns).await;
+
+    let Some((kind, text, logs)) = reminder else {
+        return;
+    };
+    for log in logs {
+        sess.send_event(turn_context, EventMsg::PlanModeLog(log)).await;
+    }
+    let source = InternalContextSource::from_static(match kind {
+        ReminderKind::Full => "frontend_mode_full_reminder",
+        ReminderKind::Sparse => "frontend_mode_sparse_reminder",
+    });
+    let fragment = InternalModelContextFragment::new(source, text);
+    let item: ResponseItem = ContextualUserFragment::into(fragment);
+    sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
+        .await;
+}
+
 fn render_plan_staleness_reminder(plan: &[PlanItemArg]) -> String {
     let mut items = String::new();
     for (index, item) in plan.iter().enumerate() {
@@ -1898,7 +1935,9 @@ async fn run_session_mode_after_turn(
     // self-review), and the Product path re-injects the requirements
     // discipline (one-question-popups, evidence grading, priority vocabulary,
     // no-code hard gate) — all of which would otherwise decay after the single
-    // entry injection. Split plans already receive event-driven directives at
+    // entry injection. Frontend has the same problem but no artifact (it is a
+    // write mode), so its cadence runs from `run_frontend_reminder` on the
+    // write path. Split plans already receive event-driven directives at
     // the initial manifest, verified part boundaries, first validation failure,
     // and final review. Periodic full/sparse reminders during every model
     // sampling only duplicate that contract and inflate context, so retain
@@ -3357,6 +3396,10 @@ async fn try_run_sampling_request(
         // unfinished plan it has stopped advancing. Runs after the checkpoint so
         // a compaction this turn carries the fresh plan, not a reminder fragment.
         run_plan_staleness_reminder(&sess, &turn_context).await;
+        // Frontend is the one write mode with a decaying contract: its claims
+        // are visual, so a faded "show me the screenshot" rule is
+        // indistinguishable from a narration of work that never happened.
+        run_frontend_reminder(&sess, &turn_context).await;
     }
 
     outcome

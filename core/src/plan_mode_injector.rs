@@ -1,4 +1,4 @@
-use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
+use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact, ReminderTurns};
 use crate::plan_mode_injector::parts_manifest::{
     ManifestRow, RowStatus, normalize_part_path, parse_parts_manifest, part_completion_violations,
     row_is_verified_done,
@@ -437,6 +437,93 @@ impl PlanModeInjector {
         );
         Some((kind, text, vec![log]))
     }
+
+    /// Frontend-mode counterpart to [`Self::render_reminder_if_due`].
+    ///
+    /// Frontend's contract is injected once at entry and then never reinforced,
+    /// so over a long build session the rules that decide whether the work is
+    /// checkable at all get buried: capture a baseline before editing, open the
+    /// screenshot you captured, re-capture the same frames. Those are exactly
+    /// the rules a model can satisfy on paper — it can describe a verification
+    /// it never ran without contradicting anything still in context.
+    ///
+    /// Unlike the Plan/Design/Product paths this takes the cadence counters
+    /// directly instead of a [`PlanArtifact`]. Frontend is a write mode, so it
+    /// never submits a plan; giving it an artifact would put a plan-scope write
+    /// whitelist and a spike-path bypass in front of a mode that has neither.
+    /// The tuple is the same one `SessionState` already persists for the other
+    /// modes, so a mode switch keeps the decay clock running rather than
+    /// resetting it.
+    ///
+    /// Returns the reminder (when one is due) together with the updated
+    /// counters, which the caller must store even when nothing fired: the turn
+    /// count advances on every turn.
+    pub fn render_frontend_reminder_if_due(
+        turns: ReminderTurns,
+        plan_mode_config: Option<&PlanModeConfigToml>,
+    ) -> (Option<(ReminderKind, String, Vec<PlanModeLogEvent>)>, ReminderTurns) {
+        let (kind, turns) = advance_reminder_turns(turns, plan_mode_config);
+        let Some(kind) = kind else {
+            return (None, turns);
+        };
+        let text = match kind {
+            ReminderKind::Full => render_frontend_full_reminder(),
+            ReminderKind::Sparse => render_frontend_sparse_reminder(),
+        };
+        let log = make_log(
+            PlanModeLogKind::RigorReminder,
+            match kind {
+                ReminderKind::Full => "Injecting full frontend reminder.".to_string(),
+                ReminderKind::Sparse => "Injecting sparse frontend reminder.".to_string(),
+            },
+            Some(format!("turn={}", turns.0)),
+        );
+        (Some((kind, text, vec![log])), turns)
+    }
+}
+
+/// Counter-only form of [`advance_and_select_reminder`], for a mode that holds
+/// no [`PlanArtifact`] of its own.
+///
+/// Same selection logic and same tuple shape `(turn_count, last_full_turn,
+/// last_any_turn)`, so a host that persists the tuple between turns gets the
+/// identical full/sparse cadence the artifact-backed modes get.
+fn advance_reminder_turns(
+    turns: ReminderTurns,
+    plan_mode_config: Option<&PlanModeConfigToml>,
+) -> (Option<ReminderKind>, ReminderTurns) {
+    let current_turn = turns.0.saturating_add(1);
+    let (last_full_turn, last_any_turn) = (turns.1, turns.2);
+
+    // Before the first full reminder has been injected, suppress sparse
+    // reminders so the initial full contract (already present in context) is
+    // not diluted by partial pointers ahead of the first scheduled refresh.
+    let full_refresh = plan_mode_config
+        .and_then(|c| c.full_refresh_turns)
+        .unwrap_or(5);
+    let last_any_turn_for_selection = if full_refresh > 0 && last_full_turn == Some(0) {
+        Some(current_turn.saturating_sub(1))
+    } else {
+        last_any_turn
+    };
+
+    let Some(kind) = select_reminder(
+        current_turn,
+        last_full_turn,
+        last_any_turn_for_selection,
+        plan_mode_config,
+    ) else {
+        return (None, (current_turn, last_full_turn, last_any_turn));
+    };
+    let last_full_turn = if kind == ReminderKind::Full {
+        Some(current_turn)
+    } else {
+        last_full_turn
+    };
+    (
+        Some(kind),
+        (current_turn, last_full_turn, Some(current_turn)),
+    )
 }
 
 /// Advances the per-artifact turn counter, selects whether a full/sparse
@@ -495,6 +582,17 @@ pub fn render_product_full_reminder() -> String {
 /// reinjections to keep the operating rules alive without full repetition).
 pub fn render_product_sparse_reminder() -> String {
     ody_collaboration_mode_templates::PRODUCT_SPARSE_REMINDER.to_string()
+}
+
+/// Renders the full Frontend-mode reminder (re-injected on the full cadence).
+pub fn render_frontend_full_reminder() -> String {
+    ody_collaboration_mode_templates::FRONTEND_FULL_REMINDER.to_string()
+}
+
+/// Renders the condensed Frontend-mode reminder (re-injected between full
+/// reinjections to keep the operating rules alive without full repetition).
+pub fn render_frontend_sparse_reminder() -> String {
+    ody_collaboration_mode_templates::FRONTEND_SPARSE_REMINDER.to_string()
 }
 
 fn make_log(kind: PlanModeLogKind, message: String, detail: Option<String>) -> PlanModeLogEvent {
@@ -1497,6 +1595,83 @@ mod directive_tests {
         )
         .expect("turn 7 should emit a sparse product reminder");
         assert_eq!(kind, ReminderKind::Sparse);
+    }
+
+    /// Frontend has no artifact, so its cadence is driven from the tuple the
+    /// session persists. It must produce the identical schedule the
+    /// artifact-backed modes produce — otherwise the mode whose claims are
+    /// hardest to check would be the one whose contract fades fastest.
+    #[test]
+    fn render_frontend_reminder_if_due_follows_full_sparse_cadence() {
+        let config = PlanModeConfigToml::default();
+        // The state a session presents on its first turn: no reminder has fired
+        // yet, and `last_full_turn == Some(0)` is the sentinel that suppresses
+        // sparse reminders until the first full one.
+        let mut turns = (0, Some(0), Some(0));
+
+        for turn in 1..=4 {
+            let (reminder, next) =
+                PlanModeInjector::render_frontend_reminder_if_due(turns, Some(&config));
+            assert!(
+                reminder.is_none(),
+                "no frontend reminder before turn 5 (turn {turn})"
+            );
+            assert_eq!(next.0, turn, "the counter advances every turn, fired or not");
+            turns = next;
+        }
+
+        let (reminder, turns) =
+            PlanModeInjector::render_frontend_reminder_if_due(turns, Some(&config));
+        let (kind, text, logs) = reminder.expect("turn 5 should emit a full frontend reminder");
+        assert_eq!(kind, ReminderKind::Full);
+        assert!(
+            text.contains("Frontend Mode") && text.contains("view_image"),
+            "full frontend reminder must carry the mode identity and the \
+             open-the-image rule:\n{text}"
+        );
+        assert!(
+            logs.iter()
+                .any(|log| log.message.contains("full frontend reminder")),
+            "the injection must be logged like the other modes"
+        );
+
+        let (reminder, turns) =
+            PlanModeInjector::render_frontend_reminder_if_due(turns, Some(&config));
+        assert!(reminder.is_none(), "turn 6 is deduplicated after a full");
+
+        let (reminder, _turns) =
+            PlanModeInjector::render_frontend_reminder_if_due(turns, Some(&config));
+        let (kind, text, _logs) = reminder.expect("turn 7 should emit a sparse frontend reminder");
+        assert_eq!(kind, ReminderKind::Sparse);
+        assert!(
+            text.contains("Never claim a visual verification you did not perform"),
+            "the sparse reminder must restate the honesty rule:\n{text}"
+        );
+    }
+
+    #[test]
+    fn advance_reminder_turns_matches_the_artifact_counter() {
+        // The two paths must not drift: same config, same schedule.
+        let config = PlanModeConfigToml::default();
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-00000000000a").unwrap();
+        let artifact = PlanArtifact::new_temp(base, thread_id, "2026-10-22");
+
+        let mut turns = (0, Some(0), Some(0));
+        for turn in 1..=8 {
+            let from_artifact =
+                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
+                    .map(|(kind, _, _)| kind);
+            let (from_turns, next) =
+                PlanModeInjector::render_frontend_reminder_if_due(turns, Some(&config));
+            assert_eq!(
+                from_artifact,
+                from_turns.map(|(kind, _, _)| kind),
+                "turn {turn}: the counter-only cadence drifted from the artifact cadence"
+            );
+            turns = next;
+        }
     }
 
     /// Production wiring creates a BRAND-NEW `PlanArtifact` every turn

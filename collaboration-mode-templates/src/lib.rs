@@ -6,6 +6,8 @@ pub const DEFAULT: &str = include_str!("../templates/default.md");
 pub const EXTERNAL_GROUNDING: &str = include_str!("../templates/external_grounding.md");
 pub const EXECUTE: &str = include_str!("../templates/execute.md");
 pub const FRONTEND: &str = include_str!("../templates/frontend.md");
+pub const FRONTEND_FULL_REMINDER: &str = include_str!("../templates/frontend_full_reminder.md");
+pub const FRONTEND_SPARSE_REMINDER: &str = include_str!("../templates/frontend_sparse_reminder.md");
 pub const GAME: &str = include_str!("../templates/game.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
@@ -336,6 +338,51 @@ mod template_tests {
             PRODUCT_FULL_REMINDER.contains("no code"),
             "PRODUCT_FULL_REMINDER must restate the no-code hard gate:\n{}",
             PRODUCT_FULL_REMINDER
+        );
+    }
+
+    /// Frontend mode's contract is injected once at entry. Over a long build
+    /// session the two rules that decide whether the work is checkable at all —
+    /// "capture a baseline first" and "a screenshot you did not open is not
+    /// evidence" — are the first to decay, because the model can always narrate
+    /// a verification it did not run. These reminders exist to make that
+    /// narration contradict an instruction that is still in context.
+    #[test]
+    fn frontend_reminders_restate_the_evidence_rules() {
+        for requirement in [
+            "Frontend Mode",
+            "baseline",
+            "view_image",
+            "Not verified",
+        ] {
+            assert!(
+                FRONTEND_FULL_REMINDER.contains(requirement),
+                "FRONTEND_FULL_REMINDER must contain {requirement:?}"
+            );
+            assert!(
+                FRONTEND_SPARSE_REMINDER.contains(requirement),
+                "FRONTEND_SPARSE_REMINDER must contain {requirement:?}"
+            );
+        }
+        // The full reminder carries the rules that only make sense in full:
+        // the tier vocabulary, the check list's owner, and the verdict scale.
+        for requirement in [
+            "`quick`",
+            "`full`",
+            "frontend-verification",
+            "design-system.md",
+            "Block",
+            "Not verified",
+        ] {
+            assert!(
+                FRONTEND_FULL_REMINDER.contains(requirement),
+                "FRONTEND_FULL_REMINDER must contain {requirement:?}"
+            );
+        }
+        // The single sentence the whole mode exists to enforce.
+        assert!(
+            FRONTEND_SPARSE_REMINDER.contains("Never claim a visual verification you did not perform"),
+            "FRONTEND_SPARSE_REMINDER must restate the honesty rule:\n{FRONTEND_SPARSE_REMINDER}"
         );
     }
 
