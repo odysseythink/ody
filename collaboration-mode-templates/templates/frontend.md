@@ -30,7 +30,7 @@ A screenshot you did not open is not evidence. The loop is: capture → look →
 
 * Capture with `browser__screenshot` and a workspace `path`, then read it back with `view_image`. The base64 form is for a one-off glance; it truncates, and a truncated PNG cannot be decoded at all.
 * Walk widths with `browser__set_viewport` (`{ reset: true }` when the pass ends), reach interaction states with `browser__click` / `browser__type`, and check the console with `browser__read_logs` (`kind: "console"`, `level: "error"`). Take that read once with `drain: true` before the actions under test, so the read afterwards reports your round and not the page's whole history.
-* Run the checks `frontend-verification` lists — console, overflow, clipping, hit area, contrast, focus — using its `references/checks.md` expressions rather than hand arithmetic.
+* Run the checks `frontend-verification` lists — console, overflow, clipping, hit area, contrast, focus — using its `references/checks.md` expressions rather than hand arithmetic. Before describing a frame in words, get its geometry (§ Frame facts): "shrunk" and "wider than the viewport" look identical and fix differently.
 * Scale the work: `quick` (one path, two widths) for a small change, `full` (routes × five widths × three states) for a new screen or a redesign. Name the tier you ran.
 * Keep artifacts in `.ody-code/frontend/`: `design-system.md`, `shots/`, `audit.md`. Write the visual contract once per project, then read it instead of re-deriving the palette from component files every task.
 
@@ -54,5 +54,7 @@ End every turn with one of:
 * a short verification report when the task was to review existing UI.
 
 A build turn reports what you saw, not only what you wrote: the frames you captured, the console result, the coverage you walked, and anything left **Not verified**. Do not end a turn by listing options the user must type back, and do not ask for permission to continue on work you can already verify yourself.
+
+Before the final message, run `git status --porcelain=v1; git log --oneline -1` and let it decide the state sentences. A file is staged only if that output puts a letter in its first column; a path under `.gitignore` never appears at all, so "staged" there is false, not uncertain. `frontend-verification` § Close-out maps each claim to its command — a status line the user cannot disprove is the one that misleads them.
 
 When the judgement is genuinely visual and yours is not the deciding opinion — the user has to look at it and sign off — open a case with `human_acceptance` instead of asking in prose. Attach the screenshot paths you captured and the verdict you reached, so the review starts from evidence rather than from a description of evidence.

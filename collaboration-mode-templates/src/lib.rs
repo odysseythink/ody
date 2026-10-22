@@ -600,6 +600,35 @@ mod template_tests {
         }
     }
 
+    /// Two claims in a round used to be written from memory: how a frame looked
+    /// ("the page is scaled down" — it was not) and what state a file was in
+    /// ("already staged" — nothing had been added, and the path was ignored).
+    /// Both are settleable by a command, so the templates must name the command
+    /// instead of asking the model to be more careful. A reminder that omits it
+    /// leaves the last sentence of a turn unguarded, which is exactly where the
+    /// claim is read and never checked.
+    #[test]
+    fn frontend_templates_tie_appearance_and_state_claims_to_a_command() {
+        for requirement in ["Frame facts", "git status --porcelain"] {
+            assert!(
+                FRONTEND.contains(requirement),
+                "FRONTEND must name {requirement:?}: a claim with no command behind it is a guess"
+            );
+        }
+        for requirement in ["Frame facts", "git status --porcelain=v1", "git log --oneline -1"] {
+            assert!(
+                FRONTEND_FULL_REMINDER.contains(requirement),
+                "FRONTEND_FULL_REMINDER must name {requirement:?}: the end of a long session is where the claim is made"
+            );
+        }
+        for requirement in ["Frame facts", "git status --porcelain=v1"] {
+            assert!(
+                FRONTEND_SPARSE_REMINDER.contains(requirement),
+                "FRONTEND_SPARSE_REMINDER must name {requirement:?}"
+            );
+        }
+    }
+
     /// `human_acceptance` is the one non-namespaced tool the frontend template
     /// names. A template that advertises a sign-off path the runtime does not
     /// register sends the model looking for a tool that is not there — the same

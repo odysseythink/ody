@@ -89,13 +89,15 @@ Run these on every frame in scope. They are cheap, objective, and they catch the
 | # | Check | Pass condition | How |
 | --- | --- | --- | --- |
 | 1 | Console | zero `error` entries produced by the actions of this round | `browser__read_logs { kind: "console", level: "error" }` after a `drain: true` baseline |
-| 2 | Horizontal overflow | no page-level horizontal scroll, no element past the right edge | `references/checks.md` § Overflow |
+| 2 | Overflow | no page-level horizontal scroll, no element past the right edge, and `visualViewport.scale` = 1 | `references/checks.md` § Overflow |
 | 3 | Clipping | no visible text cut off inside a fixed-height or hidden-overflow box | `references/checks.md` § Clipping |
 | 4 | Hit area | interactive targets ≥ 40×40 CSS px (≥ 44 on touch-first layouts) | `references/checks.md` § Hit area |
 | 5 | Contrast | body text ≥ 4.5:1, large text and UI boundaries ≥ 3:1 | `references/checks.md` § Contrast |
 | 6 | Focus | keyboard focus is visible and reachable in a sensible order | `references/checks.md` § Focus |
 
 A console `error` is a failed check even when the frame looks perfect: a component that threw during hydration will break on the next interaction.
+
+Check 2 has a blind spot worth naming, because it hides the most common mobile defect: when content is wider than a phone viewport, the browser may widen the *layout* viewport and scale the page to fit instead of overflowing. Nothing crosses the right edge, `offenders` is empty, and the page is silently rendered at 89% — real type becomes smaller and spacings compress, with no scrollbar to show for it. `visualViewport.scale` below 1, or an `innerWidth` larger than the width you passed to `set_viewport`, is that state. A fixed-width child is the usual cause.
 
 `references/checks.md` holds the exact `browser__evaluate` expressions. Use them instead of re-deriving the arithmetic — hand-computed contrast and off-by-one overflow judgements are how false passes get written.
 
@@ -109,15 +111,45 @@ The six checks are the floor. Above it, judge with the vocabulary the craft skil
 - **Consistency** — repeated elements share tokens from `design-system.md`; nothing is one-off "just this time".
 - **Comparison** — with before and after side by side, name what improved in one line per improvement. If you cannot say what got better, the change is churn.
 
+### Anchor the adjective
+
+A sentence about how a frame looks is a claim like any other, and the eye is the
+least reliable instrument in the loop. Two readings of the same picture send the
+next iteration to opposite files: *"the page is scaled down"* means the type
+scale and spacing are wrong, *"the card is wider than the viewport"* means a
+`width` is wrong. Both are sayable about one screenshot, and only one is true.
+
+So ask the page before describing it — `references/checks.md` § Frame facts
+returns `visual_viewport.scale`, `root_zoom`, `scaled_elements`,
+`sample.font_size`, and `document_scroll.w` against `viewport.w`. The rule is one
+line: **every qualitative sentence in the report carries a frame-fact number or
+a check result beside it.** "The card is 420 wide inside a 375 viewport, so the
+browser scaled the page to 0.893" is evidence. "It looks shrunk" is a guess with
+a confident tone, and it costs an iteration to disprove.
+
+The failure this catches is not cosmetic, and it cuts both ways. One round
+described a mobile frame as "the whole page is scaled down, the text is too
+small"; the review of that round answered "no, the card is clipped at the right
+edge and the type never moved". Both sentences were about the same screenshot
+and neither was checked. The geometry settled it: `visual_viewport.scale 0.893`,
+`innerWidth == scrollWidth == 420`, `offenders: []` — the layout viewport had
+grown past the 375px device, the browser had scaled the page to fit, and nothing
+was cut off. The first sentence was right. Two confident readings, one number.
+
+The general shape: a sentence about appearance is cheap to write and expensive
+to retract, because the next change is built on it. Spend one `browser__evaluate`
+instead.
+
 Severity uses the same scale as `make-interfaces-feel-better`: `HIGH` blocks use or hides information, `MEDIUM` is a noticeable usability or consistency problem, `LOW` is isolated polish.
 
 ## Exit condition
 
-Close the loop only when all three hold:
+Close the loop only when all four hold:
 
 1. Every check in the chosen tier passes, or its gap is written down as **Not verified** with the reason.
 2. The last round produced no `HIGH` finding.
 3. Before and after differ only where the task intended. An unexplained visual diff is a regression until proven otherwise.
+4. Every state sentence in the report is backed by the close-out command (below).
 
 Then write one paragraph into `.ody-code/frontend/audit.md`: tier, widths, states, checks run, result, verdict.
 
@@ -126,7 +158,9 @@ Then write one paragraph into `.ody-code/frontend/audit.md`: tier, widths, state
 The report is the evidence, not a summary of your effort. Include:
 
 - the frame paths you captured, grouped before / after;
-- the console result for this round;
+- all six checks by number — `pass`, the failing count, or **not run** — because a
+  check you forgot reads as a check you passed, and only one of those is
+  survivable;
 - the coverage actually walked (widths × states), naming anything skipped;
 - findings as a table with **Severity**, **Location**, **Before**, **After**, **Why** — reuse `make-interfaces-feel-better`'s format rather than inventing a second one;
 - a verdict: `Block` if any `HIGH` remains, `Needs changes` if only `MEDIUM` or `LOW`, `Approve` only when nothing actionable is left;
@@ -137,9 +171,41 @@ result from this round. A number you cannot point at is worse than no number: it
 reads as measured and is not. If a check returned only pass/fail, say "no targets
 under 40×40" instead of inventing the size that passed it. The same rule applies
 to state: do not report a file as staged, saved, or committed unless a command
-in this round said so.
+in this round said so — § Close-out is that command.
 
 Never describe a screen as verified when you did not open its image at that width. "I checked the desktop view" is a claim about a specific file, not a general reassurance.
+
+## Close-out
+
+The last lines of a round are where an unverified claim does the most damage:
+nobody re-opens the work to disprove a sentence that reads like a status line.
+So the round ends with one command, run once, before the final message:
+
+```
+git status --porcelain=v1; git log --oneline -1
+```
+
+Read the columns. A letter in the **first** column (`M `, `A `, `R `) means
+staged. A letter in the second (` M`) means changed but not staged. `??` means
+untracked. A path printed nowhere is unchanged — or ignored, and an ignored path
+can never be staged, so that is not a maybe.
+
+| About to write | It is true only when |
+| --- | --- |
+| "staged" / "已暂存" | the path shows a first-column letter in `git status` |
+| "modified" / "改好了" | any `git status` line names the path |
+| "committed" | `git log --oneline -1` names the commit you mean |
+| "saved" / "written" for a frame or `audit.md` | `ls -l <path>` in this round, with an mtime from this round |
+| "clean" / "no changes" | `git status --porcelain` printed nothing |
+| a check passed | that check's own tool result, containing the pass condition |
+
+If the output does not support the sentence, delete the sentence. Do not soften
+it to "should be staged" or "I believe it saved" — a hedge still implies you
+looked, and it is the hedge that survives into notes someone else acts on.
+
+This is the same rule as the numbers, applied to state instead of geometry: both
+are claims that a command in this round can settle, and neither is settled by
+being plausible.
 
 ## When the loop cannot run
 

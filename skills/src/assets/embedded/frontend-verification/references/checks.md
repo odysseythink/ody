@@ -4,6 +4,74 @@ Copy-paste `browser__evaluate` expressions for the six checks in `SKILL.md`, plu
 
 Each expression is an IIFE that returns JSON. The browser tool refuses a few patterns by policy — `document.cookie`, web storage, `eval(`, `setTimeout(`, and classic `function(` declarations — so these use arrow functions and read layout only. Keep that style when you adapt them.
 
+## Frame facts
+
+Ask this before writing a sentence that describes how a frame *looks*. It exists
+because the same picture supports two opposite readings — "the page is shrunk"
+and "one box is wider than the viewport" — and they lead to opposite fixes.
+
+```js
+(() => {
+  const px = (value) => Number.parseFloat(value) || 0;
+  const de = document.documentElement;
+  const vw = window.innerWidth;
+  const zoomOf = (value) => (!value || value === "normal" ? 1 : px(value));
+  const scaled = [...document.querySelectorAll("body *")]
+    .map((el) => {
+      const style = getComputedStyle(el);
+      return {
+        tag: el.tagName.toLowerCase(),
+        cls: String(el.className).slice(0, 40),
+        transform: style.transform,
+        zoom: zoomOf(style.zoom),
+      };
+    })
+    .filter((item) => (item.transform !== "none" && item.transform !== "") || item.zoom !== 1)
+    .slice(0, 8);
+  const sample = document.querySelector("button,a[href],input,p");
+  const box = sample ? sample.getBoundingClientRect() : null;
+  return {
+    viewport: { w: vw, h: window.innerHeight },
+    visual_viewport: window.visualViewport
+      ? {
+          w: Math.round(window.visualViewport.width),
+          scale: Number(window.visualViewport.scale.toFixed(3)),
+        }
+      : null,
+    device_pixel_ratio: window.devicePixelRatio,
+    root_zoom: zoomOf(getComputedStyle(de).zoom),
+    root_font_size: px(getComputedStyle(de).fontSize),
+    document_scroll: { w: de.scrollWidth, h: de.scrollHeight },
+    content_wider_than_viewport: de.scrollWidth > vw + 1,
+    sample: sample
+      ? {
+          tag: sample.tagName.toLowerCase(),
+          font_size: px(getComputedStyle(sample).fontSize),
+          w: Math.round(box.width),
+          h: Math.round(box.height),
+        }
+      : null,
+    scaled_elements: scaled,
+  };
+})()
+```
+
+How to read it, in the order the misreadings happen:
+
+| The sentence you want to write | What has to be true |
+| --- | --- |
+| "the page is scaled down" / "shrunk" | `root_zoom` ≠ 1, a hit in `scaled_elements`, or `visual_viewport.scale` ≠ 1. The last one is the common cause on a phone: the browser widened the layout viewport to the content's minimum and scaled the page to fit. |
+| "the text is too small" | `sample.font_size` says what it is. If `visual_viewport.scale` is below 1, the authored size is not what the reader sees — 14px at 0.893 renders as 12.5px, so the complaint is real and the fix is the scale, not the font. |
+| "the card is cut off at the right" | `content_wider_than_viewport: true`, and the overflow check's `offenders` names the element and its `right`. When `content_wider_than_viewport` is false, nothing is cut — say the page is scaled instead. |
+| "the card is cramped" | `sample.w` against `viewport.w`. A 420px card inside a 360px viewport is not cramped — it is too wide, and the fix is a `width`, not tighter padding. |
+
+A 420-wide card on a 375px phone is the case that started this check. The
+screenshot reads as "everything is smaller", the geometry agrees
+(`scale: 0.893`) and supplies the reason (`innerWidth` grew to 420 while the
+device is 375), and the overflow check on its own calls that frame clean. Read
+from the picture, the fix is a smaller type scale; read from `innerWidth` versus
+the device width, it is one `width` declaration on one card.
+
 ## Overflow
 
 ```js
@@ -28,6 +96,28 @@ Each expression is an IIFE that returns JSON. The browser tool refuses a few pat
 ```
 
 `offenders` usually points at the cause directly. If it is empty but `horizontal_scroll` is true, the culprit is a fixed-position or absolutely positioned element clipped by an ancestor — search `position: fixed` / `100vw` next.
+
+The expression has one blind spot, and on phones it is the common case: when the
+content is wider than the viewport, the browser can widen the *layout* viewport
+and shrink the page to fit instead of overflowing. `horizontal_scroll` stays
+`false`, `offenders` stays `[]`, and the page is rendered at, say, 0.893 scale.
+Read the scale in the same call:
+
+```js
+(() => ({
+  inner_width: window.innerWidth,
+  scroll_width: document.documentElement.scrollWidth,
+  scale: window.visualViewport ? Number(window.visualViewport.scale.toFixed(3)) : null,
+}))()
+```
+
+Compare `inner_width` with the width you passed to `set_viewport`.
+
+`scale` must be 1 and `inner_width` must match the width you asked for. When
+they do not, the page is shrink-to-fit: nothing overflows and everything is too
+small, which is precisely the state that passes the overflow check and fails the
+person holding the phone. A fixed-width child (`width: 420px` on a 375px device)
+is the usual cause; `min(420px, 100% - 32px)` is the usual fix.
 
 ## Clipping
 
@@ -218,6 +308,7 @@ When a finding appears, the cause is usually structural rather than cosmetic:
 | Symptom | Look at first |
 | --- | --- |
 | Horizontal scroll at one width only | a fixed width or `min-width` on a child, or `100vw` plus a scrollbar |
+| Everything looks shrunk at one width | § Frame facts before touching type. `visual_viewport.scale` < 1 is shrink-to-fit from a fixed-width child; `root_zoom` / `scaled_elements` is a CSS zoom; all at their defaults with `offenders` non-empty is real overflow |
 | Text clipped after a copy change | fixed `height`, `max-height`, or `line-clamp` without a fallback |
 | Contrast fails only in dark mode | a hard-coded hex instead of a token, or an opacity applied to text |
 | Focus ring missing on one control | a component that resets `outline` without a replacement ring |

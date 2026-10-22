@@ -49,6 +49,11 @@ Skip any step = lying, not verifying
 | Regression test works | Red-green cycle verified | Test passes once |
 | Agent completed | VCS diff shows changes | Agent reports "success" |
 | Requirements met | Line-by-line checklist | Tests passing |
+| Changes staged | `git status --porcelain`: a letter in **column 1** for each path | an earlier `git add`, or "the diff looked right" |
+| File written | the write call's result, or `ls -l` with an mtime from this round | "I wrote it a moment ago" |
+| Committed | `git log --oneline -1` names the change | `git add` succeeded |
+
+A path covered by `.gitignore` never appears in `git status` at all. For that path "staged" is not unknown — it is false, and no amount of good intent changes it.
 
 ## Red Flags - STOP
 
