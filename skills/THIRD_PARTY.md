@@ -135,13 +135,23 @@ which renders three candidates on the caller's page and lets the user pick.
 | `frontend-style/references/corporate-trust.md` | `skills/corporate-trust/SKILL.md` | `4b692ddc70c6` |
 | `frontend-style/references/cinematic-motion.md` | `skills/cinematic-motion/SKILL.md` | `b5e4b30e362c` |
 | `frontend-verification/references/accessibility.md` | `skills/taste-accessibility/SKILL.md` | `4d293f850d91` |
+| `frontend-verification/references/usability.md` | `skills/taste-design-review/SKILL.md` | `9082d8464ad0` |
 
-The last row is not an identity pack and is not vendored into `frontend-style/`.
-It lands in `frontend-verification/` as check 7 because accessibility is owed on every
-page, not chosen per project — a pack is picked from a popup, this is not optional. The
-upstream file is prose rules; the embedded version is **rewritten**, not copied, so the
-rules become four `browser__evaluate` expressions plus a named list of what no expression
-can answer. What survives verbatim from upstream is the rule set and the WCAG numbers.
+The last two rows are not identity packs and are not vendored into `frontend-style/`. They land in
+`frontend-verification/` because accessibility is owed on every page and usability is judged on
+every screen, neither being a direction the user picks — a pack comes from a popup, these do not.
+Both upstream files are prose rules; both embedded versions are **rewritten**, not copied, so the
+rules become measurable expressions plus a named list of what no expression can answer. What
+survives verbatim is the rule set and the WCAG numbers.
+
+From `taste-design-review` only §3 (Nielsen's ten, applied) and §5 (conversion pass) were taken.
+The other sections duplicate what this bundle already owns, and merging two authorities on one
+topic is how a bundle starts contradicting itself: §1's audit process overlaps `frontend-
+verification`'s loop, §2's taste pass overlaps `frontend-design` with a slop-pattern list this
+bundle deliberately does not adopt, §4's accessibility short version is superseded by check 7, and
+§6's report format conflicts with the explicit rule to reuse `make-interfaces-feel-better`'s format
+rather than invent a second one. Nielsen's heuristics themselves are a published, widely
+reproduced framework; what is pinned here is this author's applied phrasing and failure conditions.
 
 Adaptations applied on import (bodies otherwise verbatim):
 
@@ -157,6 +167,12 @@ Adaptations applied on import (bodies otherwise verbatim):
   expression, and the four checks that need a human (tab walk, screen reader,
   dialog focus, alt-text quality) are separated out so they cannot be reported as
   passed. Upstream's 24×24 / 44×44 / 4.5:1 / 3:1 / 200% requirements are kept.
+- `taste-design-review` contributes only its two passes. Its ten heuristics gain a
+  "needs which state" column, so a heuristic can be marked **Not verified** instead
+  of pass when the round never captured the frame it needs. The conversion pass
+  gains a scope rule (landing / pricing / auth / signup / upgrade only) because
+  applied to a settings or documentation page it manufactures findings, and the
+  one countable part of it gains an expression.
 
 Deliberately not imported: design-taste's `design-taste` core skill (its
 design-read procedure is reimplemented in `frontend-style/SKILL.md`) and the

@@ -94,7 +94,7 @@ Run these on every frame in scope. They are cheap, objective, and they catch the
 | 4 | Hit area | interactive targets ≥ 40×40 CSS px (≥ 44 on touch-first layouts) | `references/checks.md` § Hit area |
 | 5 | Contrast | body text ≥ 4.5:1, large text and UI boundaries ≥ 3:1 | `references/checks.md` § Contrast |
 | 6 | Focus | keyboard focus is visible and reachable in a sensible order | `references/checks.md` § Focus |
-| 7 | Accessibility | no missing label, no unnamed control, heading levels intact, targets ≥ 24×24 | `references/accessibility.md` |
+| 7 | Accessibility | no missing label, no unnamed control, heading levels intact, targets ≥ 24×24, motion respects the setting | `references/accessibility.md` |
 
 A console `error` is a failed check even when the frame looks perfect: a component that threw during hydration will break on the next interaction.
 
@@ -106,13 +106,44 @@ Check 2 has a blind spot worth naming, because it hides the most common mobile d
 
 ## Judging what the numbers cannot see
 
-The seven checks are the floor. Above it, judge with the vocabulary the craft skills already define, and do not re-invent it:
+The seven checks are the floor. Above it sit three passes. The craft skills already own their vocabulary — use theirs, do not re-invent it.
+
+### The craft pass — what a frame can show
 
 - **Hierarchy** — one primary action; what matters reads first within two seconds (`frontend.md` quality bar).
 - **Detail** — one spacing scale, all states present, composition holds between the captured widths.
-- **Motion** — a purpose per animation, timings from `motion-design`'s budget table, `prefers-reduced-motion` respected.
-- **Consistency** — repeated elements share tokens from `design-system.md`; nothing is one-off "just this time".
+- **Motion** — a purpose per animation, timings from `motion-design`'s budget table.
 - **Comparison** — with before and after side by side, name what improved in one line per improvement. If you cannot say what got better, the change is churn.
+
+Consistency is not here. It is heuristic 4 of the next pass, with the other nine, because "the same action looks the same everywhere" is a usability claim rather than a visual one.
+
+### The usability pass — Nielsen's ten, applied
+
+Ten questions, one line each. `references/usability.md` carries the failure condition for each, and the state that has to be on screen before you may answer it.
+
+1. **System status** — every action answers within a second: pressed, loading, done, failed. A control that looks inert reads as broken.
+2. **The user's language** — copy in the audience's words, not the org chart's. "Provision an instance" on a consumer page is a fail.
+3. **Control and freedom** — an exit from every state, an undo for every destructive act. A modal whose only button is "OK" is a trap.
+4. **Consistency** — one action, one appearance; one destination, one route; tokens from `design-system.md`, nothing one-off.
+5. **Error prevention** — confirm the destructive, constrain the invalid, autocomplete the tedious.
+6. **Recognition over recall** — names say what they open; nothing requires carrying a value from a screen that is gone.
+7. **Flexibility** — a shortcut for the tenth visit that does not crowd the first.
+8. **Minimalism** — every element earns its place against the primary action. Decoration that competes is noise.
+9. **Error recovery** — what happened, why, and what to do next; never a bare "Error", never colour alone.
+10. **Help where it is needed** — beside the field that confuses, not in a help centre nobody opens.
+
+Four of these are judged from a state most rounds never capture: #1 needs a loading or failed frame, #3 an open overlay, #5 an invalid submission, #9 an actual error. **A heuristic whose required state was not captured is Not verified, not pass.** "Usability 7/10, three not verified — no error frame" is honest and tells the next round what to capture; "10/10" from one default frame is the same failure as claiming a check you never ran, one level up and much easier to believe, because it is prose.
+
+### The conversion pass — only on a page that asks for something
+
+Landing, pricing, auth, signup, upgrade. Not settings, dashboards, documentation or internal tools: those have no conversion, and demanding a CTA on a page whose job is to be read is how this pass gets switched off entirely. Four things:
+
+- **One primary action above the fold.** Two buttons of equal weight are zero buttons — the visitor picks neither.
+- **The proposition lands from the headline alone**, in eight seconds, without the sub-sub-line.
+- **Friction inventory** — every field, step and click between "interested" and "started", each one justified in the list or deleted.
+- **Trust where the decision happens** — beside the CTA, inside the pricing table, not on a page they will never open.
+
+One of these is countable: the first screen's controls, their positions, and the form's field count. `references/usability.md` has the expression. It settles that there are two equal CTAs above the fold; it cannot settle which one should go. Counting hands you the list, the judgement reads it. A number is the input to this pass, never its verdict.
 
 ### Anchor the adjective
 
@@ -164,8 +195,11 @@ The report is the evidence, not a summary of your effort. Include:
 - all seven checks by number — `pass`, the failing count, or **not run** — because a
   check you forgot reads as a check you passed, and only one of those is
   survivable;
+- the usability pass by count, naming any heuristic you could not answer and the
+  state you would have needed — a pass count without that list claims coverage
+  the frames do not have;
 - the coverage actually walked (widths × states), naming anything skipped;
-- findings as a table with **Severity**, **Location**, **Before**, **After**, **Why** — reuse `make-interfaces-feel-better`'s format rather than inventing a second one;
+- findings as a table with **Severity**, **Location**, **Before**, **After**, **Why** — reuse `make-interfaces-feel-better`'s format rather than inventing a second one. **Why** opens with its source (`check 5`, `Nielsen 9`, `conversion`, `craft`) so a reader can tell a measured defect from a judged one;
 - a verdict: `Block` if any `HIGH` remains, `Needs changes` if only `MEDIUM` or `LOW`, `Approve` only when nothing actionable is left;
 - an explicit **Not verified** list.
 
