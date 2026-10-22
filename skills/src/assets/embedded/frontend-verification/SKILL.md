@@ -63,7 +63,7 @@ If the project already has breakpoints, use the project's widths instead of the 
 Use the browser tools — not a mental model of the page.
 
 ```
-browser__navigate        { url, wait_until: "networkidle" }
+browser__navigate        { url, wait_until: "network_idle" }
 browser__set_viewport    { width: 1280, height: 900 }        # repeat per width
 browser__screenshot      { path: ".ody-code/frontend/shots/home@1280@before.png" }
 view_image               { path: ".ody-code/frontend/shots/home@1280@before.png" }

@@ -108,6 +108,24 @@ fn namespaced_tool_name(name: &str) -> ToolName {
     ToolName::namespaced("browser", name)
 }
 
+/// The `wait_until` values the model is told about.
+///
+/// Derived from [`WaitCondition`] rather than written out: the hand-written list
+/// advertised `networkidle` while serde only accepted `network_idle`, so a model
+/// that followed the schema was rejected on every retry of an otherwise correct
+/// call.
+fn wait_condition_names() -> Vec<String> {
+    [
+        WaitCondition::Load,
+        WaitCondition::DomContentLoaded,
+        WaitCondition::NetworkIdle,
+    ]
+    .into_iter()
+    .filter_map(|condition| serde_json::to_value(condition).ok())
+    .filter_map(|value| value.as_str().map(str::to_string))
+    .collect()
+}
+
 fn namespace_spec(name: &str, description: &str, parameters: serde_json::Value) -> ToolSpec {
     let tool = ResponsesApiTool {
         name: name.to_string(),
@@ -182,7 +200,7 @@ impl ToolExecutor<ToolCall> for BrowserNavigateTool {
                     "url": { "type": "string", "description": "URL to navigate to." },
                     "wait_until": {
                         "type": "string",
-                        "enum": ["load", "domcontentloaded", "networkidle"],
+                        "enum": wait_condition_names(),
                         "description": "When the navigation should be considered complete."
                     }
                 },
@@ -1222,18 +1240,44 @@ mod tests {
     use crate::BrowserControlConfig;
 
     #[test]
-    fn navigate_input_schema_is_valid() {
-        let schema = json!({
-            "type": "object",
-            "properties": {
-                "url": { "type": "string" },
-                "wait_until": { "type": "string", "enum": ["load", "domcontentloaded", "networkidle"] }
-            },
-            "required": ["url"],
-            "additionalProperties": false
-        });
-        let parsed = parse_tool_input_schema(&schema);
-        assert!(parsed.is_ok(), "{parsed:?}");
+    /// The schema is the only thing the model reads before it calls. When it
+    /// advertised `networkidle` and serde demanded `network_idle`, a correct call
+    /// failed on every retry. Compare the real spec against the real enum.
+    #[test]
+    fn navigate_schema_enum_matches_the_wait_condition_names() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let spec = BrowserNavigateTool::new(state).spec();
+        let ToolSpec::Namespace(namespace) = &spec else {
+            panic!("browser tools are published as a namespace");
+        };
+        let ResponsesApiNamespaceTool::Function(function) = &namespace.tools[0] else {
+            panic!("navigate is a function inside the namespace");
+        };
+
+        let advertised: Vec<String> = function
+            .parameters
+            .properties
+            .as_ref()
+            .and_then(|properties| properties.get("wait_until"))
+            .and_then(|schema| schema.enum_values.clone())
+            .expect("navigate advertises a closed set of wait conditions")
+            .into_iter()
+            .filter_map(|value| value.as_str().map(str::to_string))
+            .collect();
+
+        assert_eq!(advertised, wait_condition_names());
+        for value in &advertised {
+            let parsed: WaitCondition = serde_json::from_value(json!(value))
+                .unwrap_or_else(|e| panic!("advertised value `{value}` must parse: {e}"));
+            assert_eq!(&serde_json::to_value(parsed).unwrap(), &json!(value));
+        }
+        assert!(
+            !advertised.iter().any(|value| value == "networkidle"),
+            "networkidle is not a name serde accepts; advertising it costs a retry"
+        );
     }
 
     #[test]
