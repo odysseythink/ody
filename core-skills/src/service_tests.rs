@@ -1001,8 +1001,9 @@ async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
         "user skills are visible by default"
     );
 
-    // Frontend mode is exclusive: only the craft bundle survives, and the
-    // user-installed skill is hidden even though no config rule targeted it.
+    // Frontend mode is exclusive: only the craft bundle and its engineering
+    // companions survive, and the user-installed skill is hidden even though no
+    // config rule targeted it.
     let frontend_stack = config_stack(&ody_home, "[skills.bundled]\nfrontend = true\n");
     let frontend_outcome = skills_for_mode_with_stack(
         &skills_service,
@@ -1018,11 +1019,11 @@ async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
         .map(|skill| skill.name.as_str())
         .collect();
     visible.sort_unstable();
-    let mut expected = ody_skills::embedded_frontend_skill_names().to_vec();
+    let mut expected = ody_skills::embedded_frontend_visible_skill_names();
     expected.sort_unstable();
     assert_eq!(
         visible, expected,
-        "Frontend mode exposes exactly the bundled craft skills"
+        "Frontend mode exposes exactly the craft skills and their companions"
     );
     assert!(
         frontend_outcome
@@ -1030,6 +1031,20 @@ async fn frontend_mode_hides_every_skill_but_the_craft_bundle() {
             .iter()
             .any(|skill| skill.name == "frontend-design"),
         "frontend-design is the bundle's entry skill and must be visible"
+    );
+    assert!(
+        frontend_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "verification-before-completion"),
+        "the mode's own verification protocol is unenforceable without this skill"
+    );
+    assert!(
+        !frontend_outcome
+            .skills
+            .iter()
+            .any(|skill| skill.name == "test-driven-development"),
+        "companions are a curated list, not every engineering skill"
     );
 }
 
@@ -1050,7 +1065,7 @@ async fn frontend_mode_keeps_the_system_root_when_bundled_skills_are_disabled() 
         skills_for_mode_with_stack(&skills_service, &cwd, &stack, &[], ModeKind::Frontend).await;
     assert_eq!(
         outcome.skills.len(),
-        ody_skills::embedded_frontend_skill_names().len(),
+        ody_skills::embedded_frontend_visible_skill_names().len(),
         "frontend mode must still load its bundled skills: {:?}",
         outcome
             .skills
@@ -1114,7 +1129,7 @@ async fn snapshot_for_cwd_cache_separates_frontend_mode() {
         .map(|skill| skill.name.as_str())
         .collect();
     visible.sort_unstable();
-    let mut expected = ody_skills::embedded_frontend_skill_names().to_vec();
+    let mut expected = ody_skills::embedded_frontend_visible_skill_names();
     expected.sort_unstable();
     assert_eq!(
         visible, expected,

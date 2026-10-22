@@ -285,14 +285,21 @@ pub fn filter_skill_load_outcome_for_game(
     })
 }
 
-/// Narrows a load outcome down to the bundled frontend-design craft bundle when
-/// the user opted in via the `--frontend` CLI flag or
-/// `skills.bundled.frontend = true`.
+/// Narrows a load outcome down to the bundled frontend-design craft bundle and
+/// its engineering companions when the user opted in via the `--frontend` CLI
+/// flag or `skills.bundled.frontend = true`.
 ///
 /// Unlike [`filter_skill_load_outcome_for_game`] (additive), frontend mode is
-/// exclusive: every skill outside the bundle is dropped, regardless of scope.
-/// Matching is by name, so a repo- or user-installed copy of
-/// `make-interfaces-feel-better` / `motion-design` still survives.
+/// exclusive: every skill outside the allowed set is dropped, regardless of
+/// scope. Matching is by name, so a repo- or user-installed copy of any member
+/// still survives.
+///
+/// The allowed set is the craft bundle **plus** a short companion list
+/// ([`ody_skills::is_embedded_frontend_companion`]). Craft and rigor are
+/// different axes: the bundle explains how to design, and the companions are
+/// the only thing in the catalog that demands evidence before completion.
+/// Keeping the crafts alone made the mode's own verification protocol
+/// unenforceable.
 pub fn filter_skill_load_outcome_for_frontend(
     outcome: SkillLoadOutcome,
     frontend_mode_enabled: bool,
@@ -302,6 +309,7 @@ pub fn filter_skill_load_outcome_for_frontend(
     }
     retain_skills_matching(outcome, |skill| {
         ody_skills::is_embedded_frontend_skill(&skill.name)
+            || ody_skills::is_embedded_frontend_companion(&skill.name)
     })
 }
 

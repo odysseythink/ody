@@ -162,10 +162,45 @@ pub fn is_embedded_frontend_skill(name: &str) -> bool {
     EMBEDDED_FRONTEND_SKILL_NAMES.contains(&name)
 }
 
-/// The names that survive `--frontend`. Exposed so callers can render or test
-/// the allowlist without duplicating it.
+/// The craft bundle: the skills that define how Frontend mode designs.
+/// Exposed so callers can render or test the bundle without duplicating it.
 pub fn embedded_frontend_skill_names() -> &'static [&'static str] {
     EMBEDDED_FRONTEND_SKILL_NAMES
+}
+
+/// Engineering discipline skills kept alongside the craft bundle.
+///
+/// Frontend mode is exclusive by design: it drops the catalog down to a set
+/// small enough to fit in context and coherent enough to point one direction.
+/// But "craft" and "rigor" are not the same axis, and the bundle only carries
+/// the first. Without these two the mode had no procedure for proving a claim:
+/// `verification-before-completion` is what turns "looks done" into "here is
+/// the command output", and `systematic-debugging` is what stops a visual
+/// regression from being fixed by nudging values until it disappears.
+///
+/// Deliberately short. Adding a skill here widens the mode's context budget on
+/// every single turn, so the bar is "the bundle is incomplete without it",
+/// not "it is generally useful".
+const EMBEDDED_FRONTEND_COMPANION_SKILL_NAMES: &[&str] = &[
+    "systematic-debugging",
+    "verification-before-completion",
+];
+
+/// Returns whether `name` is an engineering skill that survives `--frontend`
+/// without being part of the craft bundle.
+pub fn is_embedded_frontend_companion(name: &str) -> bool {
+    EMBEDDED_FRONTEND_COMPANION_SKILL_NAMES.contains(&name)
+}
+
+/// Every name visible in Frontend mode: the craft bundle plus its engineering
+/// companions. This, not [`embedded_frontend_skill_names`], is what the mode
+/// filter keeps.
+pub fn embedded_frontend_visible_skill_names() -> Vec<&'static str> {
+    EMBEDDED_FRONTEND_SKILL_NAMES
+        .iter()
+        .chain(EMBEDDED_FRONTEND_COMPANION_SKILL_NAMES)
+        .copied()
+        .collect()
 }
 
 pub use remote_sync::remote_builtin_cache_root_dir;
@@ -690,6 +725,48 @@ mod tests {
                 "{name} cannot belong to both the game and frontend bundles"
             );
         }
+    }
+
+    #[test]
+    fn frontend_companions_are_engineering_skills_outside_the_craft_bundle() {
+        let embedded: std::collections::HashSet<String> =
+            super::embedded_system_skill_names().into_iter().collect();
+        for name in super::EMBEDDED_FRONTEND_COMPANION_SKILL_NAMES {
+            assert!(
+                embedded.contains(*name),
+                "frontend companion references a missing embedded skill: {name}"
+            );
+            assert!(
+                !super::is_embedded_frontend_skill(name),
+                "{name} must stay out of the craft bundle: the bundle answers \
+                 \"how should this look\", companions answer \"how do I prove it\""
+            );
+            assert!(
+                !super::is_embedded_game_skill(name),
+                "{name} is a general engineering skill, not a game skill"
+            );
+        }
+
+        // Visible names are the union, with no duplicates and nothing dropped.
+        let mut visible = super::embedded_frontend_visible_skill_names();
+        let total = visible.len();
+        visible.sort_unstable();
+        visible.dedup();
+        assert_eq!(
+            visible.len(),
+            total,
+            "the visible list must not contain duplicates"
+        );
+        assert_eq!(
+            total,
+            super::EMBEDDED_FRONTEND_SKILL_NAMES.len()
+                + super::EMBEDDED_FRONTEND_COMPANION_SKILL_NAMES.len()
+        );
+        assert!(
+            super::is_embedded_frontend_companion("verification-before-completion"),
+            "the whole point of the companion list is this skill"
+        );
+        assert!(!super::is_embedded_frontend_companion("frontend-design"));
     }
 
     #[test]

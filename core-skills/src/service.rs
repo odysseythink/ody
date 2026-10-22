@@ -37,7 +37,8 @@ pub struct SkillsLoadInput {
     /// The collaboration mode the catalog is being built for, when the caller
     /// knows it. `Game` narrows away the bundled game skills (they are only
     /// listed in that mode) and `Frontend` narrows the catalog down to the
-    /// frontend craft bundle; every other mode leaves the catalog untouched.
+    /// frontend craft bundle plus its engineering companions; every other mode
+    /// leaves the catalog untouched.
     /// `None` means "no mode context" — the full catalog, which is what the
     /// skill-browser and watcher paths want.
     pub collaboration_mode: Option<ModeKind>,
@@ -255,8 +256,8 @@ impl SkillsService {
         if frontend_mode_active {
             info!(
                 skills = outcome.skills.len(),
-                visible = ?ody_skills::embedded_frontend_skill_names(),
-                "frontend mode: skill catalog restricted to the bundled frontend craft skills"
+                visible = ?ody_skills::embedded_frontend_visible_skill_names(),
+                "frontend mode: skill catalog restricted to the craft bundle and its companions"
             );
         }
         let disabled_paths = resolve_disabled_skill_paths(&outcome.skills, skill_config_rules);
