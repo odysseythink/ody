@@ -35,6 +35,7 @@ use ody_tools::ToolSearchInfo;
 use ody_tools::ToolSpec;
 use serde_json::Value;
 use tracing::instrument;
+use tracing::warn;
 
 pub(crate) type ToolTelemetryTags = Vec<(&'static str, String)>;
 
@@ -321,11 +322,33 @@ impl CoreToolRuntime for ExposureOverride {
 
 pub struct ToolRegistry {
     tools: HashMap<ToolName, Arc<dyn CoreToolRuntime>>,
+    /// `namespace__tool` -> canonical name, for the namespaced entries only.
+    ///
+    /// A provider without namespace support is handed the flat name and can
+    /// only send that same flat name back, arriving as a plain `ToolName`. Exact
+    /// lookup would then miss and the call would be rejected as unknown even
+    /// though the tool was listed. Built once at construction so resolution does
+    /// not re-derive strings per call.
+    flat_names: HashMap<String, ToolName>,
 }
 
 impl ToolRegistry {
     fn new(tools: HashMap<ToolName, Arc<dyn CoreToolRuntime>>) -> Self {
-        Self { tools }
+        let mut flat_names = HashMap::new();
+        for name in tools.keys() {
+            if name.namespace.is_none() {
+                continue;
+            }
+            let flat = name.flat().into_owned();
+            if flat_names.insert(flat.clone(), name.clone()).is_some() {
+                // Two namespaces flattened to the same token. Neither can own it:
+                // guessing would run a tool the model did not name. Drop the
+                // entry so both stay reachable only by their canonical names.
+                warn!("flat tool name `{flat}` is ambiguous; call it by namespace");
+                flat_names.remove(&flat);
+            }
+        }
+        Self { tools, flat_names }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -356,8 +379,25 @@ impl ToolRegistry {
         Self::new(HashMap::from([(name, handler as Arc<dyn CoreToolRuntime>)]))
     }
 
+    /// Resolves a name the model produced to the name the registry is keyed by.
+    ///
+    /// Exact match wins, so a plain tool whose name happens to look flat still
+    /// wins over a namespaced tool that flattens to it. Only then is the flat
+    /// index consulted, and only for a namespace-less name — a name that already
+    /// carries a namespace has no reason to be reinterpreted.
+    fn canonical_name(&self, name: &ToolName) -> Option<ToolName> {
+        if self.tools.contains_key(name) {
+            return Some(name.clone());
+        }
+        if name.namespace.is_none() {
+            return self.flat_names.get(&name.name).cloned();
+        }
+        None
+    }
+
     fn tool(&self, name: &ToolName) -> Option<Arc<dyn CoreToolRuntime>> {
-        self.tools.get(name).map(Arc::clone)
+        let canonical = self.canonical_name(name)?;
+        self.tools.get(&canonical).map(Arc::clone)
     }
 
     #[cfg(test)]
@@ -369,7 +409,8 @@ impl ToolRegistry {
 
     #[cfg(test)]
     pub(crate) fn tool_exposure(&self, name: &ToolName) -> Option<ToolExposure> {
-        self.tools.get(name).map(|tool| tool.exposure())
+        let canonical = self.canonical_name(name)?;
+        self.tools.get(&canonical).map(|tool| tool.exposure())
     }
 
     pub(crate) fn create_diff_consumer(
@@ -407,8 +448,8 @@ impl ToolRegistry {
         mut invocation: ToolInvocation,
         terminal_outcome_reached: Option<Arc<AtomicBool>>,
     ) -> Result<AnyToolResult, FunctionCallError> {
-        let tool_name = invocation.tool_name.clone();
-        let tool_name_flat = flat_tool_name(&tool_name);
+        let mut tool_name = invocation.tool_name.clone();
+        let tool_name_flat = flat_tool_name(&tool_name).into_owned();
         let call_id_owned = invocation.call_id.clone();
         let otel = invocation.turn.session_telemetry.clone();
         let base_tool_result_tags = [
@@ -439,8 +480,20 @@ impl ToolRegistry {
         }
 
         let dispatch_trace = ToolDispatchTrace::start(&invocation);
-        let tool = match self.tool(&tool_name) {
-            Some(tool) => tool,
+        let tool = match self
+            .canonical_name(&tool_name)
+            .and_then(|canonical| self.tools.get(&canonical).map(|tool| (canonical, Arc::clone(tool))))
+        {
+            Some((canonical, tool)) => {
+                if canonical != tool_name {
+                    // The model was handed the flat form and sent it back. The
+                    // handler, its approval checks, and its hooks all key off the
+                    // namespaced name, so dispatch from here on uses that one.
+                    invocation.tool_name = canonical.clone();
+                    tool_name = canonical;
+                }
+                tool
+            }
             None => {
                 let message = unsupported_tool_call_message(&invocation.payload, &tool_name);
                 let log_payload = invocation.payload.log_payload();

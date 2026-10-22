@@ -1332,7 +1332,10 @@ async fn file_tools_are_model_visible_in_every_mode() {
 /// which is exactly how this went unnoticed.
 #[tokio::test]
 async fn spawn_agent_is_directly_visible_in_read_only_modes() {
-    let spawn_agent = format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent");
+    // Render the name through `ToolName` rather than concatenating: how a
+    // namespace joins its tool is a property of the type, and a test that spells
+    // it out again silently disagrees the moment that rule changes.
+    let spawn_agent = ToolName::namespaced(MULTI_AGENT_V1_NAMESPACE, "spawn_agent").to_string();
     for mode in [ModeKind::Plan, ModeKind::Design] {
         let probe = probe(|turn| {
             turn.collaboration_mode.mode = mode;
@@ -1575,4 +1578,89 @@ async fn design_review_subagent_gets_no_model_tools() {
         !code_review.visible_names.is_empty(),
         "/review code review should still expose tools"
     );
+}
+
+/// A browser namespace as the extension publishes it: one entry, several
+/// functions inside.
+fn browser_namespace_spec() -> ToolSpec {
+    let function = |name: &str| {
+        ResponsesApiNamespaceTool::Function(ResponsesApiTool {
+            name: name.to_string(),
+            description: format!("{name} the page"),
+            strict: true,
+            defer_loading: None,
+            parameters: ody_tools::parse_tool_input_schema(&json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false,
+            }))
+            .expect("browser tool schema should parse"),
+            output_schema: None,
+        })
+    };
+    ToolSpec::Namespace(ody_tools::ResponsesApiNamespace {
+        name: "browser".to_string(),
+        description: "Tools in the browser namespace.".to_string(),
+        tools: vec![function("navigate"), function("screenshot")],
+    })
+}
+
+/// Chat Completions has no namespace shape, and the namespace used to be
+/// dropped entirely, which is how `browser__*` disappeared from the model's tool
+/// list while the runtime still held every browser tool.
+#[test]
+fn a_namespace_becomes_one_flat_function_per_tool() {
+    let flattened = super::model_visible_tool_specs(/*namespaces_supported*/ false, browser_namespace_spec());
+
+    let names = flattened
+        .iter()
+        .map(|spec| spec.name().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["browser__navigate", "browser__screenshot"]);
+    assert!(
+        flattened
+            .iter()
+            .all(|spec| matches!(spec, ToolSpec::Function(_))),
+        "a namespace-less provider can only execute functions"
+    );
+
+    // The function body survives the move: parameters and description are the
+    // tool's own, not the namespace's.
+    let ToolSpec::Function(screenshot) = &flattened[1] else {
+        panic!("flattened specs must be functions");
+    };
+    assert_eq!(screenshot.description, "screenshot the page");
+}
+
+#[test]
+fn a_namespace_is_left_alone_when_the_provider_supports_it() {
+    let specs = super::model_visible_tool_specs(/*namespaces_supported*/ true, browser_namespace_spec());
+
+    assert_eq!(specs.len(), 1);
+    let ToolSpec::Namespace(namespace) = &specs[0] else {
+        panic!("a namespace-capable provider keeps the namespace group");
+    };
+    assert_eq!(namespace.name, "browser");
+    assert_eq!(namespace.tools.len(), 2);
+}
+
+#[test]
+fn a_plain_function_is_unaffected_by_flattening() {
+    let spec = ToolSpec::Function(ResponsesApiTool {
+        name: "read_file".to_string(),
+        description: "Read a file.".to_string(),
+        strict: true,
+        defer_loading: None,
+        parameters: ody_tools::parse_tool_input_schema(&json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+        }))
+        .expect("schema should parse"),
+        output_schema: None,
+    });
+
+    let specs = super::model_visible_tool_specs(/*namespaces_supported*/ false, spec);
+    assert_eq!(specs.len(), 1);
+    assert_eq!(specs[0].name(), "read_file");
 }

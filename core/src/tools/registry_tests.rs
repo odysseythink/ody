@@ -472,3 +472,74 @@ fn test_invocation(
         },
     }
 }
+
+/// A provider without namespace support is handed `browser__screenshot` and can
+/// only send that same string back. It arrives with no namespace attached, so
+/// exact lookup alone would report the tool as unknown even though it was just
+/// listed.
+#[test]
+fn a_flat_name_resolves_to_the_namespaced_handler() {
+    let namespaced = ody_tools::ToolName::namespaced("browser", "screenshot");
+    let handler =
+        Arc::new(TestHandler { tool_name: namespaced.clone() }) as Arc<dyn CoreToolRuntime>;
+    let registry = ToolRegistry::new(HashMap::from([(namespaced.clone(), handler)]));
+
+    let called_as_flat = ody_tools::ToolName::plain("browser__screenshot");
+    assert_eq!(registry.canonical_name(&called_as_flat), Some(namespaced));
+    assert!(registry.tool(&called_as_flat).is_some());
+}
+
+/// MCP namespaces already end in `__`. Adding another separator would make the
+/// flat name differ from the one MCP tools have always advertised, so resolution
+/// has to follow the same rule the flat form was built with.
+#[test]
+fn an_mcp_flat_name_keeps_its_single_separator() {
+    let namespaced = ody_tools::ToolName::namespaced("mcp__server__", "exec_command");
+    let handler =
+        Arc::new(TestHandler { tool_name: namespaced.clone() }) as Arc<dyn CoreToolRuntime>;
+    let registry = ToolRegistry::new(HashMap::from([(namespaced.clone(), handler)]));
+
+    let called_as_flat = ody_tools::ToolName::plain("mcp__server__exec_command");
+    assert_eq!(registry.canonical_name(&called_as_flat), Some(namespaced));
+}
+
+/// A plain tool whose name merely looks flat is what the model actually saw, so
+/// it must not be reinterpreted as a namespace call.
+#[test]
+fn an_exact_plain_name_wins_over_a_namespace_that_flattens_to_it() {
+    let plain = ody_tools::ToolName::plain("browser__screenshot");
+    let namespaced = ody_tools::ToolName::namespaced("browser", "screenshot");
+    let plain_handler = Arc::new(TestHandler {
+        tool_name: plain.clone(),
+    }) as Arc<dyn CoreToolRuntime>;
+    let namespaced_handler = Arc::new(TestHandler {
+        tool_name: namespaced.clone(),
+    }) as Arc<dyn CoreToolRuntime>;
+    let registry = ToolRegistry::new(HashMap::from([
+        (plain.clone(), Arc::clone(&plain_handler)),
+        (namespaced, namespaced_handler),
+    ]));
+
+    assert_eq!(registry.canonical_name(&plain), Some(plain.clone()));
+    assert!(
+        registry
+            .tool(&plain)
+            .is_some_and(|resolved| Arc::ptr_eq(&resolved, &plain_handler)),
+        "the plain tool is the one that was listed under that name"
+    );
+}
+
+/// An unknown flat-looking name must stay unknown: guessing a namespace split
+/// would let a typo reach a tool the model never asked for.
+#[test]
+fn an_unlisted_flat_name_is_still_unknown() {
+    let namespaced = ody_tools::ToolName::namespaced("browser", "screenshot");
+    let handler =
+        Arc::new(TestHandler { tool_name: namespaced.clone() }) as Arc<dyn CoreToolRuntime>;
+    let registry = ToolRegistry::new(HashMap::from([(namespaced, handler)]));
+
+    assert_eq!(
+        registry.canonical_name(&ody_tools::ToolName::plain("browser__type_text")),
+        None
+    );
+}

@@ -20,6 +20,7 @@ use serde_json::Map;
 use serde_json::Value;
 use serde_json::json;
 use tracing::debug;
+use tracing::warn;
 
 pub use vendor::ChatVendor;
 
@@ -563,7 +564,18 @@ fn convert_tool(tool: &Value, vendor: ChatVendor) -> Option<Value> {
             Some(json!({ "type": "function", "function": Value::Object(function) }))
         }
         other => {
-            debug!("dropping unsupported tool type for chat completions: {other}");
+            // A tool the model was promised and cannot see is a capability bug,
+            // not noise. This used to log at `debug`, so a whole namespace
+            // disappearing looked exactly like a model that ignored its tools.
+            let name = obj
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("<unnamed>");
+            warn!(
+                tool = name,
+                kind = other,
+                "dropping a tool chat completions cannot represent"
+            );
             None
         }
     }

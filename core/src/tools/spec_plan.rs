@@ -87,6 +87,7 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_tools::ResponsesApiNamespace;
 use ody_tools::ResponsesApiNamespaceTool;
+use ody_tools::ResponsesApiTool;
 use ody_tools::ToolCall as ExtensionToolCall;
 use ody_tools::ToolEnvironmentMode;
 use ody_tools::ToolExecutor;
@@ -279,14 +280,55 @@ fn build_model_visible_specs_and_registry(
     specs.extend(hosted_specs);
 
     let registry = ToolRegistry::from_tools(runtimes);
+    let namespaces_supported = namespace_tools_enabled(turn_context);
     let model_visible_specs = merge_into_namespaces(specs)
         .into_iter()
-        .filter(|spec| {
-            namespace_tools_enabled(turn_context) || !matches!(spec, ToolSpec::Namespace(_))
-        })
+        .flat_map(|spec| model_visible_tool_specs(namespaces_supported, spec))
         .collect();
 
     (model_visible_specs, registry)
+}
+
+/// Adapts a planned spec to what this provider can actually express.
+///
+/// A Responses-API namespace is one tool entry with a `name`, a description, and
+/// a list of functions. Chat Completions has no such shape — every entry is a
+/// `function` — so a namespace cannot simply be forwarded. It used to be
+/// dropped instead, which silently removed whole capabilities: with a chat
+/// provider the model could not see `browser`, `skills`, or `memories` at all,
+/// while the runtimes still held them and dispatch would have worked. Nothing
+/// logged it above `debug`.
+///
+/// Flattening keeps the capability. Each namespace function becomes a plain
+/// function named `<namespace>__<tool>` (see [`ToolName::flat`]), which is the
+/// same name the tool already reports through [`crate::tools::flat_tool_name`]
+/// and the same name the docs and hook matchers use. The namespace description
+/// is not appended to every description: the prefix already carries the
+/// grouping, and repeating it once per tool costs context for no information.
+fn model_visible_tool_specs(namespaces_supported: bool, spec: ToolSpec) -> Vec<ToolSpec> {
+    if namespaces_supported {
+        return vec![spec];
+    }
+    match spec {
+        ToolSpec::Namespace(namespace) => namespace
+            .tools
+            .into_iter()
+            .map(|tool| match tool {
+                ResponsesApiNamespaceTool::Function(function) => {
+                    flattened_function_spec(namespace.name.as_str(), function)
+                }
+            })
+            .collect(),
+        spec => vec![spec],
+    }
+}
+
+fn flattened_function_spec(namespace: &str, mut function: ResponsesApiTool) -> ToolSpec {
+    let flat_name = ToolName::namespaced(namespace, function.name.as_str())
+        .flat()
+        .into_owned();
+    function.name = flat_name;
+    ToolSpec::Function(function)
 }
 
 fn spec_for_model_request(
