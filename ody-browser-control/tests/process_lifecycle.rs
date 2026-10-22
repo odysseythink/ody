@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ody_browser_control::{
     acquire_browser_permit, discover_chrome, BrowserControlConfig, BrowserControlError,
-    BrowserControlMode, BrowserSession, BrowserThreadState,
+    BrowserControlMode, BrowserSession, BrowserThreadState, ViewportOverride,
 };
 
 fn test_config() -> BrowserControlConfig {
@@ -117,6 +117,53 @@ async fn thread_state_navigates_and_reuses_default_page() {
 
     thread.navigate(&format!("{url}/page1"), None).await.unwrap();
     thread.navigate(&format!("{url}/page2"), None).await.unwrap();
+
+    thread.close().await.unwrap();
+}
+
+/// The responsive loop the frontend mode depends on: apply a viewport, confirm
+/// the layout really changed, capture a PNG, then drop the override.
+///
+/// Asserting `window.innerWidth` after the override is the point: a viewport
+/// command that returns Ok but does not reach layout would make every
+/// breakpoint screenshot a lie.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn thread_state_applies_and_clears_a_viewport_override() {
+    if skip_if_no_chrome() {
+        return;
+    }
+    let (_server, url) = start_test_server().await;
+    let thread = BrowserThreadState::new(test_config()).await.unwrap();
+    thread.navigate(&format!("{url}/page1"), None).await.unwrap();
+
+    let narrowed = ViewportOverride {
+        width: 420,
+        height: 720,
+        device_scale_factor: 1.0,
+        mobile: false,
+    };
+    thread.set_viewport(narrowed).await.unwrap();
+    let width = thread.evaluate("window.innerWidth").await.unwrap();
+    assert_eq!(
+        width.value,
+        serde_json::json!(420),
+        "the override must drive layout, not just be acknowledged"
+    );
+
+    let png = thread.screenshot_bytes(/*full_page*/ false).await.unwrap();
+    assert_eq!(
+        &png[..4],
+        &[0x89, 0x50, 0x4E, 0x47],
+        "the raw-byte route still returns a PNG"
+    );
+
+    thread.clear_viewport().await.unwrap();
+    let restored = thread.evaluate("window.innerWidth").await.unwrap();
+    assert_ne!(
+        restored.value,
+        serde_json::json!(420),
+        "clearing the override returns the browser window size"
+    );
 
     thread.close().await.unwrap();
 }

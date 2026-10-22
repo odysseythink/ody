@@ -13,7 +13,7 @@ use crate::error::BrowserControlError;
 use crate::page_state::PageState;
 use crate::session::BrowserSession;
 use crate::types::{
-    EvaluateResult, NavigationResult, Point, ScreenshotResult, WaitCondition,
+    EvaluateResult, NavigationResult, Point, ScreenshotResult, ViewportOverride, WaitCondition,
     truncate_base64_bytes, truncate_string_bytes,
 };
 use crate::{event_buffer::LogsSnapshot, url_block};
@@ -249,9 +249,7 @@ impl BrowserThreadState {
     /// Capture a screenshot of the default page and return a base64-encoded PNG.
     #[tracing::instrument(skip_all, fields(full_page))]
     pub async fn screenshot(&self, full_page: bool) -> Result<ScreenshotResult, BrowserControlError> {
-        let bytes = self
-            .with_page_retry(|page| Box::pin(async move { page.screenshot(full_page).await }))
-            .await?;
+        let bytes = self.screenshot_bytes(full_page).await?;
         let mut data = base64::engine::general_purpose::STANDARD.encode(&bytes);
         let truncated = data.len() > crate::types::SCREENSHOT_MAX_BYTES;
         if truncated {
@@ -262,6 +260,63 @@ impl BrowserThreadState {
             mime_type: "image/png".to_string(),
             truncated,
         })
+    }
+
+    /// Capture a screenshot of the default page and return the raw PNG bytes.
+    ///
+    /// Separate from [`Self::screenshot`] because the base64 path truncates at
+    /// [`crate::types::SCREENSHOT_MAX_BYTES`]. A caller that writes the image to
+    /// disk must never receive a truncated one: the bytes would no longer decode.
+    #[tracing::instrument(skip_all, fields(full_page))]
+    pub async fn screenshot_bytes(
+        &self,
+        full_page: bool,
+    ) -> Result<Vec<u8>, BrowserControlError> {
+        self.with_page_retry(|page| Box::pin(async move { page.screenshot(full_page).await }))
+            .await
+    }
+
+    /// Override the layout viewport via `Emulation.setDeviceMetricsOverride`.
+    ///
+    /// Waits for two animation frames after the override so callers can
+    /// screenshot immediately: a resize that has not produced a frame yet
+    /// captures the previous layout, which makes breakpoint comparisons lie.
+    #[tracing::instrument(skip_all, fields(width = viewport.width, height = viewport.height))]
+    pub async fn set_viewport(
+        &self,
+        viewport: ViewportOverride,
+    ) -> Result<(), BrowserControlError> {
+        self.execute_raw(
+            "Emulation.setDeviceMetricsOverride",
+            serde_json::json!({
+                "width": viewport.width,
+                "height": viewport.height,
+                "deviceScaleFactor": viewport.device_scale_factor,
+                "mobile": viewport.mobile,
+            }),
+        )
+        .await?;
+        self.settle_frames().await
+    }
+
+    /// Drop any viewport override and return to the browser's own window size.
+    #[tracing::instrument(skip_all)]
+    pub async fn clear_viewport(&self) -> Result<(), BrowserControlError> {
+        self.execute_raw("Emulation.clearDeviceMetricsOverride", serde_json::json!({}))
+            .await?;
+        self.settle_frames().await
+    }
+
+    /// Wait for the next two animation frames so layout and paint have landed.
+    ///
+    /// Best effort: a page that blocks rAF (background tab, heavy main-thread
+    /// work) must not fail the viewport change itself.
+    async fn settle_frames(&self) -> Result<(), BrowserControlError> {
+        let js = "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))";
+        let _ = self
+            .with_page_retry(|page| Box::pin(async move { page.evaluate(js).await }))
+            .await;
+        Ok(())
     }
 
     /// Evaluate `js` on the default page and return the serialized result.

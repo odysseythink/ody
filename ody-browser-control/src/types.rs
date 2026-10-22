@@ -47,6 +47,39 @@ pub struct ScreenshotResult {
     pub truncated: bool,
 }
 
+/// Result of a screenshot captured straight to a file.
+///
+/// Written instead of [`ScreenshotResult`] when the caller passes `path`, so the
+/// model gets a path it can hand to `view_image` rather than base64 it cannot
+/// read as an image. The bytes are never truncated on this route: a truncated
+/// PNG is not decodable, and a screenshot the model cannot see is the same as no
+/// screenshot at all.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ScreenshotFile {
+    /// Workspace-relative path the PNG was written to, exactly as requested.
+    pub path: String,
+    /// Size of the written PNG in bytes.
+    pub bytes: usize,
+    /// MIME type of the image (`image/png`).
+    pub mime_type: String,
+}
+
+/// A viewport override applied through `Emulation.setDeviceMetricsOverride`.
+///
+/// Used to walk a responsive breakpoint matrix without relaunching the browser:
+/// the model sets a width, screenshots, and repeats.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ViewportOverride {
+    /// Viewport width in CSS pixels.
+    pub width: u32,
+    /// Viewport height in CSS pixels.
+    pub height: u32,
+    /// Device pixel ratio; 1.0 captures CSS pixels one-to-one.
+    pub device_scale_factor: f64,
+    /// Whether the viewport should emulate a mobile device (touch, meta viewport).
+    pub mobile: bool,
+}
+
 /// Result of a JavaScript evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EvaluateResult {

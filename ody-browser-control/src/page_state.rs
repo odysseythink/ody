@@ -4,7 +4,6 @@ use std::sync::Arc;
 use chromiumoxide::layout::Point;
 use chromiumoxide::page::{Page, ScreenshotParams};
 use futures::StreamExt;
-use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -265,11 +264,26 @@ impl BrowserSession {
     }
 }
 
-#[derive(Debug, Serialize)]
+/// A CDP call identified only at runtime.
+///
+/// The `Command` trait requires `Serialize`, and chromiumoxide sends
+/// `serde_json::to_value(cmd)` as the request's `params` (see
+/// `CommandMessage::new`). A derived `Serialize` would therefore post
+/// `{"method": .., "params": {..}}` as the parameters, and Chrome answers every
+/// such call with `-32602 Invalid parameters`. Serializing the inner value keeps
+/// the wire shape correct.
 struct RawCdpCommand {
     method: String,
-    #[serde(rename = "params")]
     params: serde_json::Value,
+}
+
+impl serde::Serialize for RawCdpCommand {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.params.serialize(serializer)
+    }
 }
 
 impl chromiumoxide::types::Method for RawCdpCommand {
@@ -291,15 +305,32 @@ mod tests {
         // Compilation-only test: Debug must be reachable.
     }
 
+    /// chromiumoxide sends `serde_json::to_value(cmd)` as the CDP request
+    /// `params`, so this struct must serialize as the inner object only.
+    /// Wrapping it (derived `Serialize`) posts `{method, params}` as the
+    /// parameters and Chrome answers `-32602 Invalid parameters`.
     #[test]
-    fn raw_cdp_command_serialization() {
+    fn raw_cdp_command_serializes_as_bare_params() {
         let cmd = RawCdpCommand {
             method: "Runtime.evaluate".to_string(),
             params: serde_json::json!({"expression": "1+1"}),
         };
-        let json = serde_json::to_string(&cmd).unwrap();
-        assert!(json.contains("Runtime.evaluate"));
-        assert!(json.contains("1+1"));
+        let json = serde_json::to_value(&cmd).expect("serializes");
+        assert_eq!(
+            json,
+            serde_json::json!({"expression": "1+1"}),
+            "params must be the payload itself, not a wrapper"
+        );
+
+        let no_args = RawCdpCommand {
+            method: "Emulation.clearDeviceMetricsOverride".to_string(),
+            params: serde_json::json!({}),
+        };
+        assert_eq!(
+            serde_json::to_value(&no_args).expect("serializes"),
+            serde_json::json!({}),
+            "a no-argument command serializes to an empty object"
+        );
     }
 
     #[test]

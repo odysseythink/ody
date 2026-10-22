@@ -80,6 +80,9 @@ impl BrowserControlExtension {
             // BrowserUse exposes the browser navigation / inspection subset.
             "navigate" | "go_back" | "go_forward" | "reload" | "evaluate" | "get_dom"
             | "read_logs" => handle.browser_use,
+            // Viewport emulation is inspection: it changes what the page is laid
+            // out for, not what it does.
+            "set_viewport" => handle.browser_use,
             // Screenshot is useful for both modes.
             "screenshot" => handle.browser_use || handle.computer_use,
             _ => false,

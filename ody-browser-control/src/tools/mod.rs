@@ -1,15 +1,20 @@
+use std::path::{Component, Path};
 use std::sync::Arc;
 
+use ody_file_system::{CreateDirectoryOptions, ExecutorFileSystem, FileSystemSandboxContext};
 use ody_tools::{
     FunctionCallError, JsonToolOutput, ToolCall, ToolExecutor, ToolExecutorFuture, ToolExposure,
     ToolName, ToolOutput, ToolSpec, default_namespace_description,
     parse_tool_input_schema, ResponsesApiNamespace, ResponsesApiNamespaceTool, ResponsesApiTool,
 };
+use ody_utils_path_uri::PathUri;
 use serde_json::json;
 
 use crate::{
     BrowserControlApprovalTicket, BrowserControlError, BrowserControlMode, BrowserThreadState,
-    types::{LogKind, LogLevel, Point, WaitCondition},
+    types::{
+        LogKind, LogLevel, Point, ScreenshotFile, ViewportOverride, WaitCondition,
+    },
 };
 
 /// Trait marker for browser tools. The only per-type information needed is the
@@ -408,6 +413,109 @@ impl BrowserTool for BrowserScreenshotTool {
 struct BrowserScreenshotInput {
     #[serde(default)]
     full_page: bool,
+    #[serde(default)]
+    path: Option<String>,
+}
+
+/// Where a `path`-mode screenshot is written.
+///
+/// The path is pinned inside the turn's working directory: absolute paths and
+/// `..` components are rejected rather than resolved. The browser tool has no
+/// business writing outside the workspace, and a model-supplied path is exactly
+/// the input that would otherwise let it.
+struct ScreenshotTarget {
+    path_uri: PathUri,
+    requested_path: String,
+    file_system: Arc<dyn ExecutorFileSystem>,
+    sandbox: FileSystemSandboxContext,
+}
+
+impl ScreenshotTarget {
+    fn resolve(call: &ToolCall, requested: &str) -> Result<Self, FunctionCallError> {
+        let requested = requested.trim();
+        if requested.is_empty() {
+            return Err(FunctionCallError::RespondToModel(
+                "`path` must not be empty; omit it to receive base64 instead".to_string(),
+            ));
+        }
+        let candidate = Path::new(requested);
+        if candidate.is_absolute() {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "`path` must be relative to the workspace, got the absolute path `{requested}`"
+            )));
+        }
+        if candidate
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
+        {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "`path` must not contain `..`, got `{requested}`"
+            )));
+        }
+        // A screenshot writes a PNG. Requiring the extension keeps the tool from
+        // clobbering a source file when the model passes the wrong path.
+        let is_png = candidate
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("png"));
+        if !is_png {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "`path` must end in `.png`, got `{requested}`"
+            )));
+        }
+        let environment = call.environments.first().ok_or_else(|| {
+            FunctionCallError::RespondToModel(
+                "`path` needs a host environment with a working directory; this call has none, so omit `path` to receive base64 instead"
+                    .to_string(),
+            )
+        })?;
+        let absolute = environment.cwd.join(candidate);
+        Ok(Self {
+            path_uri: PathUri::from_abs_path(&absolute),
+            requested_path: requested.to_string(),
+            file_system: Arc::clone(&environment.file_system),
+            sandbox: environment.file_system_sandbox_context.clone(),
+        })
+    }
+
+    async fn write(&self, png: Vec<u8>) -> Result<ScreenshotFile, FunctionCallError> {
+        if let Some(parent) = self.path_uri.parent() {
+            match self
+                .file_system
+                .create_directory(
+                    &parent,
+                    CreateDirectoryOptions { recursive: true },
+                    Some(&self.sandbox),
+                )
+                .await
+            {
+                Ok(()) => {}
+                // The directory already exists; writing into it is still correct.
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => {
+                    return Err(FunctionCallError::RespondToModel(format!(
+                        "unable to create the directory for `{}`: {error}",
+                        self.requested_path
+                    )));
+                }
+            }
+        }
+        let bytes = png.len();
+        self.file_system
+            .write_file(&self.path_uri, png, Some(&self.sandbox))
+            .await
+            .map_err(|error| {
+                FunctionCallError::RespondToModel(format!(
+                    "unable to write the screenshot to `{}`: {error}",
+                    self.requested_path
+                ))
+            })?;
+        Ok(ScreenshotFile {
+            path: self.requested_path.clone(),
+            bytes,
+            mime_type: "image/png".to_string(),
+        })
+    }
 }
 
 impl ToolExecutor<ToolCall> for BrowserScreenshotTool {
@@ -418,13 +526,17 @@ impl ToolExecutor<ToolCall> for BrowserScreenshotTool {
     fn spec(&self) -> ToolSpec {
         namespace_spec(
             "screenshot",
-            "Capture a PNG screenshot of the current page.",
+            "Capture a PNG screenshot of the current page. Pass `path` to write it inside the workspace, then read it with `view_image`; omit `path` to get base64 back.",
             json!({
                 "type": "object",
                 "properties": {
                     "full_page": {
                         "type": "boolean",
                         "description": "Capture the full page instead of the viewport."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Workspace-relative PNG path, e.g. `.ody-code/frontend/shots/home@1280.png`. Parent directories are created. Read the file back with `view_image` to actually see the page. Absolute paths and `..` are rejected."
                     }
                 },
                 "additionalProperties": false
@@ -441,6 +553,23 @@ impl ToolExecutor<ToolCall> for BrowserScreenshotTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             let input: BrowserScreenshotInput = parse_args(&call)?;
+            let details = serde_json::to_value(&input)
+                .map_err(|e| FunctionCallError::Fatal(e.to_string()))?;
+            if let Some(requested) = input.path.as_deref() {
+                // Resolve before capturing: a rejected path must not cost a capture.
+                let target = ScreenshotTarget::resolve(&call, requested)?;
+                let png = state
+                    .screenshot_bytes(input.full_page)
+                    .await
+                    .map_err(map_error)?;
+                let saved = target.write(png).await?;
+                return Ok(wrap_output(
+                    serde_json::to_value(saved)
+                        .map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
+                    "screenshot",
+                    details,
+                ));
+            }
             let result = state
                 .screenshot(input.full_page)
                 .await
@@ -448,10 +577,145 @@ impl ToolExecutor<ToolCall> for BrowserScreenshotTool {
             Ok(wrap_output(
                 serde_json::to_value(result).map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
                 "screenshot",
-                serde_json::to_value(input).map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
+                details,
             ))
         })
     }
+}
+
+/// Change the layout viewport, or clear the override.
+///
+/// Responsive verification needs a breakpoint matrix, and launching a browser
+/// per width is both slow and unrepeatable. This is the first-class tool for it:
+/// a raw CDP call would work in local mode but is refused for external browsers.
+pub struct BrowserSetViewportTool {
+    state: Arc<BrowserThreadState>,
+}
+
+impl BrowserSetViewportTool {
+    pub fn new(state: Arc<BrowserThreadState>) -> Self {
+        Self { state }
+    }
+}
+
+impl BrowserTool for BrowserSetViewportTool {
+    fn state(&self) -> &Arc<BrowserThreadState> {
+        &self.state
+    }
+}
+
+/// Chrome rejects zero-sized metrics, and anything above this is not a real
+/// device: both are caller mistakes worth reporting instead of forwarding.
+const MAX_VIEWPORT_EDGE: u32 = 16_384;
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct BrowserSetViewportInput {
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+    #[serde(default)]
+    device_scale_factor: Option<f64>,
+    #[serde(default)]
+    mobile: bool,
+    /// Drop the override and return to the browser window's own size.
+    #[serde(default)]
+    reset: bool,
+}
+
+impl ToolExecutor<ToolCall> for BrowserSetViewportTool {
+    fn tool_name(&self) -> ToolName {
+        namespaced_tool_name("set_viewport")
+    }
+
+    fn spec(&self) -> ToolSpec {
+        namespace_spec(
+            "set_viewport",
+            "Set the layout viewport size so a responsive breakpoint can be screenshotted, or clear the override with `reset`.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "width": {
+                        "type": "integer",
+                        "description": "Viewport width in CSS pixels, from 1 to 16384."
+                    },
+                    "height": {
+                        "type": "integer",
+                        "description": "Viewport height in CSS pixels, from 1 to 16384."
+                    },
+                    "device_scale_factor": {
+                        "type": "number",
+                        "description": "Device pixel ratio. Defaults to 1."
+                    },
+                    "mobile": {
+                        "type": "boolean",
+                        "description": "Emulate a mobile device (touch events, meta viewport). Defaults to false."
+                    },
+                    "reset": {
+                        "type": "boolean",
+                        "description": "Clear the override instead of setting one."
+                    }
+                },
+                "additionalProperties": false
+            }),
+        )
+    }
+
+    fn exposure(&self) -> ToolExposure {
+        ToolExposure::Direct
+    }
+
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
+    fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
+        let state = Arc::clone(&self.state);
+        Box::pin(async move {
+            let input: BrowserSetViewportInput = parse_args(&call)?;
+            let details = serde_json::to_value(&input)
+                .map_err(|e| FunctionCallError::Fatal(e.to_string()))?;
+            if input.reset {
+                state.clear_viewport().await.map_err(map_error)?;
+                return Ok(wrap_output(
+                    json!({"reset": true}),
+                    "set_viewport",
+                    details,
+                ));
+            }
+            let width = input.width.ok_or_else(|| missing_edge("width"))?;
+            let height = input.height.ok_or_else(|| missing_edge("height"))?;
+            for (label, value) in [("width", width), ("height", height)] {
+                if value == 0 || value > MAX_VIEWPORT_EDGE {
+                    return Err(FunctionCallError::RespondToModel(format!(
+                        "`{label}` must be between 1 and {MAX_VIEWPORT_EDGE}, got {value}"
+                    )));
+                }
+            }
+            let device_scale_factor = input.device_scale_factor.unwrap_or(1.0);
+            if !(device_scale_factor.is_finite() && device_scale_factor > 0.0) {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "`device_scale_factor` must be a positive number, got {device_scale_factor}"
+                )));
+            }
+            let viewport = ViewportOverride {
+                width,
+                height,
+                device_scale_factor,
+                mobile: input.mobile,
+            };
+            state.set_viewport(viewport).await.map_err(map_error)?;
+            Ok(wrap_output(
+                serde_json::to_value(viewport)
+                    .map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
+                "set_viewport",
+                details,
+            ))
+        })
+    }
+}
+
+fn missing_edge(field: &str) -> FunctionCallError {
+    FunctionCallError::RespondToModel(format!(
+        "`{field}` is required unless `reset` is true"
+    ))
 }
 
 /// Evaluate a JavaScript expression on the page.
@@ -931,6 +1195,7 @@ pub fn all_tools(state: Arc<BrowserThreadState>) -> Vec<Arc<dyn ToolExecutor<Too
         Arc::new(BrowserGoForwardTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
         Arc::new(BrowserReloadTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
         Arc::new(BrowserScreenshotTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
+        Arc::new(BrowserSetViewportTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
         Arc::new(BrowserEvaluateTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
         Arc::new(BrowserClickTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
         Arc::new(BrowserTypeTool::new(Arc::clone(&state))) as Arc<dyn ToolExecutor<ToolCall>>,
@@ -944,9 +1209,14 @@ pub fn all_tools(state: Arc<BrowserThreadState>) -> Vec<Arc<dyn ToolExecutor<Too
 mod tests {
     use super::*;
 
+    use ody_file_system::{
+        CopyOptions, ExecutorFileSystemFuture, FileMetadata, FileSystemReadStream,
+        ReadDirectoryEntry, RemoveOptions,
+    };
     use ody_protocol::models::ResponseInputItem;
     use ody_protocol::protocol::TruncationPolicy;
-    use ody_tools::{NoopTurnItemEmitter, ToolPayload};
+    use ody_tools::{NoopTurnItemEmitter, ToolEnvironment, ToolPayload};
+    use ody_utils_path_uri::PathUri;
     use serde_json::Value;
 
     use crate::BrowserControlConfig;
@@ -1191,5 +1461,394 @@ mod tests {
         assert!(result.is_err(), "expected an error");
         let Err(err) = result else { unreachable!() };
         assert!(err.to_string().contains("external browser mode"));
+    }
+
+    /// Filesystem that records what the screenshot writer asked for.
+    ///
+    /// Only the write path is exercised. Every other operation returns an error
+    /// so that an unexpected call fails loudly instead of succeeding silently.
+    #[derive(Default)]
+    struct RecordingFileSystem {
+        directories: std::sync::Mutex<Vec<String>>,
+        writes: std::sync::Mutex<Vec<(String, Vec<u8>)>>,
+    }
+
+    impl RecordingFileSystem {
+        fn directories(&self) -> Vec<String> {
+            self.directories.lock().expect("directories lock").clone()
+        }
+
+        fn writes(&self) -> Vec<(String, Vec<u8>)> {
+            self.writes.lock().expect("writes lock").clone()
+        }
+    }
+
+    fn unsupported<T: Send + 'static>(operation: &str) -> ExecutorFileSystemFuture<'static, T> {
+        let operation = operation.to_string();
+        Box::pin(async move {
+            Err(std::io::Error::other(format!(
+                "{operation} is not supported by the recording filesystem"
+            )))
+        })
+    }
+
+    impl ExecutorFileSystem for RecordingFileSystem {
+        fn canonicalize<'a>(
+            &'a self,
+            path: &'a PathUri,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, PathUri> {
+            Box::pin(async move { Ok(path.clone()) })
+        }
+
+        fn read_file<'a>(
+            &'a self,
+            _path: &'a PathUri,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, Vec<u8>> {
+            unsupported("read_file")
+        }
+
+        fn read_file_stream<'a>(
+            &'a self,
+            _path: &'a PathUri,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, FileSystemReadStream> {
+            unsupported("read_file_stream")
+        }
+
+        fn write_file<'a>(
+            &'a self,
+            path: &'a PathUri,
+            contents: Vec<u8>,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, ()> {
+            Box::pin(async move {
+                self.writes
+                    .lock()
+                    .expect("writes lock")
+                    .push((path.to_path_buf().display().to_string(), contents));
+                Ok(())
+            })
+        }
+
+        fn create_directory<'a>(
+            &'a self,
+            path: &'a PathUri,
+            _options: CreateDirectoryOptions,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, ()> {
+            Box::pin(async move {
+                self.directories
+                    .lock()
+                    .expect("directories lock")
+                    .push(path.to_path_buf().display().to_string());
+                Ok(())
+            })
+        }
+
+        fn get_metadata<'a>(
+            &'a self,
+            _path: &'a PathUri,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, FileMetadata> {
+            unsupported("get_metadata")
+        }
+
+        fn read_directory<'a>(
+            &'a self,
+            _path: &'a PathUri,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, Vec<ReadDirectoryEntry>> {
+            unsupported("read_directory")
+        }
+
+        fn remove<'a>(
+            &'a self,
+            _path: &'a PathUri,
+            _options: RemoveOptions,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, ()> {
+            unsupported("remove")
+        }
+
+        fn copy<'a>(
+            &'a self,
+            _source: &'a PathUri,
+            _destination: &'a PathUri,
+            _options: CopyOptions,
+            _sandbox: Option<&'a FileSystemSandboxContext>,
+        ) -> ExecutorFileSystemFuture<'a, ()> {
+            unsupported("copy")
+        }
+    }
+
+    fn workspace_path(path: &std::path::Path) -> ody_utils_absolute_path::AbsolutePathBuf {
+        ody_utils_absolute_path::AbsolutePathBuf::from_absolute_path(path)
+            .expect("tempdir path is absolute")
+    }
+
+    fn sandbox_for(cwd: &std::path::Path) -> FileSystemSandboxContext {
+        let cwd = PathUri::from_host_native_path(cwd).expect("cwd is a host path");
+        FileSystemSandboxContext {
+            permissions: Default::default(),
+            cwd: Some(cwd.clone()),
+            workspace_roots: vec![cwd],
+            windows_sandbox_level: Default::default(),
+            windows_sandbox_private_desktop: false,
+            use_legacy_landlock: false,
+        }
+    }
+
+    fn make_tool_call_in_workspace(
+        workspace: &std::path::Path,
+        file_system: Arc<RecordingFileSystem>,
+        tool_name: ToolName,
+        arguments: &str,
+    ) -> ToolCall {
+        ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name,
+            model: "test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1),
+            conversation_history: Default::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: vec![ToolEnvironment {
+                environment_id: "env-1".to_string(),
+                cwd: workspace_path(workspace),
+                file_system,
+                file_system_sandbox_context: sandbox_for(workspace),
+            }],
+            payload: ToolPayload::Function {
+                arguments: arguments.to_string(),
+            },
+            guardian_approved_action_id: None,
+        }
+    }
+
+    fn uninitialized_state() -> Arc<BrowserThreadState> {
+        Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        )
+    }
+
+    fn spec_json(tool: &impl ToolExecutor<ToolCall>) -> Value {
+        serde_json::to_value(tool.spec()).expect("tool spec serializes")
+    }
+
+    /// `required` is either absent or empty; either way the model is not forced
+    /// to pass the field.
+    fn assert_no_required(published: &Value) {
+        let required = &published["required"];
+        assert!(
+            required.is_null() || required.as_array().is_some_and(Vec::is_empty),
+            "no field may be required: {required}"
+        );
+    }
+
+    /// The whole point of `path` is that `view_image` can read the result, so the
+    /// bytes must land in the workspace untouched and the parent directory must
+    /// exist. A truncated or missing file is a screenshot the model cannot see.
+    #[tokio::test]
+    async fn screenshot_path_writes_the_png_into_the_workspace() {
+        let workspace = tempfile::tempdir().expect("tempdir");
+        let file_system = Arc::new(RecordingFileSystem::default());
+        let call = make_tool_call_in_workspace(
+            workspace.path(),
+            Arc::clone(&file_system),
+            ToolName::namespaced("browser", "screenshot"),
+            r#"{"path": ".ody-code/frontend/shots/home@1280.png", "full_page": true}"#,
+        );
+        let target = ScreenshotTarget::resolve(&call, ".ody-code/frontend/shots/home@1280.png")
+            .expect("relative workspace path resolves");
+        let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        let saved = target.write(png.clone()).await.expect("write succeeds");
+
+        assert_eq!(saved.path, ".ody-code/frontend/shots/home@1280.png");
+        assert_eq!(saved.bytes, png.len());
+        assert_eq!(saved.mime_type, "image/png");
+        assert_eq!(
+            file_system.directories(),
+            vec![
+                workspace
+                    .path()
+                    .join(".ody-code/frontend/shots")
+                    .display()
+                    .to_string()
+            ],
+            "the parent directory is created before the write"
+        );
+        let writes = file_system.writes();
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0].1, png, "PNG bytes are written unchanged");
+        assert_eq!(
+            writes[0].0,
+            workspace
+                .path()
+                .join(".ody-code/frontend/shots/home@1280.png")
+                .display()
+                .to_string(),
+            "the write is resolved against the workspace root"
+        );
+    }
+
+    #[test]
+    fn screenshot_path_refuses_to_escape_the_workspace() {
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "screenshot"),
+            r#"{"path": "../../etc/passwd"}"#,
+            None,
+        );
+        for requested in ["/etc/passwd", "../../etc/passwd", "shots/../../../escape.png"] {
+            let Err(err) = ScreenshotTarget::resolve(&call, requested) else {
+                panic!("{requested} must be rejected");
+            };
+            assert!(
+                matches!(err, FunctionCallError::RespondToModel(_)),
+                "rejection is reported to the model: {err:?}"
+            );
+            assert!(
+                err.to_string().contains("relative") || err.to_string().contains(".."),
+                "the error names the rule: {err}"
+            );
+        }
+    }
+
+    /// Without an environment there is no workspace to resolve against. Failing
+    /// with an actionable message beats writing to the process working directory.
+    #[test]
+    fn screenshot_path_requires_an_environment() {
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "screenshot"),
+            r#"{"path": "shot.png"}"#,
+            None,
+        );
+        let Err(err) = ScreenshotTarget::resolve(&call, "shot.png") else {
+            panic!("a call without environments must be rejected");
+        };
+        assert!(matches!(err, FunctionCallError::RespondToModel(_)));
+        assert!(err.to_string().contains("omit `path`"), "{err}");
+    }
+
+    /// A screenshot writes a PNG; anything else would let a wrong path clobber a
+    /// source file with image bytes.
+    #[test]
+    fn screenshot_path_must_be_a_png() {
+        let workspace = tempfile::tempdir().expect("tempdir");
+        let call = make_tool_call_in_workspace(
+            workspace.path(),
+            Arc::new(RecordingFileSystem::default()),
+            ToolName::namespaced("browser", "screenshot"),
+            r#"{"path": "src/main.rs"}"#,
+        );
+        for requested in ["src/main.rs", "shots/home@1280.png.txt", "shots/no-extension"] {
+            let Err(err) = ScreenshotTarget::resolve(&call, requested) else {
+                panic!("{requested} must be rejected");
+            };
+            assert!(err.to_string().contains(".png"), "{requested}: {err}");
+        }
+        // Case is not part of the rule.
+        assert!(ScreenshotTarget::resolve(&call, "shots/HOME.PNG").is_ok());
+    }
+
+    /// The inline route has to stay the default: `path` is opt-in, otherwise every
+    /// existing caller silently starts writing files.
+    #[test]
+    fn screenshot_path_is_optional_in_the_published_schema() {
+        let spec = spec_json(&BrowserScreenshotTool::new(uninitialized_state()));
+        let parameters = &spec["tools"][0]["parameters"];
+        assert_eq!(parameters["properties"]["path"]["type"], "string");
+        assert_eq!(parameters["properties"]["full_page"]["type"], "boolean");
+        assert_no_required(parameters);
+        assert!(
+            parameters["properties"]["path"]["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("view_image")),
+            "the description has to name the tool that can read the file"
+        );
+    }
+
+    #[test]
+    fn set_viewport_publishes_width_and_height() {
+        let spec = spec_json(&BrowserSetViewportTool::new(uninitialized_state()));
+        let parameters = &spec["tools"][0]["parameters"];
+        assert_eq!(parameters["properties"]["width"]["type"], "integer");
+        assert_eq!(parameters["properties"]["height"]["type"], "integer");
+        assert_eq!(
+            parameters["properties"]["device_scale_factor"]["type"],
+            "number"
+        );
+        assert_eq!(parameters["properties"]["reset"]["type"], "boolean");
+        assert_no_required(parameters);
+        // Numeric bounds are not part of the supported schema subset, so they
+        // live in the description text instead.
+        for field in ["width", "height"] {
+            let description = parameters["properties"][field]["description"]
+                .as_str()
+                .expect("edge fields carry a description");
+            assert!(
+                description.contains("1 to 16384"),
+                "{field} must document its accepted range: {description}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn set_viewport_reports_missing_and_out_of_range_edges() {
+        let tool = BrowserSetViewportTool::new(uninitialized_state());
+        let cases = [
+            (r#"{}"#, "`width` is required"),
+            (r#"{"width": 1280}"#, "`height` is required"),
+            (r#"{"width": 0, "height": 800}"#, "between 1"),
+            (
+                r#"{"width": 1280, "height": 20000}"#,
+                "between 1",
+            ),
+            (
+                r#"{"width": 1280, "height": 800, "device_scale_factor": 0}"#,
+                "positive number",
+            ),
+        ];
+        for (arguments, expected) in cases {
+            let call = make_tool_call(
+                ToolName::namespaced("browser", "set_viewport"),
+                arguments,
+                None,
+            );
+            let Err(err) = ToolExecutor::handle(&tool, call).await else {
+                panic!("{arguments} must be rejected");
+            };
+            assert!(
+                matches!(err, FunctionCallError::RespondToModel(_)),
+                "{arguments}: validation errors are model-correctable: {err:?}"
+            );
+            assert!(err.to_string().contains(expected), "{arguments}: {err}");
+        }
+    }
+
+    /// Validation happens before the browser is touched: an uninitialized state
+    /// still yields the state error, which proves the request was well formed.
+    #[tokio::test]
+    async fn set_viewport_reaches_the_browser_once_valid() {
+        let tool = BrowserSetViewportTool::new(uninitialized_state());
+        for arguments in [
+            r#"{"width": 1280, "height": 800}"#,
+            r#"{"reset": true}"#,
+        ] {
+            let call = make_tool_call(
+                ToolName::namespaced("browser", "set_viewport"),
+                arguments,
+                None,
+            );
+            let Err(err) = ToolExecutor::handle(&tool, call).await else {
+                panic!("{arguments} must reach the uninitialized browser");
+            };
+            assert!(
+                !matches!(err, FunctionCallError::RespondToModel(_)),
+                "{arguments} is valid and must not be rejected as input: {err:?}"
+            );
+        }
     }
 }
