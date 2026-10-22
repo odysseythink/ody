@@ -67,8 +67,14 @@ browser__navigate        { url, wait_until: "network_idle" }
 browser__set_viewport    { width: 1280, height: 900 }        # repeat per width
 browser__screenshot      { path: ".ody-code/frontend/shots/home@1280@before.png" }
 view_image               { path: ".ody-code/frontend/shots/home@1280@before.png" }
-browser__read_logs       { kind: "console", level: "error" }
+browser__read_logs       { kind: "console", level: "error", drain: true }   # marking the start
 ```
+
+The `drain: true` read is the round's zero point: it reports what the page had
+already logged, then removes those entries so the read after your actions shows
+only what your actions produced. Without it the console check can only be
+inferred by comparing counts, and an inferred check is the one that gets
+overstated in the report.
 
 `browser__screenshot` with `path` writes the PNG into the workspace; the call is only useful once `view_image` reads it back. A screenshot you did not open is not evidence. The `path` form never truncates — the base64 form does, and a truncated PNG cannot be decoded at all.
 
@@ -82,7 +88,7 @@ Run these on every frame in scope. They are cheap, objective, and they catch the
 
 | # | Check | Pass condition | How |
 | --- | --- | --- | --- |
-| 1 | Console | zero `error` entries produced by the actions of this round | `browser__read_logs { kind: "console", level: "error" }` |
+| 1 | Console | zero `error` entries produced by the actions of this round | `browser__read_logs { kind: "console", level: "error" }` after a `drain: true` baseline |
 | 2 | Horizontal overflow | no page-level horizontal scroll, no element past the right edge | `references/checks.md` § Overflow |
 | 3 | Clipping | no visible text cut off inside a fixed-height or hidden-overflow box | `references/checks.md` § Clipping |
 | 4 | Hit area | interactive targets ≥ 40×40 CSS px (≥ 44 on touch-first layouts) | `references/checks.md` § Hit area |
@@ -125,6 +131,13 @@ The report is the evidence, not a summary of your effort. Include:
 - findings as a table with **Severity**, **Location**, **Before**, **After**, **Why** — reuse `make-interfaces-feel-better`'s format rather than inventing a second one;
 - a verdict: `Block` if any `HIGH` remains, `Needs changes` if only `MEDIUM` or `LOW`, `Approve` only when nothing actionable is left;
 - an explicit **Not verified** list.
+
+Every dimension, ratio, and count in that report must be traceable to a tool
+result from this round. A number you cannot point at is worse than no number: it
+reads as measured and is not. If a check returned only pass/fail, say "no targets
+under 40×40" instead of inventing the size that passed it. The same rule applies
+to state: do not report a file as staged, saved, or committed unless a command
+in this round said so.
 
 Never describe a screen as verified when you did not open its image at that width. "I checked the desktop view" is a claim about a specific file, not a general reassurance.
 

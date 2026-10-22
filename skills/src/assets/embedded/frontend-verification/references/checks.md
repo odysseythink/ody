@@ -56,21 +56,30 @@ An ellipsis is legitimate for a table cell or a badge, and a defect for a button
 ## Hit area
 
 ```js
-(() => [...document.querySelectorAll('a[href],button,[role="button"],input,select,textarea,summary')]
-  .map((el) => {
-    const r = el.getBoundingClientRect();
-    return {
-      tag: el.tagName.toLowerCase(),
-      label: (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 40),
-      w: Math.round(r.width),
-      h: Math.round(r.height),
-    };
-  })
-  .filter((item) => item.w > 0 && item.h > 0 && (item.w < 40 || item.h < 40))
-  .slice(0, 15))()
+(() => {
+  const targets = [...document.querySelectorAll('a[href],button,[role="button"],input,select,textarea,summary')]
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        tag: el.tagName.toLowerCase(),
+        label: (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 40),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+      };
+    })
+    .filter((item) => item.w > 0 && item.h > 0);
+  const violations = targets.filter((item) => item.w < 40 || item.h < 40);
+  return { total: targets.length, violations, targets: targets.slice(0, 40) };
+})()
 ```
 
-The visible box can pass while the clickable box fails, or the reverse: a padded icon button is fine visually and tight in hit area only if the padding is on a child. Cross-check with `getBoundingClientRect` on the element that receives the handler.
+The pass condition is `violations.length === 0`. `targets` is there so a passing
+round still has a number to quote: "the primary button is 279×44 at 375px" is
+evidence, "the check returned `[]`" is only the absence of evidence — and an
+absent number is what invites a made-up one in the report. Read the size of the
+element that actually receives the pointer, not the one that looks like a button:
+a padded icon button is fine visually and tight in hit area only if the padding
+sits on a child.
 
 ## Contrast
 
@@ -185,11 +194,22 @@ browser__screenshot { path: "...@<width>@open.png" }
 
 ### Console
 
+The buffer is cumulative for the page's lifetime, so a plain read mixes this
+round's errors with everything that happened before it. Mark the start of the
+round with a draining read, then read again after the actions:
+
 ```
-browser__read_logs { kind: "console", level: "error" }
+browser__read_logs { kind: "console", level: "error", drain: true }   # baseline: read it, then forget it
+# ... the actions under test ...
+browser__read_logs { kind: "console", level: "error" }                # only entries from this round
 ```
 
-The buffer accumulates for the page's lifetime, so a non-empty result may include errors from before this round. Record the count at the start of the round and compare, instead of asserting the whole buffer is empty. An `error` from a resource that 404s is still a defect in the screen you are about to call finished.
+The second call is the check: it must be empty. An `error` from a resource that
+404s is still a defect in the screen you are about to call finished.
+
+Without `drain` the only honest move is to record the starting count and compare,
+which turns a measurement into an inference — and an inference is what gets
+mis-stated in the report. Take the baseline, then let the buffer forget it.
 
 ## Fast triage
 

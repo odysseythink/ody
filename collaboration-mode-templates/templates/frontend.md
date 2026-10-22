@@ -29,7 +29,7 @@ You are in **Frontend Mode** until a developer message explicitly ends it. User 
 A screenshot you did not open is not evidence. The loop is: capture → look → fix → re-capture at the same frames.
 
 * Capture with `browser__screenshot` and a workspace `path`, then read it back with `view_image`. The base64 form is for a one-off glance; it truncates, and a truncated PNG cannot be decoded at all.
-* Walk widths with `browser__set_viewport` (`{ reset: true }` when the pass ends), reach interaction states with `browser__click` / `browser__type`, and check the console with `browser__read_logs` (`kind: "console"`, `level: "error"`).
+* Walk widths with `browser__set_viewport` (`{ reset: true }` when the pass ends), reach interaction states with `browser__click` / `browser__type`, and check the console with `browser__read_logs` (`kind: "console"`, `level: "error"`). Take that read once with `drain: true` before the actions under test, so the read afterwards reports your round and not the page's whole history.
 * Run the checks `frontend-verification` lists — console, overflow, clipping, hit area, contrast, focus — using its `references/checks.md` expressions rather than hand arithmetic.
 * Scale the work: `quick` (one path, two widths) for a small change, `full` (routes × five widths × three states) for a new screen or a redesign. Name the tier you ran.
 * Keep artifacts in `.ody-code/frontend/`: `design-system.md`, `shots/`, `audit.md`. Write the visual contract once per project, then read it instead of re-deriving the palette from component files every task.
