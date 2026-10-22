@@ -39,16 +39,13 @@ pub(crate) const TELEMETRY_PREVIEW_TRUNCATION_NOTICE: &str =
 /// Legacy boundaries such as hook payloads, telemetry tags, and Responses tool
 /// names still require a single flattened string. Keep comparisons and sorting
 /// on `ToolName` itself; use this only when crossing those boundaries.
+///
+/// The separator rule lives on [`ToolName::flat`] rather than here so that this
+/// string and the name a namespace-less provider is handed are computed the
+/// same way. When they disagreed, a call came back as `browser__navigate` while
+/// hook matchers and logs called the same tool `browsernavigate`.
 pub(crate) fn flat_tool_name(tool_name: &ToolName) -> Cow<'_, str> {
-    match tool_name.namespace.as_deref() {
-        Some(namespace) => {
-            let mut name = String::with_capacity(namespace.len() + tool_name.name.len());
-            name.push_str(namespace);
-            name.push_str(&tool_name.name);
-            Cow::Owned(name)
-        }
-        None => Cow::Borrowed(tool_name.name.as_str()),
-    }
+    tool_name.flat()
 }
 
 pub(crate) fn tool_user_shell_type(
