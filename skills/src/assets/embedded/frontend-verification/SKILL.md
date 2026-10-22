@@ -14,11 +14,12 @@ Craft rules live elsewhere: `frontend-design` owns direction and composition, `m
 Every task that changes pixels runs this loop, in order. Skipping a step is not a shortcut; it moves the failure to the user.
 
 1. **Baseline before the edit.** Capture the current state at the widths you will compare against. A redesign with no "before" cannot answer "is this better", only "is this different".
-2. **Look at the baseline.** Read the images. Name what is wrong with the current screen in one sentence per problem. If you cannot name a problem, you are not ready to change it.
-3. **Build toward the stated direction.** Only the part under change; do not restyle adjacent surfaces to match your new idea.
-4. **Re-capture the same frames.** Same route, same widths, same states, same file naming. Different camera, no comparison.
-5. **Judge against the checks below, then fix and re-capture.** One hypothesis per iteration. A fix that is not re-captured is unverified.
-6. **Stop when the exit condition holds** (below), then report with evidence.
+2. **Read the contract.** Open `.ody-code/frontend/design-system.md` if it exists and take tokens from it. Re-deriving the palette from component files invents a second source of truth; by the third task they disagree. If it does not exist and the task establishes a direction, write it now (see "The durable contract").
+3. **Look at the baseline.** Read the images. Name what is wrong with the current screen in one sentence per problem. If you cannot name a problem, you are not ready to change it.
+4. **Build toward the stated direction.** Only the part under change; do not restyle adjacent surfaces to match your new idea.
+5. **Re-capture the same frames.** Same route, same widths, same states, same file naming. Different camera, no comparison.
+6. **Judge against the checks below, then fix and re-capture.** One hypothesis per iteration. A fix that is not re-captured is unverified.
+7. **Stop when the exit condition holds** (below), then report with evidence.
 
 ## State layout
 
@@ -34,6 +35,17 @@ Keep the loop's artifacts in the repository, not in your head:
 `<route>` is a short slug (`home`, `login`, `settings-billing`). `<width>` is a CSS pixel number. `<state>` is `default`, `empty`, `error`, `loading`, `hover`, `focus`, or `open`.
 
 Never overwrite a baseline with a re-capture: write `...@1280@after.png` next to `...@1280@before.png`. Two files with the same name across rounds cannot be compared, and the audit loses its evidence.
+
+## The durable contract
+
+`design-system.md` is the one artifact that outlives a task. Everything else here is per-round.
+
+- **Write it on the first task that fixes a direction.** Before there is a screen, the tables would record intent rather than fact.
+- **Read it before editing components, amend it in place.** A value in the file and a value in the code that disagree is a bug in one of them — pick which and fix it. Two sources of truth is the failure this file prevents.
+- **Tokens, not implementations.** `--space-3: 12px`, not the padding of one card.
+- **The bar:** a new teammate reads only this file and builds a screen that belongs in the app.
+
+When the direction has to come from somewhere other than your own taste — "make it feel like X" — extract a scale from a public reference page with `references/tokens.md`. That file also has the non-negotiables: public pages only, visual properties only, two or three sources at most, and every extraction recorded with its URL, date, and what you deliberately did not take.
 
 ## Coverage tiers
 
