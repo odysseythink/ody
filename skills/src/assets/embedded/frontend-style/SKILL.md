@@ -57,6 +57,37 @@ Rules for the shortlist:
 2. **`cinematic-motion` is a layer.** It changes choreography, not identity. Never offer it as one of the three; apply it on top of whichever identity wins, if the brief wants a film.
 3. **Say why each one fits the read**, in half a sentence each. A shortlist without reasons is three guesses.
 4. **Mind the defaults.** `frontend-design` names three looks as the AI defaults (warm cream `#F4F1EA` + serif + terracotta; near-black + one acid accent; broadsheet hairlines with zero radius). Six packs live inside those clusters. That is allowed here and only here: **the user's pick is the brief's own words**, and the brief wins. But if you nominate one, the read must say what in the brief asks for it — otherwise pick something else.
+5. **Read the shortlist history before choosing.** Same packs for every project is the failure mode this step exists to prevent, and you cannot see it from inside one turn. See § Step 2.5.
+
+## Step 2.5 — Read the shortlist history
+
+Before nominating, read `.ody-code/frontend/style-history.json`. Missing file is not an error: it means this is the project's first direction, say "no history" and continue.
+
+```json
+{
+  "entries": [
+    {
+      "at": "2026-10-22T13:20Z",
+      "page": "pricing",
+      "seed": "a41f2c",
+      "nominated": ["neo-brutalism", "dark-tech", "editorial-minimal"],
+      "chosen": "neo-brutalism",
+      "basis": "USER",
+      "override": null
+    }
+  ]
+}
+```
+
+Three rules, in order of how often they bite:
+
+1. **At most one repeat.** Of the three you are about to nominate, at most one may appear in the most recent entry for the same `page`. Two repeats means the read did not change — re-read the brief, do not re-roll the dice.
+2. **Repeating all three needs a written reason.** That happens when the brief really is the same job as last time. Say so in the reply in one line, and put the reason in the entry's `override` field. An unexplained identical shortlist reads as a cached answer.
+3. **Do not swap a candidate silently.** If you replace one after writing it down, the reply names what you dropped and why. "It looked better" is not a reason; "the read named procurement, and `quiet-luxury` is the only pack with an evidence table" is.
+
+`seed` is six hex characters you invent once per run. Its only job is reproducibility: given the same read and the same seed, the shortlist must come out the same. It is not a random number generator and proves nothing on its own — the entry is the evidence, the seed is how a later run repeats it.
+
+Keep the file to the newest 24 entries, oldest dropped. It lives under `.ody-code/`, which is usually git-ignored, so it is per-machine memory, not a project artifact: after a fresh clone there is no history, and that is the normal case rather than a problem.
 
 ## Step 3 — Render all three on the real page
 
@@ -123,6 +154,8 @@ Write the decision into `.ody-code/frontend/design-system.md` (create it if abse
 ```
 
 Order matters because a build turn gets long: the record written last is the record that gets skipped, and the reply then claims a decision that exists nowhere on disk. After writing, read the block back with one command — if you cannot show it, it is not recorded.
+
+Then append this run to `.ody-code/frontend/style-history.json` — the same write, one file over, and the one that stops next month's project from being offered the same three identities. `basis` is `USER` when the popup came back with an answer, `INFERRED` when it came back empty. The history is written even for `INFERRED`: a direction nobody chose was still shown to the user, and re-nominating it next time is equally repetitive.
 
 Later rounds read this block and do not re-ask. When the user changes direction, rewrite the block and keep the old pack in a `## Previous directions` list — a reversal is information, not noise.
 

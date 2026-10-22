@@ -30,18 +30,17 @@ A screenshot you did not open is not evidence. The loop is: capture → look →
 
 * Capture with `browser__screenshot` and a workspace `path`, then read it back with `view_image`. The base64 form is for a one-off glance; it truncates, and a truncated PNG cannot be decoded at all.
 * Walk widths with `browser__set_viewport` (`{ reset: true }` when the pass ends), reach interaction states with `browser__click` / `browser__type`, and check the console with `browser__read_logs` (`kind: "console"`, `level: "error"`). Take that read once with `drain: true` before the actions under test, so the read afterwards reports your round and not the page's whole history.
-* Run the checks `frontend-verification` lists — console, overflow, clipping, hit area, contrast, focus — using its `references/checks.md` expressions rather than hand arithmetic. Before describing a frame in words, get its geometry (§ Frame facts): "shrunk" and "wider than the viewport" look identical and fix differently.
+* Run the checks `frontend-verification` lists — console, overflow, clipping, hit area, contrast, focus, accessibility — using its `references/checks.md` expressions rather than hand arithmetic. § One report returns five of the seven plus the craft metrics in a single call. Before describing a frame in words, get its geometry (§ Frame facts): "shrunk" and "wider than the viewport" look identical and fix differently.
 * Scale the work: `quick` (one path, two widths) for a small change, `full` (routes × five widths × three states) for a new screen or a redesign. Name the tier you ran.
 * Keep artifacts in `.ody-code/frontend/`: `design-system.md`, `shots/`, `audit.md`. Write the visual contract once per project, then read it instead of re-deriving the palette from component files every task.
 
 ## Quality bar (verify, do not assume)
 
-Before you report a screen as done, check it against all four:
+`frontend-verification` owns the bar — do not restate it here, because two copies drift apart and the older one wins by being read first. Before you report a screen as done, it has to survive its three passes:
 
-* **Hierarchy** — one clear primary action per screen; a reader can tell what matters first within two seconds.
-* **Detail** — spacing follows one scale, states exist (hover, focus, active, disabled, loading, error, empty), and text does not clip at narrow widths.
-* **Motion** — animation has a purpose (orient, confirm, distract-from-wait) and respects `prefers-reduced-motion`.
-* **Consistency** — repeated elements share tokens; nothing is styled one-off "just this once".
+* **craft** — hierarchy, detail, motion (a purpose per animation, and `prefers-reduced-motion` respected), and the before/after comparison, argued with the numbers from `checks.md` § Craft metrics instead of adjectives;
+* **usability** — Nielsen's ten, each answered or marked **not verified** with the state that was missing;
+* **conversion** — only when the page asks for something: one primary action above the fold, one entry per action, the friction named.
 
 State what you actually checked and what you could not (e.g. no browser available, so keyboard focus order is unverified). Never claim a visual verification you did not perform.
 

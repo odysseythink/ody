@@ -185,3 +185,44 @@ The checkout carries no git metadata, so pinning is by content digest above.
 When syncing, re-copy each upstream `SKILL.md`, recompute the twelve-character
 sha256 prefixes in this table, and re-apply the adaptations listed here.
 
+## taste-skill (MIT License) — consulted, no content copied
+
+- **Upstream**: local checkout at `~/workspace/frontend_work/taste-skill-2.1.4`
+  (directory name carries the version; no `.git`, so no commit to pin).
+- **License**: MIT. Root `LICENSE` reads `Copyright (c) 2026 Leonxlnx`.
+- **Used by**: `frontend-style` (candidate history), `frontend-verification`
+  (craft metrics). Both are **mechanisms**, re-expressed as rules and
+  expressions in this bundle's own words. No sentence, expression, or data file
+  from upstream is vendored.
+
+What was taken, and what it turned into:
+
+| Upstream mechanism | Embedded outcome |
+|---|---|
+| `draw.mjs` seed + `~/.taste-skill/history.json` + `--redraw` requiring a reason | `frontend-style/SKILL.md` § Step 2.5: one repeat maximum per page kind, a written reason for an identical shortlist, a `seed` field for reproducibility, history at `.ody-code/frontend/style-history.json` |
+| `inspect.mjs` reporting counts (headline lines, measure, colour sprawl, image count) rather than verdicts | `frontend-verification/references/checks.md` § Craft metrics: six numbers with a page-kind precondition and a "do not use it for" column |
+| The rule that a ruleset must declare what it cannot see | Already this bundle's **Not verified** convention; the upstream version confirmed the shape, not the wording |
+
+Deliberately not taken, with the reason each would have cost more than it gave:
+
+- **`library/*.json` (1.6 MB: 20 directions, 58 heroes, 185 sections, 44 fonts,
+  56 palettes, 420 photos across 19 sets, 202 studied sites).** Vendoring it
+  roughly doubles the embedded asset payload (2.1 MB total today) and puts a
+  second visual authority beside the ten packs in `frontend-style/references/`,
+  which are a chosen result rather than an option set. The ten packs plus the
+  candidate step already answer the question it answers.
+- **The 92 runtime rules and 25 static rules.** Roughly a third are house-style
+  verdicts (`eyebrow`, `mono`, `numbering`, `palette-claude`), which contradict
+  `frontend-design`'s "the brief's own words always win". Another ten need a
+  hover, a scroll, or elapsed time, and this bundle's twelve browser tools have
+  no hover, no scroll, and no awaited `evaluate` — those rules cannot be checked
+  here, and a check that cannot run is a check that gets guessed.
+- **`critique.md`'s weighted score and caps.** A 0.4/0.3/0.2/0.1 composite with
+  17 caps presents a judgement as a measurement. The reports here already carry
+  per-check counts and per-heuristic counts, which are auditable one at a time.
+
+The author is the same `leonxlnx` whose `design-taste-frontend` is listed above
+as not imported for unverifiable provenance. That entry still stands: this is a
+different artifact, and its root `LICENSE` is quoted here rather than inferred.
+
+

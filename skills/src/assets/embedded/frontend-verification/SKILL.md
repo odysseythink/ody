@@ -102,7 +102,7 @@ Check 7 is the one that cannot be guessed from a picture. A `<div role="button">
 
 Check 2 has a blind spot worth naming, because it hides the most common mobile defect: when content is wider than a phone viewport, the browser may widen the *layout* viewport and scale the page to fit instead of overflowing. Nothing crosses the right edge, `offenders` is empty, and the page is silently rendered at 89% — real type becomes smaller and spacings compress, with no scrollbar to show for it. `visualViewport.scale` below 1, or an `innerWidth` larger than the width you passed to `set_viewport`, is that state. A fixed-width child is the usual cause.
 
-`references/checks.md` holds the exact `browser__evaluate` expressions. Use them instead of re-deriving the arithmetic — hand-computed contrast and off-by-one overflow judgements are how false passes get written.
+`references/checks.md` holds the exact `browser__evaluate` expressions. Use them instead of re-deriving the arithmetic — hand-computed contrast and off-by-one overflow judgements are how false passes get written. § One report returns checks 2–6 plus the craft metrics in a single call; when a count in it is non-zero, drop to the matching section for the element names.
 
 ## Judging what the numbers cannot see
 
@@ -114,6 +114,8 @@ The seven checks are the floor. Above it sit three passes. The craft skills alre
 - **Detail** — one spacing scale, all states present, composition holds between the captured widths.
 - **Motion** — a purpose per animation, timings from `motion-design`'s budget table.
 - **Comparison** — with before and after side by side, name what improved in one line per improvement. If you cannot say what got better, the change is churn.
+
+Where a claim here can be turned into a number, turn it into one with `references/checks.md` § Craft metrics — headline lines, measure in `ch`, distinct colours, bitmap count, the text inset inside a card, variant counts. "The headline is 3 lines and 21 words" is arguable; "hierarchy is weak" is not. A number is the input to a finding, never the finding itself, and the six numbers are only meaningful per page kind: a login page with `bitmap_count: 0` is correct, and judging it against a landing page's imagery is the mistake this rule exists to prevent.
 
 Consistency is not here. It is heuristic 4 of the next pass, with the other nine, because "the same action looks the same everywhere" is a usability claim rather than a visual one.
 
@@ -198,6 +200,10 @@ The report is the evidence, not a summary of your effort. Include:
 - the usability pass by count, naming any heuristic you could not answer and the
   state you would have needed — a pass count without that list claims coverage
   the frames do not have;
+- the craft numbers you measured — `headline_lines`, `text_measure_ch`,
+  `colour_distinct`, `bitmap_count`, `edge_inset_min`, and the variant counts —
+  or `not run`. A craft pass reported as a verdict with no numbers behind it is
+  the same claim as a check you skipped, one sentence softer;
 - the coverage actually walked (widths × states), naming anything skipped;
 - findings as a table with **Severity**, **Location**, **Before**, **After**, **Why** — reuse `make-interfaces-feel-better`'s format rather than inventing a second one. **Why** opens with its source (`check 5`, `Nielsen 9`, `conversion`, `craft`) so a reader can tell a measured defect from a judged one;
 - a verdict: `Block` if any `HIGH` remains, `Needs changes` if only `MEDIUM` or `LOW`, `Approve` only when nothing actionable is left;

@@ -4,6 +4,8 @@ Copy-paste `browser__evaluate` expressions for checks 1–6 in `SKILL.md`, plus 
 
 Check 7 (accessibility) has its own expressions in `references/accessibility.md` — semantics, accessible names, the 24×24 floor, and reduced motion. They are kept apart because check 7 is the only one whose verdict is partly a reading of the markup rather than of the rendered frame.
 
+§ Craft metrics supplies the six numbers behind the craft pass, and § One report runs checks 2–6 plus those metrics in a single call.
+
 Each expression is an IIFE that returns JSON. The browser tool refuses a few patterns by policy — `document.cookie`, web storage, `eval(`, `setTimeout(`, and classic `function(` declarations — so these use arrow functions and read layout only. Keep that style when you adapt them.
 
 ## Frame facts
@@ -258,6 +260,287 @@ Two limits, state them when you report:
 
 - Programmatic `focus()` does not always match `:focus-visible`, so a ring that shows here can still be absent after a mouse click and present after Tab. The check catches *missing* rings reliably; it cannot prove the ring only appears for keyboard users.
 - Tab *order* needs real key events. `browser__execute_raw_cdp` with `Input.dispatchKeyEvent` can send them in local browser mode, but the call is refused for an external browser. If neither path is available, label order **Not verified** instead of guessing.
+
+## Craft metrics
+
+Six numbers behind the craft pass in `SKILL.md`. They exist because "hierarchy is weak" and "type feels small" are not checkable, while "the headline is 3 lines and 21 words" is.
+
+```js
+(() => {
+  const px = (value) => Number.parseFloat(value) || 0;
+  const shown = (el) => {
+    const style = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && style.visibility !== "hidden"
+      && style.display !== "none" && Number(style.opacity) > 0;
+  };
+  const textOf = (el) => (el.textContent || "").trim();
+  const shownAll = [...document.querySelectorAll("body *")].filter(shown);
+
+  const headline = document.querySelector("h1")
+    || document.querySelector('[role="heading"][aria-level="1"]');
+  const headStyle = headline ? getComputedStyle(headline) : null;
+  const headBox = headline ? headline.getBoundingClientRect() : null;
+  const lineHeight = headStyle ? px(headStyle.lineHeight) || px(headStyle.fontSize) * 1.2 : 0;
+  const headlineText = headline ? textOf(headline) : "";
+
+  const chOf = (el) => {
+    const style = getComputedStyle(el);
+    const probe = document.createElement("span");
+    probe.textContent = "0000000000";
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.whiteSpace = "pre";
+    probe.style.fontFamily = style.fontFamily;
+    probe.style.fontSize = style.fontSize;
+    probe.style.fontWeight = style.fontWeight;
+    probe.style.fontStyle = style.fontStyle;
+    document.body.appendChild(probe);
+    const one = probe.getBoundingClientRect().width / 10;
+    probe.remove();
+    return one || px(style.fontSize) * 0.5;
+  };
+  const paragraphs = [...document.querySelectorAll("p")].filter(shown);
+  const body = paragraphs.sort((a, b) => textOf(b).length - textOf(a).length)[0] || null;
+  const measure = body ? Math.round(body.getBoundingClientRect().width / chOf(body)) : null;
+
+  const colourCount = new Map();
+  const note = (value) => {
+    if (!value || value === "rgba(0, 0, 0, 0)" || value === "transparent") return;
+    colourCount.set(value, (colourCount.get(value) || 0) + 1);
+  };
+  shownAll.forEach((el) => {
+    const style = getComputedStyle(el);
+    note(style.color);
+    note(style.backgroundColor);
+    if (px(style.borderTopWidth) > 0 && style.borderTopStyle !== "none") note(style.borderTopColor);
+  });
+  const colours = [...colourCount.entries()].sort((a, b) => b[1] - a[1]);
+
+  const images = [...document.querySelectorAll("img")].filter(shown);
+  const bitmaps = images.length + [...document.querySelectorAll("video")].filter(shown).length;
+  const broken = images.filter((img) => img.complete && img.naturalWidth === 0).length;
+  const cssImages = shownAll
+    .filter((el) => /url\(/.test(getComputedStyle(el).backgroundImage)).length;
+
+  const boxes = (el) => {
+    const style = getComputedStyle(el);
+    if (style.display === "inline") return false;
+    const sides = ["Top", "Right", "Bottom", "Left"].filter((side) =>
+      px(style[`border${side}Width`]) > 0 && style[`border${side}Style`] !== "none").length;
+    return style.backgroundColor !== "rgba(0, 0, 0, 0)" || style.boxShadow !== "none" || sides >= 2;
+  };
+  const boxAncestor = (el) => {
+    let node = el.parentElement;
+    let depth = 0;
+    while (node && node !== document.body && depth < 8) {
+      if (boxes(node)) return node;
+      node = node.parentElement;
+      depth += 1;
+    }
+    return null;
+  };
+  const insets = [...document.querySelectorAll("p,li,h1,h2,h3,h4,span,a,button,label,td,th,figcaption")]
+    .filter((el) => el.children.length === 0 && textOf(el).length > 1 && shown(el))
+    .map((el) => {
+      const box = boxAncestor(el);
+      if (!box) return null;
+      const r = el.getBoundingClientRect();
+      const pr = box.getBoundingClientRect();
+      const ps = getComputedStyle(box);
+      if (pr.width >= window.innerWidth * 0.9) return null;
+      return {
+        tag: el.tagName.toLowerCase(),
+        text: textOf(el).slice(0, 28),
+        inset: Math.round(r.left - pr.left - px(ps.borderLeftWidth)),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.inset - b.inset);
+
+  const distinct = (pick) => [...new Set(shownAll.map(pick).filter(Boolean))];
+  const families = distinct((el) => {
+    const value = getComputedStyle(el).fontFamily;
+    return value ? value.split(",")[0].trim().replace(/^["']|["']$/g, "") : null;
+  });
+  const sizes = distinct((el) =>
+    textOf(el).length > 0 ? Math.round(px(getComputedStyle(el).fontSize)) : null).filter((n) => n > 0);
+  const radii = distinct((el) => getComputedStyle(el).borderRadius).filter((v) => v !== "0px");
+  const shadows = distinct((el) => getComputedStyle(el).boxShadow).filter((v) => v !== "none");
+  const borders = distinct((el) => {
+    const style = getComputedStyle(el);
+    return style.borderTopStyle === "none" ? null : `${style.borderTopWidth} ${style.borderTopStyle}`;
+  }).filter((v) => !v.startsWith("0px"));
+
+  return {
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    scale: window.visualViewport ? Number(window.visualViewport.scale.toFixed(3)) : null,
+    page_height_screens: Number((document.documentElement.scrollHeight / window.innerHeight).toFixed(1)),
+    headline_lines: headBox && lineHeight ? Math.max(1, Math.round(headBox.height / lineHeight)) : null,
+    headline_words: headlineText ? headlineText.split(/\s+/).filter(Boolean).length : null,
+    headline_chars: headlineText ? headlineText.replace(/\s+/g, "").length : null,
+    text_measure_ch: measure,
+    colour_distinct: colours.length,
+    colour_used_once: colours.filter(([, n]) => n === 1).map(([value]) => value).slice(0, 8),
+    colour_top: colours.slice(0, 6),
+    bitmap_count: bitmaps,
+    bitmap_broken: broken,
+    css_background_images: cssImages,
+    inline_svg: document.querySelectorAll("svg").length,
+    edge_inset_min: insets.length ? insets[0].inset : null,
+    edge_inset_worst: insets.slice(0, 4),
+    font_families: families.length,
+    font_sizes: sizes.length,
+    radii: radii.length,
+    shadows: shadows.length,
+    border_styles: borders.slice(0, 6),
+  };
+})()
+```
+
+What each number can settle, and what it cannot:
+
+| Number | Read it as | Do not use it for | Applies to |
+| --- | --- | --- | --- |
+| `headline_lines` | 1–2 at 1280 is a headline; 3+ means it is doing a paragraph's job — cut it, do not shrink it. `headline_words` / `headline_chars` corroborate; CJK has few spaces, so read `chars` for Chinese copy and `words` for English | Judging whether the words are good | Any page with an `h1` |
+| `text_measure_ch` | 45–75 ch is readable; under 40 the column is a sidebar, over 90 the eye loses the line on the return | Setting a `max-width` without checking the font — one page can carry two measures on purpose | Pages with prose; never on a nav, table or dashboard |
+| `colour_distinct` | Context only. The signal is `colour_used_once`: a value used exactly once is either a mistake or an accent that still needs a job | "Too many colours" — a data page legitimately uses 12 | Every page, as context |
+| `bitmap_count` | Whether a page that needs imagery has any. `bitmap_broken` > 0 is always a defect | A minimum. Auth, settings and dashboards correctly have 0; `css_background_images` counts décor, not content | Landing / marketing / portfolio |
+| `edge_inset_min` | ≥ 8. `0` means the text starts at the very edge of the card it sits on; negative means it already overflows it. `edge_inset_worst` names the element | Measuring page gutters, vertical rhythm, or anything on the right side. It reads one number: the leading inset of text inside the nearest ancestor with a background, border or shadow — and only when that box is narrower than 90% of the viewport, because a full-bleed band's left edge is the page edge and 0 there is correct. `null` means the page has no such box | Pages with cards, panels or bordered rows |
+| `font_families` / `font_sizes` / `radii` / `shadows` | Consistency, counted. One screen with 2 families, ≤ 6 sizes, 1–2 radii and 1–2 shadows reads deliberate; 4 radii and 5 shadows reads assembled | Proving a design is consistent — a token system can still be applied badly | Every page |
+
+Two warnings, both earned:
+
+- **The number is the input to a finding, never the finding.** "`colour_distinct: 9`" is not a defect; "`colour_used_once` contains three near-identical greys at `#6B6B6B`, `#6C6C6C`, `#6E6E6E`" is.
+- **`page_height_screens` is context, not a target.** It is what you quote when a claim depends on "the fold" — 6.4 screens means the fold is at 14% of the page.
+
+## One report
+
+Checks 2–6 plus the craft metrics are six `browser__evaluate` calls if run one by one. This returns them together, so one round costs one call and the report lines come from one snapshot of the page instead of six.
+
+```js
+(() => {
+  const px = (value) => Number.parseFloat(value) || 0;
+  const safe = (name, run) => {
+    try { return [name, run()]; }
+    catch (error) { return [name, { error: String((error && error.message) || error) }]; }
+  };
+  const vw = window.innerWidth;
+  const doc = document.documentElement;
+  const shown = (el) => {
+    const style = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+  };
+  const all = [...document.querySelectorAll("body *")].filter(shown);
+  const textOf = (el) => (el.textContent || "").trim();
+
+  const channels = (value) => {
+    const parts = (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    return parts.length === 3 ? parts : null;
+  };
+  const alphaOf = (value) => {
+    const parts = value.match(/[\d.]+/g) || [];
+    return parts.length > 3 ? Number(parts[3]) : 1;
+  };
+  const luminance = (rgb) => {
+    const linear = rgb.map((channel) => {
+      const c = channel / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const ratio = (a, b) => {
+    const la = luminance(a);
+    const lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  };
+  const backgroundOf = (el) => {
+    let node = el;
+    while (node) {
+      const value = getComputedStyle(node).backgroundColor;
+      const rgb = channels(value);
+      if (rgb && alphaOf(value) > 0.5) return rgb;
+      node = node.parentElement;
+    }
+    return [255, 255, 255];
+  };
+
+  return Object.fromEntries([
+    safe("frame", () => ({
+      inner_width: vw,
+      scroll_width: doc.scrollWidth,
+      scale: window.visualViewport ? Number(window.visualViewport.scale.toFixed(3)) : null,
+      shrunk: vw < window.screen.width && (window.visualViewport ? window.visualViewport.scale < 1 : false),
+    })),
+    safe("overflow", () => {
+      const offenders = all
+        .filter((el) => el.getBoundingClientRect().right > vw + 1)
+        .slice(0, 6)
+        .map((el) => ({ tag: el.tagName.toLowerCase(), right: Math.round(el.getBoundingClientRect().right) }));
+      return { horizontal_scroll: doc.scrollWidth > vw + 1, offenders };
+    }),
+    safe("clip", () => {
+      const hits = [...document.querySelectorAll("h1,h2,h3,h4,p,span,a,li,td,th,label,button")]
+        .filter((el) => {
+          if (el.children.length > 0) return false;
+          const style = getComputedStyle(el);
+          return (style.overflow !== "visible" || style.textOverflow === "ellipsis")
+            && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
+        });
+      return { count: hits.length, first: hits.slice(0, 4).map((el) => textOf(el).slice(0, 30)) };
+    }),
+    safe("hit_area", () => {
+      const targets = [...document.querySelectorAll('a[href],button,[role="button"],input,select,textarea,summary')]
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.width > 0 && r.height > 0);
+      const small = targets.filter((r) => r.width < 40 || r.height < 40);
+      const min = targets.length
+        ? targets.reduce(
+            (acc, r) => ({ w: Math.min(acc.w, Math.round(r.width)), h: Math.min(acc.h, Math.round(r.height)) }),
+            { w: 9999, h: 9999 },
+          )
+        : null;
+      return { total: targets.length, under_40: small.length, min };
+    }),
+    safe("contrast", () => {
+      const failures = [...document.querySelectorAll("h1,h2,h3,h4,h5,p,span,a,li,td,th,label,button,figcaption")]
+        .filter((el) => el.children.length === 0 && textOf(el).length > 1)
+        .map((el) => {
+          const style = getComputedStyle(el);
+          if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return null;
+          const size = px(style.fontSize);
+          const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
+          const fg = channels(style.color);
+          if (!fg) return null;
+          return { text: textOf(el).slice(0, 24), ratio: Number(ratio(fg, backgroundOf(el)).toFixed(2)), required: large ? 3 : 4.5 };
+        })
+        .filter((item) => item && item.ratio < item.required);
+      return { failures: failures.length, worst: failures.sort((a, b) => a.ratio - b.ratio).slice(0, 4) };
+    }),
+    safe("focus", () => {
+      const focusable = [...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter((el) => !el.disabled && el.getBoundingClientRect().width > 0);
+      const missing = focusable.slice(0, 8).filter((el) => {
+        el.focus();
+        const style = getComputedStyle(el);
+        const ring = style.outlineStyle !== "none" && px(style.outlineWidth) > 0
+          && style.outlineColor !== "rgba(0, 0, 0, 0)";
+        return !ring && style.boxShadow === "none";
+      });
+      return { focusable: focusable.length, sampled: Math.min(8, focusable.length), no_ring: missing.length };
+    }),
+  ]);
+})()
+```
+
+Three things this does and does not do:
+
+- It **runs `focus()` on up to eight controls**, which moves the visible focus ring. Run it last in the round, or expect the frame after it to look focused.
+- It reports **counts and the worst case**, not the full lists. When a count is non-zero, open the matching section above and run the detailed expression — that one names elements.
+- It **agrees with the sections by construction, and must be re-checked when a threshold moves**. If you change the 40 in § Hit area or the 4.5 in § Contrast, change it here in the same commit and re-run both on one fixture; a composite that disagrees with its own detail is worse than six calls.
+
+`shrunk` uses `window.screen.width` as a second opinion on § Frame facts. On a real phone browser `screen.width` is the device width and a shrink-to-fit shows up immediately; under emulation it can equal the emulated width, in which case trust `scale` and `inner_width` from § Frame facts instead.
 
 ## Capture recipes
 
