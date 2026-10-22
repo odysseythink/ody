@@ -21,7 +21,7 @@ pub use config::{
     BrowserControlMode, ViewportConfig,
 };
 pub use error::BrowserControlError;
-pub use event_buffer::{ConsoleEntry, EventBuffer, LogsSnapshot, NetworkEntry};
+pub use event_buffer::{ConsoleEntry, EventBuffer, LogDrain, LogsSnapshot, NetworkEntry};
 pub use page_state::PageState;
 pub use session::BrowserSession;
 pub use thread_state::BrowserThreadState;

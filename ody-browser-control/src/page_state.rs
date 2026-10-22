@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use crate::config::BrowserControlConfig;
 use crate::error::BrowserControlError;
-use crate::event_buffer::{EventBuffer, LogsSnapshot};
+use crate::event_buffer::{EventBuffer, LogDrain, LogsSnapshot};
 use crate::session::BrowserSession;
 
 /// Per-page state holding a CDP target and a rolling event buffer.
@@ -244,10 +244,20 @@ impl PageState {
     }
 
     /// Read a snapshot of the buffered console and network logs.
-    #[tracing::instrument(skip_all)]
-    pub async fn read_logs(&self) -> Result<LogsSnapshot, BrowserControlError> {
-        let guard = self.event_buffer.lock().await;
-        Ok(guard.snapshot())
+    ///
+    /// When `drain` selects a channel, its entries are removed in the same
+    /// critical section that produced the snapshot. Doing it in two steps would
+    /// leave a window where an entry is discarded without ever being reported —
+    /// the one failure mode a log check exists to prevent.
+    #[tracing::instrument(skip_all, fields(drain_console = drain.console, drain_network = drain.network))]
+    pub async fn read_logs(&self, drain: LogDrain) -> Result<LogsSnapshot, BrowserControlError> {
+        let mut guard = self.event_buffer.lock().await;
+        let snapshot = guard.snapshot();
+        let removed = guard.clear(drain);
+        if removed > 0 {
+            tracing::debug!(removed, "drained the event buffer after the snapshot");
+        }
+        Ok(snapshot)
     }
 }
 

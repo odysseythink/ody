@@ -53,6 +53,36 @@ pub struct LogsSnapshot {
     pub network: Vec<NetworkEntry>,
 }
 
+/// Which channels a read should remove from the buffer after snapshotting.
+///
+/// The default is to keep everything: the buffer is a history of the page, so
+/// "show me only what happened since I last looked" has to be asked for
+/// explicitly. Without it a verification round cannot distinguish an error it
+/// caused from one that was already in the buffer when it started.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LogDrain {
+    pub console: bool,
+    pub network: bool,
+}
+
+impl LogDrain {
+    /// Keep everything; report the full history.
+    pub const NONE: Self = Self {
+        console: false,
+        network: false,
+    };
+
+    /// Drop both channels after reporting them.
+    pub const ALL: Self = Self {
+        console: true,
+        network: true,
+    };
+
+    pub fn any(self) -> bool {
+        self.console || self.network
+    }
+}
+
 enum BufferedEntry {
     Console(ConsoleEntry),
     Network(NetworkEntry),
@@ -109,6 +139,28 @@ impl EventBuffer {
         self.entries.push(StoredEntry { kind, byte_size });
         self.total_bytes = self.total_bytes.saturating_add(byte_size);
         self.evict_if_needed();
+    }
+
+    /// Drop the entries of the selected channels, returning how many were removed.
+    ///
+    /// Callers use this to turn the cumulative buffer into a per-round one: read
+    /// with a drain, then read again and see only what arrived in between. The
+    /// byte accounting is recomputed rather than decremented so that a future
+    /// eviction path cannot inherit a drifted total.
+    pub fn clear(&mut self, drain: LogDrain) -> usize {
+        if !drain.any() {
+            return 0;
+        }
+        let before = self.entries.len();
+        self.entries.retain(|stored| match &stored.kind {
+            BufferedEntry::Console(_) => !drain.console,
+            BufferedEntry::Network(_) => !drain.network,
+        });
+        let removed = before - self.entries.len();
+        if removed > 0 {
+            self.total_bytes = self.entries.iter().map(|stored| stored.byte_size).sum();
+        }
+        removed
     }
 
     pub fn push_console(&mut self, entry: &LogEntry) {
@@ -412,5 +464,65 @@ mod tests {
             "expected eviction, got {} entries",
             snap.console.len()
         );
+    }
+
+    fn make_network_entry(url: &str) -> NetworkEntry {
+        NetworkEntry {
+            request_id: format!("req-{url}"),
+            url: url.to_string(),
+            method: Some("GET".to_string()),
+            status: Some(200),
+            status_text: Some("OK".to_string()),
+            resource_type: Some("Document".to_string()),
+            timestamp: 0.0,
+            request_body: None,
+            response_body: None,
+            request_headers: None,
+            response_headers: None,
+            request_headers_size: 0,
+            response_headers_size: 0,
+            from_cache: None,
+        }
+    }
+
+    #[test]
+    fn reading_without_a_drain_keeps_the_history() {
+        let mut buffer = EventBuffer::new(&BrowserControlConfig::default());
+        buffer.push_console(&make_log_entry("boom"));
+
+        assert_eq!(buffer.clear(LogDrain::NONE), 0);
+        assert_eq!(buffer.snapshot().console.len(), 1);
+    }
+
+    #[test]
+    fn a_console_drain_leaves_network_entries_alone() {
+        let mut buffer = EventBuffer::new(&BrowserControlConfig::default());
+        buffer.push_console(&make_log_entry("boom"));
+        buffer.push(BufferedEntry::Network(make_network_entry("https://example.test/")));
+
+        let drained = LogDrain {
+            console: true,
+            network: false,
+        };
+        assert_eq!(buffer.clear(drained), 1);
+
+        let snap = buffer.snapshot();
+        assert!(snap.console.is_empty(), "the console entry should be gone");
+        assert_eq!(snap.network.len(), 1, "network must survive a console drain");
+    }
+
+    #[test]
+    fn a_full_drain_empties_the_buffer_and_resets_the_byte_total() {
+        let mut buffer = EventBuffer::new(&BrowserControlConfig::default());
+        buffer.push_console(&make_log_entry("boom"));
+        buffer.push(BufferedEntry::Network(make_network_entry("https://example.test/")));
+        assert!(buffer.total_bytes > 0);
+
+        assert_eq!(buffer.clear(LogDrain::ALL), 2);
+
+        let snap = buffer.snapshot();
+        assert!(snap.console.is_empty());
+        assert!(snap.network.is_empty());
+        assert_eq!(buffer.total_bytes, 0, "byte accounting must not drift");
     }
 }

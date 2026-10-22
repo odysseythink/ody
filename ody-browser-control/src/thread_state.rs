@@ -378,15 +378,26 @@ impl BrowserThreadState {
     }
 
     /// Read the buffered console/network logs for the default page.
-    #[tracing::instrument(skip_all, fields(kind = ?kind, level = ?level))]
+    ///
+    /// `drain` removes the reported channels from the buffer, so a caller can
+    /// mark the start of a verification round ("take what is there, forget it")
+    /// and afterwards see only the entries its own actions produced.
+    #[tracing::instrument(skip_all, fields(kind = ?kind, level = ?level, drain))]
     pub async fn read_logs(
         &self,
         kind: crate::types::LogKind,
         level: crate::types::LogLevel,
+        drain: bool,
     ) -> Result<LogsSnapshot, BrowserControlError> {
         self.with_page_retry(|page| {
             Box::pin(async move {
-                let mut snapshot = page.read_logs().await?;
+                // Only drain the channels being reported; a console-only read
+                // must not silently discard the network history.
+                let drain = crate::event_buffer::LogDrain {
+                    console: drain && kind.includes_console(),
+                    network: drain && kind.includes_network(),
+                };
+                let mut snapshot = page.read_logs(drain).await?;
                 if !kind.includes_console() {
                     snapshot.console.clear();
                 }

@@ -1045,6 +1045,8 @@ struct BrowserReadLogsInput {
     kind: LogKind,
     #[serde(default = "default_read_logs_level")]
     level: LogLevel,
+    #[serde(default)]
+    drain: bool,
 }
 
 fn default_read_logs_kind() -> LogKind {
@@ -1076,6 +1078,10 @@ impl ToolExecutor<ToolCall> for BrowserReadLogsTool {
                         "type": "string",
                         "enum": ["verbose", "info", "warning", "error"],
                         "description": "Minimum console log level to include."
+                    },
+                    "drain": {
+                        "type": "boolean",
+                        "description": "Remove the entries this call returns from the buffer, so the next read reports only what happened afterwards. Use it to mark the start of a verification round: read with drain before the actions under test, then read again and attribute every entry to this round. Defaults to false, which returns the whole history."
                     }
                 },
                 "additionalProperties": false
@@ -1092,9 +1098,9 @@ impl ToolExecutor<ToolCall> for BrowserReadLogsTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             let input: BrowserReadLogsInput = parse_args(&call)?;
-            tracing::info!(kind = ?input.kind, level = ?input.level);
+            tracing::info!(kind = ?input.kind, level = ?input.level, drain = input.drain);
             let result = state
-                .read_logs(input.kind, input.level)
+                .read_logs(input.kind, input.level, input.drain)
                 .await
                 .map_err(map_error)?;
             Ok(wrap_output(
@@ -1239,7 +1245,6 @@ mod tests {
 
     use crate::BrowserControlConfig;
 
-    #[test]
     /// The schema is the only thing the model reads before it calls. When it
     /// advertised `networkidle` and serde demanded `network_idle`, a correct call
     /// failed on every retry. Compare the real spec against the real enum.
@@ -1253,9 +1258,7 @@ mod tests {
         let ToolSpec::Namespace(namespace) = &spec else {
             panic!("browser tools are published as a namespace");
         };
-        let ResponsesApiNamespaceTool::Function(function) = &namespace.tools[0] else {
-            panic!("navigate is a function inside the namespace");
-        };
+        let ResponsesApiNamespaceTool::Function(function) = &namespace.tools[0];
 
         let advertised: Vec<String> = function
             .parameters
@@ -1278,6 +1281,49 @@ mod tests {
             !advertised.iter().any(|value| value == "networkidle"),
             "networkidle is not a name serde accepts; advertising it costs a retry"
         );
+    }
+
+    #[test]
+    /// A verification round needs to say "count from here". That only works if
+    /// the schema advertises the switch, and if omitting it keeps the old
+    /// whole-history behaviour for every other caller.
+    fn read_logs_advertises_the_drain_switch_and_still_defaults_to_the_history() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let spec = BrowserReadLogsTool::new(state).spec();
+        let ToolSpec::Namespace(namespace) = &spec else {
+            panic!("browser tools are published as a namespace");
+        };
+        let ResponsesApiNamespaceTool::Function(function) = &namespace.tools[0];
+
+        let drain = function
+            .parameters
+            .properties
+            .as_ref()
+            .and_then(|properties| properties.get("drain"))
+            .expect("read_logs advertises the drain switch");
+        assert_eq!(
+            serde_json::to_value(drain)
+                .unwrap()
+                .get("type")
+                .and_then(Value::as_str),
+            Some("boolean"),
+            "the model can only send what the schema names"
+        );
+
+        let defaults: BrowserReadLogsInput =
+            serde_json::from_value(json!({})).expect("an empty call must still parse");
+        assert!(
+            !defaults.drain,
+            "omitting drain must keep the cumulative behaviour"
+        );
+
+        let explicit: BrowserReadLogsInput =
+            serde_json::from_value(json!({"kind": "console", "level": "error", "drain": true}))
+                .expect("an explicit drain must parse");
+        assert!(explicit.drain);
     }
 
     #[test]

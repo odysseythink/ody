@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ody_browser_control::{
-    discover_chrome, BrowserControlConfig, BrowserControlMode, BrowserSession,
+    discover_chrome, BrowserControlConfig, BrowserControlMode, BrowserSession, LogDrain,
 };
 
 fn test_config() -> BrowserControlConfig {
@@ -124,12 +124,30 @@ async fn console_logs_are_collected() {
     page.navigate(&url).await.unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let logs = page.read_logs().await.unwrap();
+    // Drain while reporting: the entry comes back once, and the next read must
+    // not show it again. This is what lets a verification round attribute an
+    // error to its own actions instead of to the whole page lifetime.
+    let logs = page
+        .read_logs(LogDrain {
+            console: true,
+            network: false,
+        })
+        .await
+        .unwrap();
     let found = logs
         .console
         .iter()
         .any(|entry| entry.text.contains("ODY_CONSOLE"));
     assert!(found, "console log should contain ODY_CONSOLE: {logs:?}");
+
+    let after_drain = page.read_logs(LogDrain::NONE).await.unwrap();
+    assert!(
+        !after_drain
+            .console
+            .iter()
+            .any(|entry| entry.text.contains("ODY_CONSOLE")),
+        "a drained entry must not be reported twice: {after_drain:?}"
+    );
 
     let _ = page.close().await;
     session.close().await.unwrap();
@@ -276,7 +294,7 @@ async fn network_logs_are_redacted() {
         .unwrap();
     assert_eq!(fetch_result["ok"].as_bool(), Some(true), "fetch should succeed: {fetch_result:?}");
 
-    let logs = page.read_logs().await.unwrap();
+    let logs = page.read_logs(LogDrain::NONE).await.unwrap();
     let entry = logs
         .network
         .iter()
