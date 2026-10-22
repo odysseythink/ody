@@ -53,8 +53,8 @@ Pick the tier from the size of the change, and say which one you ran. This is wh
 
 | Tier | When | Frames | Checks |
 | --- | --- | --- | --- |
-| `quick` | one component, copy, spacing, a single state | 1 primary path × 2 widths (mobile + desktop) × the state you touched, ≤ 6 frames | console clean, overflow, clipping, hit area |
-| `full` | a new screen, a redesign, layout or type-scale change, a flow with several steps | every affected route × 5 widths (360 / 768 / 1024 / 1280 / 1440) × 3 states (default / empty / error, or default / hover / focus for interactive parts) | all six checks, plus the craft pass |
+| `quick` | one component, copy, spacing, a single state | 1 primary path × 2 widths (mobile + desktop) × the state you touched, ≤ 6 frames | console clean, overflow, clipping, hit area, accessible names |
+| `full` | a new screen, a redesign, layout or type-scale change, a flow with several steps | every affected route × 5 widths (360 / 768 / 1024 / 1280 / 1440) × 3 states (default / empty / error, or default / hover / focus for interactive parts) | all seven checks, plus the craft pass |
 
 If the project already has breakpoints, use the project's widths instead of the default five and say so.
 
@@ -82,7 +82,7 @@ overstated in the report.
 
 For a state that only appears on interaction, drive it: `browser__click` at a point, `browser__type` into a selector, then capture. For key events there is no first-class tool — `browser__execute_raw_cdp` with `Input.dispatchKeyEvent` works in local browser mode only, and is refused for an external browser. If you cannot reach the state, capture the closest reachable one and label the rest **Not verified**.
 
-## The six checks
+## The seven checks
 
 Run these on every frame in scope. They are cheap, objective, and they catch the failures that survive a visual skim.
 
@@ -94,8 +94,11 @@ Run these on every frame in scope. They are cheap, objective, and they catch the
 | 4 | Hit area | interactive targets ≥ 40×40 CSS px (≥ 44 on touch-first layouts) | `references/checks.md` § Hit area |
 | 5 | Contrast | body text ≥ 4.5:1, large text and UI boundaries ≥ 3:1 | `references/checks.md` § Contrast |
 | 6 | Focus | keyboard focus is visible and reachable in a sensible order | `references/checks.md` § Focus |
+| 7 | Accessibility | no missing label, no unnamed control, heading levels intact, targets ≥ 24×24 | `references/accessibility.md` |
 
 A console `error` is a failed check even when the frame looks perfect: a component that threw during hydration will break on the next interaction.
+
+Check 7 is the one that cannot be guessed from a picture. A `<div role="button">`, a placeholder standing in for a label, and three skipped heading levels all render beautifully — checks 1–6 pass, and the page is unusable with a keyboard and silent to a screen reader. `references/accessibility.md` carries four `browser__evaluate` expressions for the measurable half and separates out the four sentences that require actually pressing Tab or running VoiceOver. Those go in **Not verified** if you did not do them; they do not get written as "keyboard accessible" on the strength of an expression.
 
 Check 2 has a blind spot worth naming, because it hides the most common mobile defect: when content is wider than a phone viewport, the browser may widen the *layout* viewport and scale the page to fit instead of overflowing. Nothing crosses the right edge, `offenders` is empty, and the page is silently rendered at 89% — real type becomes smaller and spacings compress, with no scrollbar to show for it. `visualViewport.scale` below 1, or an `innerWidth` larger than the width you passed to `set_viewport`, is that state. A fixed-width child is the usual cause.
 
@@ -103,7 +106,7 @@ Check 2 has a blind spot worth naming, because it hides the most common mobile d
 
 ## Judging what the numbers cannot see
 
-The six checks are the floor. Above it, judge with the vocabulary the craft skills already define, and do not re-invent it:
+The seven checks are the floor. Above it, judge with the vocabulary the craft skills already define, and do not re-invent it:
 
 - **Hierarchy** — one primary action; what matters reads first within two seconds (`frontend.md` quality bar).
 - **Detail** — one spacing scale, all states present, composition holds between the captured widths.
@@ -158,7 +161,7 @@ Then write one paragraph into `.ody-code/frontend/audit.md`: tier, widths, state
 The report is the evidence, not a summary of your effort. Include:
 
 - the frame paths you captured, grouped before / after;
-- all six checks by number — `pass`, the failing count, or **not run** — because a
+- all seven checks by number — `pass`, the failing count, or **not run** — because a
   check you forgot reads as a check you passed, and only one of those is
   survivable;
 - the coverage actually walked (widths × states), naming anything skipped;
@@ -210,3 +213,5 @@ being plausible.
 ## When the loop cannot run
 
 No dev server, no browser, or a build that will not start: say so in the first reply, not the last. Fall back to reading the code and state clearly that rendering, overflow, contrast, and focus are **Not verified**. Do not simulate a verification narrative around a page you never rendered — that is the failure this skill exists to prevent.
+
+Check 7 is the partial exception, and the only one. Label association, heading levels, `div[onclick]`, `aria-hidden` on focusable content, and target sizes declared in the stylesheet are all readable in the source — run that half and say you read it rather than measured it. The tab walk, the screen-reader pass, and alt-text quality stay **Not verified**: they are properties of the rendered page and of a reader, and neither exists yet.

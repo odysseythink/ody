@@ -1,6 +1,8 @@
 # Checks
 
-Copy-paste `browser__evaluate` expressions for the six checks in `SKILL.md`, plus the capture recipes that keep a round comparable.
+Copy-paste `browser__evaluate` expressions for checks 1–6 in `SKILL.md`, plus the capture recipes that keep a round comparable.
+
+Check 7 (accessibility) has its own expressions in `references/accessibility.md` — semantics, accessible names, the 24×24 floor, and reduced motion. They are kept apart because check 7 is the only one whose verdict is partly a reading of the markup rather than of the rendered frame.
 
 Each expression is an IIFE that returns JSON. The browser tool refuses a few patterns by policy — `document.cookie`, web storage, `eval(`, `setTimeout(`, and classic `function(` declarations — so these use arrow functions and read layout only. Keep that style when you adapt them.
 

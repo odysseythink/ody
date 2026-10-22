@@ -134,6 +134,14 @@ which renders three candidates on the caller's page and lets the user pick.
 | `frontend-style/references/neo-brutalism.md` | `skills/neo-brutalism/SKILL.md` | `bc71fa3bba39` |
 | `frontend-style/references/corporate-trust.md` | `skills/corporate-trust/SKILL.md` | `4b692ddc70c6` |
 | `frontend-style/references/cinematic-motion.md` | `skills/cinematic-motion/SKILL.md` | `b5e4b30e362c` |
+| `frontend-verification/references/accessibility.md` | `skills/taste-accessibility/SKILL.md` | `4d293f850d91` |
+
+The last row is not an identity pack and is not vendored into `frontend-style/`.
+It lands in `frontend-verification/` as check 7 because accessibility is owed on every
+page, not chosen per project — a pack is picked from a popup, this is not optional. The
+upstream file is prose rules; the embedded version is **rewritten**, not copied, so the
+rules become four `browser__evaluate` expressions plus a named list of what no expression
+can answer. What survives verbatim from upstream is the rule set and the WCAG numbers.
 
 Adaptations applied on import (bodies otherwise verbatim):
 
@@ -144,16 +152,20 @@ Adaptations applied on import (bodies otherwise verbatim):
   this bundle's motion authority.
 - `cinematic-motion` is documented as a **modifier layer** in `SKILL.md` rather
   than a peer identity, because its content is choreography, not palette/type.
+- `taste-accessibility` is restructured: upstream's seven rule sections are
+  reorganised around what can be measured, each measurable rule gains an
+  expression, and the four checks that need a human (tab walk, screen reader,
+  dialog focus, alt-text quality) are separated out so they cannot be reported as
+  passed. Upstream's 24×24 / 44×44 / 4.5:1 / 3:1 / 200% requirements are kept.
 
 Deliberately not imported: design-taste's `design-taste` core skill (its
-design-read procedure is reimplemented in `frontend-style/SKILL.md`) and the ten
-`taste-*` craft/code skills (overlap `frontend-design`,
-`make-interfaces-feel-better`, `motion-design`, `frontend-verification`; the
-accessibility gap is tracked separately).
+design-read procedure is reimplemented in `frontend-style/SKILL.md`) and the
+remaining `taste-*` craft/code skills (overlap `frontend-design`,
+`make-interfaces-feel-better`, `motion-design`, `frontend-verification`).
 
 ### Sync policy
 
 The checkout carries no git metadata, so pinning is by content digest above.
 When syncing, re-copy each upstream `SKILL.md`, recompute the twelve-character
-sha256 prefixes in this table, and re-apply the three adaptations listed here.
+sha256 prefixes in this table, and re-apply the adaptations listed here.
 
