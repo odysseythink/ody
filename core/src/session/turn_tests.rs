@@ -146,7 +146,11 @@ async fn plan_mode_records_full_reminder_at_turn_five() {
     artifact.finalize_name("topic").await.unwrap();
     tc_mut.plan_artifact = Some(Arc::new(artifact));
 
-    let plan_markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | pending |\n";
+    // An unsplit plan: `should_inject_periodic_reminder` suppresses the cadence
+    // for split plans, which get event-driven directives at manifest and part
+    // boundaries instead. A Parts table here would make this test assert a
+    // reminder the design deliberately does not send.
+    let plan_markdown = "# Topic\n\n## Approach\n\nRead the config, then rewrite the loader.\n";
     let mut client_session = crate::session::tests::test_model_client_session();
 
     for _ in 1..=5 {
