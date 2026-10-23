@@ -100,13 +100,13 @@ impl ThreadLifecycleContributor<Config> for BrowserControlExtension {
                 return;
             }
             let browser_cfg = Self::effective_browser_config(input.config);
-            let state = match BrowserThreadState::new(browser_cfg).await {
-                Ok(state) => Arc::new(state),
-                Err(err) => {
-                    tracing::warn!(error = %err, "failed to start browser thread state");
-                    return;
-                }
-            };
+            // Lazy construction: Chrome is launched on the first browser tool
+            // call. If it cannot start (e.g. its own sandbox fails to
+            // initialize), the launch error — including the actionable
+            // `services.browser.sandbox = false` hint — is returned to the
+            // model on that call instead of silently dropping the whole
+            // browser tool group at thread start.
+            let state = Arc::new(BrowserThreadState::new_lazy(browser_cfg));
             let (full_cdp_access, computer_use, browser_use) =
                 Self::tool_visibility_flags(input.config);
             input.thread_store.insert(BrowserControlHandle {

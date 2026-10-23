@@ -112,13 +112,88 @@ impl BrowserSession {
 
         let handler_task = Some(spawn_handler(handler));
 
-        Ok(Self {
+        let mut session = Self {
             browser: Some(browser),
             handler_task,
             _permit,
             _profile_dir: profile_dir,
             _local: true,
             config,
+        };
+
+        session
+            .health_check()
+            .await
+            .map_err(|e| {
+            if let Some(task) = session.handler_task.take() {
+                task.abort();
+            }
+            e
+        })?;
+
+        Ok(session)
+    }
+
+    /// Probe the CDP connection with a bounded `Browser.version` call.
+    ///
+    /// Chrome can die immediately after the DevTools WebSocket connection is
+    /// established (a common cause on macOS is that Chrome's own sandbox fails
+    /// to initialize when Chrome is spawned by another process). Without this
+    /// probe the failure stays silent: the first tool call then waits forever
+    /// on the dead connection because CDP responses never arrive.
+    #[tracing::instrument(skip_all)]
+    async fn health_check(&mut self) -> Result<(), BrowserControlError> {
+        const HEALTH_HINT: &str = "chrome did not answer a CDP version call after launch; \
+a common cause is that Chrome's own sandbox fails to initialize when spawned by another process — \
+set `services.browser.sandbox = false` in the ody config to launch with --no-sandbox";
+        let browser = self
+            .browser
+            .as_ref()
+            .ok_or(BrowserControlError::SessionClosed)?;
+        let timeout =
+            Duration::from_millis(self.config.launch_timeout_ms.max(self.config.command_timeout_ms));
+        match tokio::time::timeout(timeout, browser.version()).await {
+            Ok(Ok(_)) => {
+                // `version()` can win a race against the Chrome process dying
+                // (e.g. a sandbox initialization failure kills Chrome about a
+                // second after launch, right after it answered the version
+                // call). Give the process a short grace period and re-check.
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+                if self.local_process_alive() == Some(false) {
+                    return Err(BrowserControlError::LaunchFailed {
+                        source: chromiumoxide::error::CdpError::msg(format!(
+                            "{HEALTH_HINT}; the chrome process exited right after launch"
+                        )),
+                    });
+                }
+                Ok(())
+            }
+            Ok(Err(e)) => Err(BrowserControlError::LaunchFailed {
+                source: chromiumoxide::error::CdpError::msg(format!(
+                    "{HEALTH_HINT}; version call failed: {e}"
+                )),
+            }),
+            Err(_) => Err(BrowserControlError::LaunchFailed {
+                source: chromiumoxide::error::CdpError::msg(format!(
+                    "{HEALTH_HINT}; version call timed out after {timeout:?}"
+                )),
+            }),
+        }
+    }
+
+    /// Return whether the locally launched Chrome process is still alive.
+    ///
+    /// Returns `None` for external sessions (no owned process) or when the
+    /// process handle is unavailable.
+    pub fn local_process_alive(&mut self) -> Option<bool> {
+        if !self._local {
+            return None;
+        }
+        let browser = self.browser.as_mut()?;
+        let child = browser.get_mut_child()?;
+        Some(match child.try_wait() {
+            Ok(Some(_)) | Err(_) => false,
+            Ok(None) => true,
         })
     }
 
@@ -163,14 +238,26 @@ impl BrowserSession {
 
         let handler_task = Some(spawn_handler(handler));
 
-        Ok(Self {
+        let mut session = Self {
             browser: Some(browser),
             handler_task,
             _permit: None,
             _profile_dir: dummy_profile_dir,
             _local: false,
             config,
-        })
+        };
+
+        session
+            .health_check()
+            .await
+            .map_err(|e| {
+            if let Some(task) = session.handler_task.take() {
+                task.abort();
+            }
+            e
+        })?;
+
+        Ok(session)
     }
 
     /// Create an uninitialized session for tests that do not need a real browser.

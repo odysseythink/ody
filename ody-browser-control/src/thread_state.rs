@@ -67,6 +67,24 @@ impl BrowserThreadState {
         })
     }
 
+    /// Create a thread-local browser state without launching Chrome yet.
+    ///
+    /// The session is launched on the first tool call via
+    /// [`Self::ensure_session`]. This is the preferred construction path for
+    /// tool hosts: if Chrome cannot start (e.g. its sandbox fails to
+    /// initialize), the launch error — including its actionable hint — is
+    /// returned to the model on the first browser tool call instead of
+    /// silently dropping the whole browser tool group at startup.
+    #[tracing::instrument(skip_all, fields(mode = ?config.mode))]
+    pub fn new_lazy(config: BrowserControlConfig) -> Self {
+        Self {
+            config: StdMutex::new(config),
+            session: Mutex::new(None),
+            default_page: Mutex::new(None),
+            stale: AtomicBool::new(false),
+        }
+    }
+
     /// Create an uninitialized thread state for tests that do not need a real
     /// browser process.
     #[doc(hidden)]
@@ -96,8 +114,7 @@ impl BrowserThreadState {
 
     /// Create an additional page in the same session.
     pub async fn new_page(&self) -> Result<PageState, BrowserControlError> {
-        let guard = self.ensure_session().await?;
-        guard.as_ref().unwrap().new_page().await
+        self.new_page_bounded().await
     }
 
     /// Close the default page (if any) and then the browser session.
@@ -136,6 +153,19 @@ impl BrowserThreadState {
                 let _ = old.close().await;
             }
         }
+        // A locally launched Chrome process can die behind our back (e.g. its
+        // own sandbox fails to initialize). Detect that here so the session is
+        // recreated instead of every subsequent call waiting on a dead CDP
+        // connection. `close()` is deliberately skipped: it would send a
+        // `Browser.close` command into the dead connection and hang.
+        if guard
+            .as_mut()
+            .and_then(BrowserSession::local_process_alive)
+            == Some(false)
+        {
+            tracing::warn!("browser process exited unexpectedly, recreating session");
+            guard.take();
+        }
         if guard.is_none() {
             let config = self.config();
             let session = match config.mode {
@@ -145,6 +175,45 @@ impl BrowserThreadState {
             *guard = Some(session);
         }
         Ok(guard)
+    }
+
+    /// Create a page on the current session with a bounded timeout.
+    ///
+    /// When a CDP connection is closed, pending chromiumoxide calls never
+    /// resolve, so an unbounded `new_page` on a dead session hangs forever.
+    /// This bounds the wait with `command_timeout_ms`; on timeout or CDP
+    /// failure the dead session is dropped (not closed — closing would hang
+    /// the same way) and the operation is retried once against a freshly
+    /// launched session.
+    async fn new_page_bounded(&self) -> Result<PageState, BrowserControlError> {
+        let timeout = Duration::from_millis(self.config().command_timeout_ms);
+        let mut attempts = 0;
+        loop {
+            let mut session_guard = self.ensure_session().await?;
+            let create = session_guard.as_ref().expect("session just created").new_page();
+            match tokio::time::timeout(timeout, create).await {
+                Ok(Ok(page)) => return Ok(page),
+                Ok(Err(e)) => {
+                    if attempts >= 1 {
+                        return Err(e);
+                    }
+                    attempts += 1;
+                    tracing::warn!(error = %e, "new_page failed, recreating browser session once");
+                    session_guard.take();
+                }
+                Err(_) => {
+                    if attempts >= 1 {
+                        return Err(BrowserControlError::Timeout {
+                            command: "new_page".to_string(),
+                            elapsed_ms: timeout.as_millis() as u64,
+                        });
+                    }
+                    attempts += 1;
+                    tracing::warn!("new_page timed out, recreating browser session once");
+                    session_guard.take();
+                }
+            }
+        }
     }
 
     /// Return a guard that always contains a non-crashed default page.
@@ -158,8 +227,7 @@ impl BrowserThreadState {
             }
         }
         if guard.is_none() {
-            let session_guard = self.ensure_session().await?;
-            let page = session_guard.as_ref().unwrap().new_page().await?;
+            let page = self.new_page_bounded().await?;
             *guard = Some(page);
         }
         Ok(guard)
