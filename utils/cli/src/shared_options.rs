@@ -61,9 +61,10 @@ pub struct SharedCliOptions {
 
     /// Opt in to Frontend mode for this invocation. The session starts in
     /// Frontend mode, whose catalog is exactly the bundled frontend craft
-    /// skills (`frontend-design`, `make-interfaces-feel-better`,
-    /// `motion-design`); every other skill, from any scope, is hidden while
-    /// that mode is active.
+    /// skills (`frontend-design`, `frontend-style`,
+    /// `make-interfaces-feel-better`, `motion-design`,
+    /// `frontend-verification`); every other skill, from any scope, is hidden
+    /// while that mode is active.
     #[arg(long = "frontend", default_value_t = false)]
     pub frontend: bool,
 }
@@ -72,7 +73,19 @@ impl SharedCliOptions {
     /// Extra `-c`-style config overrides implied by dedicated flags, in
     /// addition to the user's own `-c key=value` overrides. The [`--game`]
     /// flag layers `skills.bundled.game = true` onto the config stack, and
-    /// [`--frontend`] layers `skills.bundled.frontend = true`.
+    /// [`--frontend`] layers `skills.bundled.frontend = true` plus
+    /// `services.browser.allow_local_network = true`.
+    ///
+    /// The second frontend override is not a convenience. The mode's contract
+    /// is "render the page, measure it, then say what you saw", and the page
+    /// is almost always a dev server on `127.0.0.1` or a `file://` path. With
+    /// the default `allow_local_network = false` every `browser__navigate` to
+    /// that page is rejected, so `browser__evaluate` — which owns all seven
+    /// checks — can never run, and a turn quietly falls back to driving
+    /// Chrome through `exec_command`. The flag says the user wants to work on
+    /// a local interface; refusing to open it makes the mode unable to do the
+    /// one thing it was chosen for. Same shape as `--frontend` overriding
+    /// `skills.bundled.enabled` for the system root.
     ///
     /// [`--game`]: Self::game
     /// [`--frontend`]: Self::frontend
@@ -87,6 +100,10 @@ impl SharedCliOptions {
         if self.frontend {
             overrides.push((
                 "skills.bundled.frontend".to_string(),
+                toml::Value::Boolean(true),
+            ));
+            overrides.push((
+                "services.browser.allow_local_network".to_string(),
                 toml::Value::Boolean(true),
             ));
         }
@@ -274,10 +291,45 @@ mod tests {
         assert!(!cli.shared.game, "--frontend must not imply --game");
         assert_eq!(
             cli.shared.implied_config_overrides(),
-            vec![(
-                "skills.bundled.frontend".to_string(),
-                toml::Value::Boolean(true),
-            )]
+            vec![
+                (
+                    "skills.bundled.frontend".to_string(),
+                    toml::Value::Boolean(true),
+                ),
+                (
+                    "services.browser.allow_local_network".to_string(),
+                    toml::Value::Boolean(true),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn frontend_flag_opens_local_network_for_the_browser_tool() {
+        // The mode cannot render a dev server it is not allowed to open, and
+        // every check lives behind a navigation to that server.
+        let cli = TestCli::try_parse_from(["test", "--frontend"]).expect("parse");
+        let overrides = cli.shared.implied_config_overrides();
+        assert!(
+            overrides
+                .iter()
+                .any(|(key, value)| key == "services.browser.allow_local_network"
+                    && *value == toml::Value::Boolean(true)),
+            "frontend must open local network for the browser tool"
+        );
+    }
+
+    #[test]
+    fn game_flag_leaves_local_network_closed() {
+        // Only the interface mode implies a local dev server. Gaming keeps the
+        // default policy so this flag does not become a general SSRF bypass.
+        let cli = TestCli::try_parse_from(["test", "--game"]).expect("parse");
+        assert!(
+            !cli.shared
+                .implied_config_overrides()
+                .iter()
+                .any(|(key, _)| key == "services.browser.allow_local_network"),
+            "--game must not widen browser network policy"
         );
     }
 
@@ -293,6 +345,10 @@ mod tests {
                 ),
                 (
                     "skills.bundled.frontend".to_string(),
+                    toml::Value::Boolean(true),
+                ),
+                (
+                    "services.browser.allow_local_network".to_string(),
                     toml::Value::Boolean(true),
                 ),
             ]

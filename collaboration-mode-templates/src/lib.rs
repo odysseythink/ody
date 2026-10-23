@@ -509,6 +509,13 @@ mod template_tests {
             "frontend-verification",
             "make-interfaces-feel-better",
             "motion-design",
+            // The direction selector. Leaving it out of the pin is how it got
+            // skipped in a real run: the entry skill was read, the template
+            // said "when the look is genuinely open", and a turn that found a
+            // design-system.md decided the question was already answered.
+            "frontend-style",
+            "[C:USER]",
+            "[C:INFERRED]",
             "Design before markup",
             "Real content",
             "prefers-reduced-motion",

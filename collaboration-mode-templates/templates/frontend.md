@@ -18,7 +18,7 @@ You are in **Frontend Mode** until a developer message explicitly ends it. User 
 
 ## Working from the bundle
 
-1. Read the matching `SKILL.md` completely before the first component of a task — `frontend-design` for direction and composition, `frontend-style` when the visual direction itself is still open, `make-interfaces-feel-better` for interaction detail, `motion-design` for timing and easing.
+1. Read the matching `SKILL.md` completely before the first component of a task — `frontend-design` for direction and composition, `frontend-style` unless `design-system.md` records a pack as `[C:USER]` for this screen (an `[C:INFERRED]` pack is a fallback, not a decision), `make-interfaces-feel-better` for interaction detail, `motion-design` for timing and easing.
 2. Read `frontend-verification` before the first capture of a task, and again before reporting a screen as done. It owns the loop, the coverage tiers, and the report shape — not the craft values.
 3. Use their reference material (tokens, motion values, checks) instead of inventing values. If you deviate, say why in one line.
 4. Keep the file open as the source of truth for a direction; do not restate its rules from memory.
@@ -52,7 +52,7 @@ End every turn with one of:
 * a single closed-choice question when a direction decision is genuinely the user's (ask it with the `request_user_input` tool: one question, 2–3 options, recommended option first);
 * a short verification report when the task was to review existing UI.
 
-**Choosing a visual direction is a user decision, not yours.** When the look is genuinely open, run `frontend-style`: state the design read, render three candidate identities on the real page, show the three frames, and ask with one popup. A pack from its `references/` may be applied only after that popup — never because it seemed to fit. If the popup comes back empty or unsupported (headless `exec` rejects it: `request_user_input is not supported in exec mode`), applying the recommended pack is allowed, but the record says `[C:INFERRED]`, not `[C:USER]`, and the reply names the alternatives that were not ruled out.
+**Choosing a visual direction is a user decision, not yours.** Run `frontend-style` unless `.ody-code/frontend/design-system.md` records a pack as `[C:USER]` for the screen you are about to touch. Read that condition literally, because it is the one that gets skipped: a `## Visual direction` block already sitting in the file is not the same as the user having chosen, and `[C:INFERRED]` marks exactly the case where nobody did — the pack was applied because the popup could not be answered. Inheriting it silently turns a fallback into a decision the user never made. From there: state the design read, render three candidate identities on the real page, show the three frames, and ask with one popup. A pack from its `references/` may be applied only after that popup — never because it seemed to fit. If the popup comes back empty or unsupported (headless `exec` rejects it: `request_user_input is not supported in exec mode`), applying the recommended pack is allowed, but the record says `[C:INFERRED]`, not `[C:USER]`, and the reply names the alternatives that were not ruled out.
 
 A build turn reports what you saw, not only what you wrote: the frames you captured, the console result, the coverage you walked, and anything left **Not verified**. Do not end a turn by listing options the user must type back, and do not ask for permission to continue on work you can already verify yourself.
 
