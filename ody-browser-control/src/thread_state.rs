@@ -29,6 +29,11 @@ pub struct BrowserThreadState {
     session: Mutex<Option<BrowserSession>>,
     default_page: Mutex<Option<PageState>>,
     stale: AtomicBool,
+    /// Viewport override currently applied via `Emulation.setDeviceMetricsOverride`.
+    ///
+    /// Tracked so a full-page screenshot (which clears all overrides inside
+    /// chromiumoxide) can restore the caller's viewport afterwards.
+    active_viewport: StdMutex<Option<ViewportOverride>>,
 }
 
 impl std::fmt::Debug for BrowserThreadState {
@@ -64,6 +69,7 @@ impl BrowserThreadState {
             session: Mutex::new(Some(session)),
             default_page: Mutex::new(None),
             stale: AtomicBool::new(false),
+            active_viewport: StdMutex::new(None),
         })
     }
 
@@ -82,6 +88,7 @@ impl BrowserThreadState {
             session: Mutex::new(None),
             default_page: Mutex::new(None),
             stale: AtomicBool::new(false),
+            active_viewport: StdMutex::new(None),
         }
     }
 
@@ -98,6 +105,7 @@ impl BrowserThreadState {
             ))),
             default_page: Mutex::new(None),
             stale: AtomicBool::new(false),
+            active_viewport: StdMutex::new(None),
         })
     }
 
@@ -257,11 +265,12 @@ impl BrowserThreadState {
     }
 
     /// Navigate the default page to `url` and return the resulting URL/title.
-    #[tracing::instrument(skip_all, fields(url_preview = %crate::types::truncate_string_bytes(url, 120), wait_until = ?wait_until))]
+    #[tracing::instrument(skip_all, fields(url_preview = %crate::types::truncate_string_bytes(url, 120), wait_until = ?wait_until, bypass_cache))]
     pub async fn navigate(
         &self,
         url: &str,
         wait_until: Option<WaitCondition>,
+        bypass_cache: bool,
     ) -> Result<NavigationResult, BrowserControlError> {
         if let Err(reason) =
             url_block::check_url_is_allowed(url, self.config().allow_local_network)
@@ -274,7 +283,7 @@ impl BrowserThreadState {
         self.with_page_retry(|page| {
             let url = url.clone();
             Box::pin(async move {
-                tokio::time::timeout(timeout, page.navigate(&url))
+                tokio::time::timeout(timeout, page.navigate(&url, bypass_cache))
                     .await
                     .map_err(|_| BrowserControlError::Timeout {
                         command: "navigate".to_string(),
@@ -340,8 +349,15 @@ impl BrowserThreadState {
         &self,
         full_page: bool,
     ) -> Result<Vec<u8>, BrowserControlError> {
-        self.with_page_retry(|page| Box::pin(async move { page.screenshot(full_page).await }))
-            .await
+        let bytes = self
+            .with_page_retry(|page| Box::pin(async move { page.screenshot(full_page).await }))
+            .await;
+        // chromiumoxide clears every device-metrics override as part of the
+        // full-page capture; put the caller's viewport back afterwards.
+        if full_page {
+            self.restore_viewport().await;
+        }
+        bytes
     }
 
     /// Override the layout viewport via `Emulation.setDeviceMetricsOverride`.
@@ -354,6 +370,48 @@ impl BrowserThreadState {
         &self,
         viewport: ViewportOverride,
     ) -> Result<(), BrowserControlError> {
+        self.apply_viewport_override(viewport).await?;
+        *self
+            .active_viewport
+            .lock()
+            .expect("viewport mutex poisoned") = Some(viewport);
+        self.settle_frames().await
+    }
+
+    /// Drop any viewport override and return to the browser's own window size.
+    #[tracing::instrument]
+    pub async fn clear_viewport(&self) -> Result<(), BrowserControlError> {
+        self.execute_raw("Emulation.clearDeviceMetricsOverride", serde_json::json!({}))
+            .await?;
+        *self
+            .active_viewport
+            .lock()
+            .expect("viewport mutex poisoned") = None;
+        self.settle_frames().await
+    }
+
+    /// Re-apply the tracked viewport override, if any.
+    ///
+    /// chromiumoxide's full-page screenshot path clears *all* device metrics
+    /// overrides after capture, which silently drops the caller's viewport —
+    /// the model then had to re-issue `set_viewport` after every screenshot.
+    async fn restore_viewport(&self) {
+        let Some(viewport) = *self
+            .active_viewport
+            .lock()
+            .expect("viewport mutex poisoned")
+        else {
+            return;
+        };
+        if let Err(e) = self.apply_viewport_override(viewport).await {
+            tracing::warn!(error = %e, "failed to restore viewport after screenshot");
+        }
+    }
+
+    async fn apply_viewport_override(
+        &self,
+        viewport: ViewportOverride,
+    ) -> Result<(), BrowserControlError> {
         self.execute_raw(
             "Emulation.setDeviceMetricsOverride",
             serde_json::json!({
@@ -363,16 +421,8 @@ impl BrowserThreadState {
                 "mobile": viewport.mobile,
             }),
         )
-        .await?;
-        self.settle_frames().await
-    }
-
-    /// Drop any viewport override and return to the browser's own window size.
-    #[tracing::instrument(skip_all)]
-    pub async fn clear_viewport(&self) -> Result<(), BrowserControlError> {
-        self.execute_raw("Emulation.clearDeviceMetricsOverride", serde_json::json!({}))
-            .await?;
-        self.settle_frames().await
+        .await
+        .map(|_| ())
     }
 
     /// Wait for the next two animation frames so layout and paint have landed.

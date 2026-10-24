@@ -183,6 +183,8 @@ struct BrowserNavigateInput {
     url: String,
     #[serde(default)]
     wait_until: Option<WaitCondition>,
+    #[serde(default)]
+    bypass_cache: Option<bool>,
 }
 
 impl ToolExecutor<ToolCall> for BrowserNavigateTool {
@@ -202,6 +204,10 @@ impl ToolExecutor<ToolCall> for BrowserNavigateTool {
                         "type": "string",
                         "enum": wait_condition_names(),
                         "description": "When the navigation should be considered complete."
+                    },
+                    "bypass_cache": {
+                        "type": "boolean",
+                        "description": "Clear the browser cache before navigating so the page and its subresources are freshly fetched. Use after editing local assets served over HTTP; without it the browser may serve stale CSS/JS."
                     }
                 },
                 "required": ["url"],
@@ -239,7 +245,7 @@ impl ToolExecutor<ToolCall> for BrowserNavigateTool {
                 "browser navigate proceeding"
             );
             let result = state
-                .navigate(&input.url, input.wait_until)
+                .navigate(&input.url, input.wait_until, input.bypass_cache.unwrap_or(false))
                 .await
                 .map_err(map_error)?;
             Ok(wrap_output(
@@ -1150,11 +1156,13 @@ impl ToolExecutor<ToolCall> for BrowserExecuteRawCdpTool {
                 "properties": {
                     "method": {
                         "type": "string",
-                        "description": "CDP method name, e.g. 'Runtime.getProperties'."
+                        "description": "CDP method name, e.g. 'Runtime.evaluate'."
                     },
                     "params": {
                         "type": "object",
-                        "description": "JSON parameters for the CDP method."
+                        "properties": {},
+                        "additionalProperties": true,
+                        "description": "Free-form JSON parameters for the CDP method; keys depend on the method. Examples: Runtime.evaluate -> {\"expression\": \"1+1\"}; Input.dispatchKeyEvent -> {\"type\": \"keyDown\", \"key\": \"Tab\"}. Omit only for methods that take no parameters."
                     }
                 },
                 "required": ["method"],
@@ -1195,10 +1203,29 @@ impl ToolExecutor<ToolCall> for BrowserExecuteRawCdpTool {
                 }));
             }
             ensure_browser_approved(&call)?;
+            let params_is_empty = match &input.params {
+                serde_json::Value::Null => true,
+                serde_json::Value::Object(map) => map.is_empty(),
+                _ => false,
+            };
             let result = state
                 .execute_raw(&input.method, input.params.clone())
                 .await
-                .map_err(map_error)?;
+                .map_err(|e| {
+                    let mapped = map_error(e).to_string();
+                    // Chrome rejects parameterless calls to methods with required
+                    // fields with a bare -32602; without the sent payload in the
+                    // message the model just retries the identical empty call.
+                    if params_is_empty && mapped.contains("-32602") {
+                        FunctionCallError::Fatal(format!(
+                            "{mapped} — params was {{}}; this CDP method requires fields such \
+                             as type/key (Input.*) or expression (Runtime.evaluate). Send them \
+                             inside params."
+                        ))
+                    } else {
+                        FunctionCallError::Fatal(mapped)
+                    }
+                })?;
             Ok(wrap_output(
                 result,
                 "execute_raw_cdp",

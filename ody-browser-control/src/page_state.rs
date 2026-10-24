@@ -130,12 +130,31 @@ impl PageState {
     }
 
     /// Navigate the page to `url` and wait for the load event.
-    pub async fn navigate(&self, url: &str) -> Result<(), BrowserControlError> {
+    ///
+    /// With `bypass_cache`, the browser cache is cleared first so the
+    /// navigation cannot serve stale subresources (the failure the model used
+    /// to work around with a `?v=` query param).
+    pub async fn navigate(&self, url: &str, bypass_cache: bool) -> Result<(), BrowserControlError> {
+        if bypass_cache {
+            self.clear_browser_cache().await?;
+        }
         self.page
             .goto(url)
             .await
             .map_err(|e| BrowserControlError::from_command_error("navigate", e))?;
         Ok(())
+    }
+
+    /// Clear the browser cache (`Network.clearBrowserCache`).
+    pub async fn clear_browser_cache(&self) -> Result<(), BrowserControlError> {
+        self.page
+            .execute(RawCdpCommand {
+                method: "Network.clearBrowserCache".to_string(),
+                params: serde_json::json!({}),
+            })
+            .await
+            .map(|_| ())
+            .map_err(|e| BrowserControlError::from_command_error("clear_browser_cache", e))
     }
 
     /// Evaluate a JavaScript expression and return the serialized result.

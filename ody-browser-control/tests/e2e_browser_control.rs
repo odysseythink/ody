@@ -65,7 +65,7 @@ async fn navigate_evaluate_screenshot_full_chain() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
 
     // Wait a short moment for rendering to settle before screenshot.
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -97,7 +97,7 @@ async fn full_page_screenshot_is_png() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let screenshot = page.screenshot(true).await.unwrap();
@@ -121,7 +121,7 @@ async fn console_logs_are_collected() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     // Drain while reporting: the entry comes back once, and the next read must
@@ -165,7 +165,7 @@ async fn get_dom_returns_document_and_element() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let full = page.get_dom(None).await.unwrap();
@@ -201,7 +201,7 @@ document.getElementById('btn').addEventListener('click', function() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     page.type_text("#name", "Ody").await.unwrap();
@@ -283,7 +283,7 @@ async fn network_logs_are_redacted() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page = session.new_page().await.unwrap();
-    page.navigate(&url).await.unwrap();
+    page.navigate(&url, false).await.unwrap();
 
     // Perform the fetch inside the page and await it so the request is fully
     // sent before we read the network buffer. The page response sets a cookie

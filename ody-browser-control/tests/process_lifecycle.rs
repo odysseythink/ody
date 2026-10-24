@@ -92,10 +92,10 @@ async fn multiple_pages_are_independent() {
     let session = BrowserSession::launch(cfg).await.unwrap();
 
     let page1 = session.new_page().await.unwrap();
-    page1.navigate(&format!("{url}/page1")).await.unwrap();
+    page1.navigate(&format!("{url}/page1"), false).await.unwrap();
 
     let page2 = session.new_page().await.unwrap();
-    page2.navigate(&format!("{url}/page2")).await.unwrap();
+    page2.navigate(&format!("{url}/page2"), false).await.unwrap();
 
     let url1 = page1.evaluate("document.location.href").await.unwrap();
     let url2 = page2.evaluate("document.location.href").await.unwrap();
@@ -115,8 +115,12 @@ async fn thread_state_navigates_and_reuses_default_page() {
     let cfg = test_config();
     let thread = BrowserThreadState::new(cfg).await.unwrap();
 
-    thread.navigate(&format!("{url}/page1"), None).await.unwrap();
-    thread.navigate(&format!("{url}/page2"), None).await.unwrap();
+    thread.navigate(&format!("{url}/page1"), None, false)
+        .await
+        .unwrap();
+    thread.navigate(&format!("{url}/page2"), None, false)
+        .await
+        .unwrap();
 
     thread.close().await.unwrap();
 }
@@ -134,7 +138,9 @@ async fn thread_state_applies_and_clears_a_viewport_override() {
     }
     let (_server, url) = start_test_server().await;
     let thread = BrowserThreadState::new(test_config()).await.unwrap();
-    thread.navigate(&format!("{url}/page1"), None).await.unwrap();
+    thread.navigate(&format!("{url}/page1"), None, false)
+        .await
+        .unwrap();
 
     let narrowed = ViewportOverride {
         width: 420,
@@ -155,6 +161,20 @@ async fn thread_state_applies_and_clears_a_viewport_override() {
         &png[..4],
         &[0x89, 0x50, 0x4E, 0x47],
         "the raw-byte route still returns a PNG"
+    );
+
+    // Regression: a full-page capture clears every device-metrics override
+    // inside chromiumoxide; the caller's viewport must be restored afterwards,
+    // otherwise every breakpoint screenshot silently resets the layout.
+    thread
+        .screenshot_bytes(/*full_page*/ true)
+        .await
+        .unwrap();
+    let width_after_full_page = thread.evaluate("window.innerWidth").await.unwrap();
+    assert_eq!(
+        width_after_full_page.value,
+        serde_json::json!(420),
+        "full-page screenshot must not drop the active viewport override"
     );
 
     thread.clear_viewport().await.unwrap();
