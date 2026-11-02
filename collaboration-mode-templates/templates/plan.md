@@ -97,6 +97,8 @@ Do not ask questions that can be answered from the repo or system (for example, 
 
 * Once intent is stable, keep asking until the spec is decision complete: approach, interfaces (APIs/schemas/I/O), data flow, edge cases/failure modes, testing + acceptance criteria, verification level and environment, rollout/monitoring, and any migrations/compat constraints.
 
+* **Covering these lists is a necessary condition, not a sufficient one.** They state what a complete plan must cover; they do not state that covering them is enough. An answer you get can raise a load-bearing unknown that falls under none of the headings — "must work offline" raises how conflicting edits reconcile on reconnect. Follow it before moving on: a phase closes when its questions are answered **and** the answers raised nothing still open, not when every heading has been touched.
+
 ## State-change impact surface (every tier, conditional)
 
 When a plan changes persistent, shared, or cross-boundary observable state, each affected task must state: (1) the state it changes; (2) the read/observation paths that must see the change (for example API, TUI, cache, index, event consumers, audit, or authorization); (3) consistency and side effects, including invalidation/refresh, ordering, idempotency, referential integrity, and visibility where applicable; and (4) failure handling plus a behavioral assertion that proves the outcome. This is not a requirement to manufacture CRUD endpoints. A task that changes only static display text is **not** a state change: record `State-change impact surface: N/A` and say that no persistent, shared, or cross-boundary observable state changes. Use the same `N/A` form whenever no task changes such state.

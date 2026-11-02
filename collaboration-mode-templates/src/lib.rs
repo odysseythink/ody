@@ -261,6 +261,25 @@ mod template_tests {
         );
     }
 
+    /// Both clarification checklists (Design's seven dimensions, Plan's
+    /// PHASE 2/3 headings) are closed lists: satisfying them reads as
+    /// "clarification done". The clause below is the only thing stopping a
+    /// derived unknown — one the user's own answer created and no heading
+    /// names — from being rounded to the nearest dimension and dropped.
+    #[test]
+    fn clarification_checklists_are_necessary_not_sufficient() {
+        for (name, body) in [("DESIGN", DESIGN), ("PLAN", PLAN)] {
+            assert!(
+                body.contains("necessary condition, not a sufficient one"),
+                "{name} must say its checklist bounds coverage without bounding derived questions"
+            );
+            assert!(
+                body.contains("raised nothing still open"),
+                "{name} must define closure as answers-plus-derived-questions, not headings touched"
+            );
+        }
+    }
+
     /// The product-mode P0 triage contract: one entry point, three internal
     /// paths (direction undecided / direction settled / change-request), so the
     /// complexity of the requirements-analysis workflow lives inside the mode's
