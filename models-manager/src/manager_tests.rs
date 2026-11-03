@@ -541,9 +541,18 @@ fn bundled_models_support_personality_for_kimi_deepseek_glm() {
         !response.models.is_empty(),
         "bundled models.json should contain models"
     );
+    // Internal system models on the openai-responses provider are not
+    // personality surfaces; keep them listed explicitly so a NEW user-facing
+    // provider without coverage still fails loudly below.
+    const PERSONALITY_EXEMPT_SLUGS: [&str; 2] =
+        ["ody-auto-review", "guardian-review-model-override"];
     for model in &response.models {
-        // Every bundled model belongs to one of these providers, so all of them
-        // should advertise personality support with a substituting placeholder.
+        if PERSONALITY_EXEMPT_SLUGS.contains(&model.slug.as_str()) {
+            continue;
+        }
+        // Every user-facing bundled model belongs to one of the covered
+        // providers, so all of them should advertise personality support with
+        // a substituting placeholder.
         assert!(
             crate::model_info::provider_supports_personality(&model.provider),
             "unexpected provider {} without personality coverage",
