@@ -4,6 +4,7 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
+use crate::exec::ExecExpiration;
 use crate::exec::ExecParams;
 use crate::exec_policy::ExecApprovalRequest;
 use crate::function_tool::FunctionCallError;
@@ -24,10 +25,12 @@ use crate::tools::runtimes::shell::ShellRuntime;
 use crate::tools::runtimes::shell::ShellRuntimeBackend;
 use crate::tools::sandboxing::ToolCtx;
 use ody_protocol::models::AdditionalPermissionProfile;
+use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::ExecCommandSource;
 use ody_tools::ToolName;
 use ody_utils_path_uri::PathUri;
 
+mod background;
 mod shell_command;
 
 pub use shell_command::ShellCommandHandler;
@@ -56,9 +59,27 @@ struct RunExecLikeArgs {
     tracker: crate::tools::context::SharedTurnDiffTracker,
     call_id: String,
     shell_runtime_backend: ShellRuntimeBackend,
+    /// Overrides the `timeout_ms`-derived expiration. Background execution
+    /// sets this so an omitted timeout does not fall back to the 10s default.
+    expiration_override: Option<ExecExpiration>,
 }
 
-async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, FunctionCallError> {
+/// Everything the two shell execution paths (foreground and background) share:
+/// permission preprocessing, the approval-policy guard, and the assembled
+/// [`ShellRequest`]. The apply_patch intercept intentionally lives with the
+/// callers — patch application is interactive by nature and is skipped for
+/// background execution.
+struct PreparedShellExec {
+    emitter: ToolEmitter,
+    tool_ctx: ToolCtx,
+    req: ShellRequest,
+    turn: Arc<TurnContext>,
+    approval_policy: AskForApproval,
+    turn_environment: crate::session::turn_context::TurnEnvironment,
+    shell_runtime_backend: ShellRuntimeBackend,
+}
+
+async fn prepare_shell_exec(args: RunExecLikeArgs) -> Result<PreparedShellExec, FunctionCallError> {
     let RunExecLikeArgs {
         tool_name,
         exec_params,
@@ -69,17 +90,17 @@ async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, Func
         prefix_rule,
         session,
         turn,
-        tracker,
+        tracker: _,
         call_id,
         shell_runtime_backend,
+        expiration_override,
     } = args;
 
-    let Some(turn_environment) = turn.environments.primary() else {
+    let Some(turn_environment) = turn.environments.primary().cloned() else {
         return Err(FunctionCallError::RespondToModel(
             "shell is unavailable in this session".to_string(),
         ));
     };
-    let fs = turn_environment.environment.get_filesystem();
 
     let explicit_env_overrides = turn
         .config
@@ -139,33 +160,17 @@ async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, Func
         )));
     }
 
-    // Intercept apply_patch if present.
-    let apply_patch_cwd = PathUri::from_abs_path(&exec_params.cwd);
-    if let Some(output) = intercept_apply_patch(
-        &exec_params.command,
-        &apply_patch_cwd,
-        fs.as_ref(),
-        turn_environment.clone(),
-        session.clone(),
-        turn.clone(),
-        Some(&tracker),
-        &call_id,
-        tool_name.name.as_str(),
-    )
-    .await?
-    {
-        return Ok(output);
-    }
-
-    let source = ExecCommandSource::Agent;
-    let emitter = ToolEmitter::shell(exec_params.command.clone(), exec_params.cwd.clone(), source);
-    let event_ctx = ToolEventCtx::new(
-        session.as_ref(),
-        turn.as_ref(),
-        &call_id,
-        /*turn_diff_tracker*/ None,
+    let emitter = ToolEmitter::shell(
+        exec_params.command.clone(),
+        exec_params.cwd.clone(),
+        ExecCommandSource::Agent,
     );
-    emitter.begin(event_ctx).await;
+    let tool_ctx = ToolCtx {
+        session: session.clone(),
+        turn: turn.clone(),
+        call_id: call_id.clone(),
+        tool_name,
+    };
 
     let exec_approval_requirement = session
         .services
@@ -191,6 +196,7 @@ async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, Func
         hook_command,
         cwd: exec_params.cwd.clone(),
         timeout_ms: exec_params.expiration.timeout_ms(),
+        expiration_override,
         cancellation_token,
         env: exec_params.env.clone(),
         explicit_env_overrides,
@@ -203,27 +209,111 @@ async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, Func
         justification: exec_params.justification.clone(),
         exec_approval_requirement,
     };
+
+    let approval_policy = turn.approval_policy.value();
+    Ok(PreparedShellExec {
+        emitter,
+        tool_ctx,
+        req,
+        turn,
+        approval_policy,
+        turn_environment,
+        shell_runtime_backend,
+    })
+}
+
+/// Dispatches a prepared-or-not shell execution to the foreground or the
+/// background path. `background` comes from the tool call's `background`
+/// parameter.
+async fn run_shell_exec(
+    args: RunExecLikeArgs,
+    background: bool,
+) -> Result<FunctionToolOutput, FunctionCallError> {
+    if !background {
+        return run_exec_like(args).await;
+    }
+    let task_id = format!("bg_{}", uuid::Uuid::new_v4().simple());
+    let log_path = args
+        .exec_params
+        .cwd
+        .as_path()
+        .to_path_buf()
+        .join(".ody-code")
+        .join("background")
+        .join(format!("{task_id}.log"));
+    if let Some(parent) = log_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            FunctionCallError::RespondToModel(format!(
+                "failed to create background log directory {}: {err}",
+                parent.display()
+            ))
+        })?;
+    }
+    let prepared = prepare_shell_exec(args).await?;
+    background::run_background_exec(prepared, task_id, log_path).await
+}
+
+async fn run_exec_like(args: RunExecLikeArgs) -> Result<FunctionToolOutput, FunctionCallError> {
+    let RunExecLikeArgs {
+        call_id,
+        session,
+        turn,
+        tracker,
+        ..
+    } = &args;
+    let call_id = call_id.clone();
+    let session = Arc::clone(session);
+    let turn = Arc::clone(turn);
+    let tracker = tracker.clone();
+
+    let prepared = prepare_shell_exec(args).await?;
+    let PreparedShellExec {
+        emitter,
+        tool_ctx,
+        req,
+        turn,
+        approval_policy,
+        turn_environment,
+        shell_runtime_backend,
+    } = prepared;
+
+    let fs = turn_environment.environment.get_filesystem();
+
+    // Intercept apply_patch if present.
+    let apply_patch_cwd = PathUri::from_abs_path(&req.cwd);
+    if let Some(output) = intercept_apply_patch(
+        &req.command,
+        &apply_patch_cwd,
+        fs.as_ref(),
+        turn_environment.clone(),
+        tool_ctx.session.clone(),
+        tool_ctx.turn.clone(),
+        /*tracker*/ Some(&tracker),
+        &call_id,
+        tool_ctx.tool_name.name.as_str(),
+    )
+    .await?
+    {
+        return Ok(output);
+    }
+
+    let event_ctx = ToolEventCtx::new(
+        tool_ctx.session.as_ref(),
+        tool_ctx.turn.as_ref(),
+        &call_id,
+        /*turn_diff_tracker*/ None,
+    );
+    emitter.begin(event_ctx).await;
+
     let mut orchestrator = ToolOrchestrator::new();
     let mut runtime = ShellRuntime::for_shell_command(shell_runtime_backend);
-    let tool_ctx = ToolCtx {
-        session: session.clone(),
-        turn: turn.clone(),
-        call_id: call_id.clone(),
-        tool_name,
-    };
     let out = orchestrator
-        .run(
-            &mut runtime,
-            &req,
-            &tool_ctx,
-            &turn,
-            turn.approval_policy.value(),
-        )
+        .run(&mut runtime, &req, &tool_ctx, &turn, approval_policy)
         .await
         .map(|result| result.output);
     let event_ctx = ToolEventCtx::new(
-        session.as_ref(),
-        turn.as_ref(),
+        tool_ctx.session.as_ref(),
+        tool_ctx.turn.as_ref(),
         &call_id,
         /*turn_diff_tracker*/ None,
     );

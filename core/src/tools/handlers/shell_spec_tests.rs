@@ -221,19 +221,21 @@ Examples of valid command strings:
 - setting an env var: "$env:FOO='bar'; echo $env:FOO"
 - running an inline Python script: "@'\\nprint('Hello, world!')\\n'@ | python -""#
             .to_string()
+            + "\n\n"
+            + BACKGROUND_EXEC_GUIDANCE
             + &windows_shell_guidance_description()
     } else {
         r#"Runs a shell command and returns its output.
-- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."#
-            .to_string()
+- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary.
+- "#
+        .to_string()
+            + BACKGROUND_EXEC_GUIDANCE
     };
 
     let mut properties = BTreeMap::from([
         (
             "command".to_string(),
-            JsonSchema::string(Some(
-                "Shell script to run in the user's default shell.".to_string(),
-            )),
+            JsonSchema::string(Some("Shell command to execute.".to_string())),
         ),
         (
             "workdir".to_string(),
@@ -248,6 +250,13 @@ Examples of valid command strings:
             )),
         ),
         (
+            "background".to_string(),
+            JsonSchema::boolean(Some(
+                "True runs the command detached from this call and returns immediately with a task id and output log path; a <background_task_notification> is delivered to a later turn when the process exits. Use for long-running builds, training jobs, and batch extractions instead of `nohup`/`&`/`Start-Process`. Omit `timeout_ms` to let it run until it exits."
+                    .to_string(),
+            )),
+        ),
+        (
             "login".to_string(),
             JsonSchema::boolean(Some(
                 "True runs with login shell semantics; false disables them. Defaults to true."
@@ -258,6 +267,11 @@ Examples of valid command strings:
     properties.extend(create_approval_parameters(
         /*exec_permission_approvals_enabled*/ false,
     ));
+
+    let ToolSpec::Function(actual) = &tool else {
+        panic!("expected function tool");
+    };
+    assert_eq!(actual.description, description);
 
     assert_eq!(
         tool,

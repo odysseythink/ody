@@ -164,6 +164,13 @@ pub fn create_shell_command_tool(options: CommandToolOptions) -> ToolSpec {
                 "Maximum command runtime. Defaults to 10000 ms.".to_string(),
             )),
         ),
+        (
+            "background".to_string(),
+            JsonSchema::boolean(Some(
+                "True runs the command detached from this call and returns immediately with a task id and output log path; a <background_task_notification> is delivered to a later turn when the process exits. Use for long-running builds, training jobs, and batch extractions instead of `nohup`/`&`/`Start-Process`. Omit `timeout_ms` to let it run until it exits."
+                    .to_string(),
+            )),
+        ),
     ]);
     if options.allow_login_shell {
         properties.insert(
@@ -180,7 +187,7 @@ pub fn create_shell_command_tool(options: CommandToolOptions) -> ToolSpec {
 
     let description = if let Some(shell_name) = options.shell_name {
         format!(
-            "Runs a {shell_name} command and returns its output. Use {shell_name} syntax; the runtime will execute this command with {shell_name}, even when the host OS is different.\n- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."
+            "Runs a {shell_name} command and returns its output. Use {shell_name} syntax; the runtime will execute this command with {shell_name}, even when the host OS is different.\n- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary.\n- {BACKGROUND_EXEC_GUIDANCE}"
         )
     } else if cfg!(windows) {
         format!(
@@ -195,13 +202,17 @@ Examples of valid command strings:
 - setting an env var: "$env:FOO='bar'; echo $env:FOO"
 - running an inline Python script: "@'\\nprint('Hello, world!')\\n'@ | python -"
 
+{BACKGROUND_EXEC_GUIDANCE}
+
 {}"#,
             windows_shell_guidance()
         )
     } else {
-        r#"Runs a shell command and returns its output.
-- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."#
-            .to_string()
+        format!(
+            r#"Runs a shell command and returns its output.
+- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary.
+- {BACKGROUND_EXEC_GUIDANCE}"#
+        )
     };
 
     ToolSpec::Function(ResponsesApiTool {
@@ -429,6 +440,8 @@ fn file_system_permissions_schema() -> JsonSchema {
     schema.description = Some("Filesystem access request.".to_string());
     schema
 }
+
+pub(crate) const BACKGROUND_EXEC_GUIDANCE: &str = "For long-running commands (builds, training jobs, batch extraction over many files), pass `background: true` instead of launching them with `nohup`, `&`, or `Start-Process`: the session cannot observe detached processes and will never learn when they finish. With `background: true` the call returns immediately and a <background_task_notification> is delivered to a later turn when the process exits.";
 
 fn windows_shell_guidance() -> &'static str {
     r#"Windows safety rules:

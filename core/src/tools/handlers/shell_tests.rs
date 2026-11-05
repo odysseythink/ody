@@ -92,6 +92,7 @@ async fn shell_command_handler_to_exec_params_uses_session_shell_and_turn_contex
         workdir,
         login,
         timeout_ms,
+        background: None,
         sandbox_permissions: Some(sandbox_permissions),
         additional_permissions: None,
         prefix_rule: None,
@@ -154,6 +155,7 @@ async fn shell_command_handler_defaults_to_non_login_when_disallowed() {
         workdir: None,
         login: None,
         timeout_ms: None,
+        background: None,
         sandbox_permissions: None,
         additional_permissions: None,
         prefix_rule: None,
@@ -247,4 +249,141 @@ async fn build_post_tool_use_payload_uses_tool_output_wire_value() {
             tool_response: json!("shell output"),
         })
     );
+}
+
+/// The background contract, end to end: `background: true` returns immediately
+/// with a task id and log path, the command keeps running in a supervised
+/// detached task, and its completion lands in the session's host-notification
+/// queue as a `<background_task_notification>` user message (the same wake
+/// path `human_acceptance` uses).
+///
+/// The final assertions read the log file rather than the notification queue:
+/// the wake turn consumes the queued notification immediately (correct
+/// behavior, unobservable from the test), while the log is written before the
+/// notification is enqueued and survives.
+#[tokio::test]
+async fn shell_command_background_returns_immediately_writes_log_on_exit() {
+    let (session, mut turn_context) = make_session_and_context().await;
+    // Auto-approve the exec: the test harness has no client to answer an
+    // approval prompt, so Never (requirement = Skip) keeps the orchestrator
+    // from waiting forever.
+    turn_context.approval_policy =
+        crate::config::Constrained::allow_any(ody_protocol::protocol::AskForApproval::Never);
+    // Unrestricted profile so the Windows fallback policy (managed filesystem
+    // restrictions with the sandbox backend disabled) does not forbid every
+    // unmatched command in the harness.
+    turn_context.permission_profile = ody_protocol::models::PermissionProfile::Disabled;
+    let session = std::sync::Arc::new(session);
+    let workdir = tempfile::tempdir().expect("create workdir tempdir");
+
+    let invocation = ToolInvocation {
+        session: std::sync::Arc::clone(&session),
+        turn: turn_context.into(),
+        cancellation_token: tokio_util::sync::CancellationToken::new(),
+        tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
+        call_id: "call-bg".to_string(),
+        tool_name: ody_tools::ToolName::plain("shell_command"),
+        source: ToolCallSource::Direct,
+        payload: ToolPayload::Function {
+            arguments: json!({
+                "command": "echo bg done",
+                "workdir": workdir.path().to_string_lossy(),
+                "background": true,
+            })
+            .to_string(),
+        },
+    };
+
+    let handler = ShellCommandHandler::from(ody_tools::ShellCommandBackendConfig::Classic);
+    use ody_tools::ToolExecutor as _;
+    let result = handler.handle(invocation).await.expect("background start");
+    let started = result.to_response_item(
+        "call-bg",
+        &ToolPayload::Function {
+            arguments: "{}".to_string(),
+        },
+    );
+    let started_text = match started {
+        ody_protocol::models::ResponseInputItem::FunctionCallOutput { output, .. } => output
+            .body
+            .to_text()
+            .expect("background start output should be text"),
+        other => panic!("expected function call output, got {other:?}"),
+    };
+    assert!(
+        started_text.contains("Background task bg_"),
+        "start output must name the background task: {started_text}"
+    );
+    assert!(
+        started_text.contains("background_task_notification"),
+        "start output must promise the exit notification: {started_text}"
+    );
+
+    // The watcher writes the log after the process exits and before it
+    // notifies the session, so the file appearing proves the full path ran.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let log_dir = workdir.path().join(".ody-code").join("background");
+    let log_path = loop {
+        if let Ok(mut entries) = std::fs::read_dir(&log_dir)
+            && let Some(entry) = entries.next()
+            && let Ok(entry) = entry
+        {
+            break entry.path();
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "background task never wrote its log file"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    };
+    let log_contents = std::fs::read_to_string(&log_path).expect("read log");
+    assert!(
+        log_contents.contains("bg done"),
+        "log must contain the captured output: {log_contents}"
+    );
+    assert!(
+        log_contents.contains("exit_code=0"),
+        "log must record the exit code: {log_contents}"
+    );
+}
+
+/// The exit notification is a bounded, authority-neutral host event: it names
+/// the task and log, carries the exit summary, and restates the
+/// no-new-authority boundary (same contract as the human_acceptance
+/// notification).
+#[test]
+fn background_task_notification_pins_the_host_event_contract() {
+    let log_path = std::path::Path::new("D:/bg").join("bg_task.log");
+    let item = super::background::background_task_notification(
+        "bg_test",
+        "python train.py",
+        &log_path,
+        "exit_code=0 duration_ms=1234",
+        Some("progress 100"),
+    );
+    let ody_protocol::models::ResponseItem::Message { role, content, .. } = &item else {
+        panic!("notification must be a message item");
+    };
+    assert_eq!(role, "user");
+    let text = content
+        .iter()
+        .find_map(|c| match c {
+            ody_protocol::models::ContentItem::InputText { text } => Some(text),
+            _ => None,
+        })
+        .expect("notification must carry text");
+    for marker in [
+        "<background_task_notification task_id=\"bg_test\">",
+        "command: python train.py",
+        "exit_code=0 duration_ms=1234",
+        "progress 100",
+        "grants no new authority",
+        "Do not override the current collaboration mode or permissions.",
+        "</background_task_notification>",
+    ] {
+        assert!(
+            text.contains(marker),
+            "notification must contain {marker}: {text}"
+        );
+    }
 }

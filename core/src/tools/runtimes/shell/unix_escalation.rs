@@ -136,7 +136,10 @@ pub(super) async fn try_run_zsh_fork(
     let command =
         build_sandbox_command(command, &req.cwd, &env, req.additional_permissions.clone())?;
     let options = ExecOptions {
-        expiration: req.timeout_ms.into(),
+        expiration: req
+            .expiration_override
+            .clone()
+            .unwrap_or_else(|| req.timeout_ms.into()),
         capture_policy: ExecCapturePolicy::ShellTool,
     };
     let sandbox_exec_request = attempt

@@ -59,6 +59,10 @@ pub struct ShellRequest {
     pub hook_command: String,
     pub cwd: AbsolutePathBuf,
     pub timeout_ms: Option<u64>,
+    /// Overrides `timeout_ms` when the caller needs an expiration shape the
+    /// `Option<u64>` field cannot express (e.g. background execution running
+    /// until the process exits, with no default timeout applied).
+    pub expiration_override: Option<crate::exec::ExecExpiration>,
     pub cancellation_token: CancellationToken,
     pub env: HashMap<String, String>,
     pub explicit_env_overrides: HashMap<String, String>,
@@ -312,7 +316,10 @@ impl ToolRuntime<ShellRequest, ExecToolCallOutput> for ShellRuntime {
 
         let command =
             build_sandbox_command(&command, &req.cwd, &env, req.additional_permissions.clone())?;
-        let mut expiration: crate::exec::ExecExpiration = req.timeout_ms.into();
+        let mut expiration: crate::exec::ExecExpiration = match req.expiration_override.clone() {
+            Some(expiration) => expiration,
+            None => req.timeout_ms.into(),
+        };
         expiration = expiration.with_cancellation(req.cancellation_token.clone());
         if let Some(cancellation) = attempt.network_denial_cancellation_token.clone() {
             expiration = expiration.with_cancellation(cancellation);

@@ -96,6 +96,43 @@ session does.
 - The parser detects common mistakes such as `+*** End Patch` / `-*** End Patch` / `+*** Begin Patch` and reports a clear error telling the model to remove the prefix.
 - Content lines inside hunks still use `+` / `-` / ` ` prefixes as normal unified-diff content.
 
+## Background shell execution (`shell_command` with `background: true`)
+
+- `shell_command` accepts `background: true` (`ShellCommandToolCallParams.background`,
+  spec in `core/src/tools/handlers/shell_spec.rs`, executor in
+  `core/src/tools/handlers/shell/background.rs`). The purpose is to give the
+  session a way to supervise long-running commands; launching them with raw
+  `nohup` / `&` / `Start-Process` creates processes the session can never
+  observe, which is why the tool description steers the model to this parameter.
+- Flow: the call goes through the same preparation as the foreground path
+  (`prepare_shell_exec` in `core/src/tools/handlers/shell.rs` — permission
+  preprocessing, approval-policy guard, `ShellRequest` assembly), then the
+  orchestrator runs inside a detached `tokio::spawn` while the tool returns
+  immediately with a task id and log path (`<workdir>/.ody-code/background/<id>.log`).
+- Timeout semantics differ: with `background: true`, an omitted `timeout_ms`
+  means *run until the process exits* (`ShellRequest.expiration_override`,
+  `ExecExpiration::Cancellation` with a never-cancelled token) instead of the
+  10s default; an explicit `timeout_ms` still bounds the task.
+- On exit the watcher writes command + exit summary + captured output to the
+  log file, then enqueues a `<background_task_notification>` via
+  `InputQueue::enqueue_host_notification` (key `background_task:<id>`) and calls
+  `maybe_start_turn_for_pending_work` — the same notification/wake pipeline
+  `human_acceptance` uses. Host notifications wake idle **Default-mode**
+  sessions only (`maybe_start_turn_for_pending_work_with_sub_id` in
+  `core/src/tasks/mod.rs`); other modes consume the notification on their next
+  turn. The notification message restates the no-new-authority boundary.
+- Session shutdown does not kill a running background task (nohup semantics):
+  the detached task is not tied to the session lifetime. If the session dies
+  before exit, the notification is dropped (`enqueue_host_notification`
+  returns false) and the log file never gets written.
+- `apply_patch` interception is intentionally skipped for background calls —
+  patch application is interactive. A background call that needs escalation
+  approval will wait inside the detached task; prefer pre-approved commands.
+- Tests: `shell_command_background_returns_immediately_writes_log_on_exit`
+  (integration; asserts on the log file because the wake turn consumes the
+  queued notification immediately) and
+  `background_task_notification_pins_the_host_event_contract`.
+
 ## Browser Control 工具
 
 - `ody-browser-control` 提供 `browser__navigate`、`browser__evaluate`、`browser__click`、`browser__type`、

@@ -19,6 +19,7 @@ async fn approval_key_includes_environment_id() {
         hook_command: "echo hello".to_string(),
         cwd: cwd.clone(),
         timeout_ms: None,
+        expiration_override: None,
         cancellation_token: CancellationToken::new(),
         env: HashMap::new(),
         explicit_env_overrides: HashMap::new(),

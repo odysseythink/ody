@@ -27,8 +27,6 @@ use ody_tools::ToolSpec;
 
 use super::super::shell_spec::CommandToolOptions;
 use super::super::shell_spec::create_shell_command_tool;
-use super::RunExecLikeArgs;
-use super::run_exec_like;
 use super::shell_command_payload_command;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -190,6 +188,22 @@ impl ShellCommandHandler {
         )
         .await;
         let prefix_rule = params.prefix_rule.clone();
+        // Background execution replaces the timeout semantics: with no
+        // explicit timeout the command runs until it exits instead of hitting
+        // the 10s default; an explicit timeout still bounds it.
+        let background = params.background.unwrap_or(false);
+        let expiration_override = if background {
+            Some(match params.timeout_ms {
+                Some(timeout_ms) => crate::exec::ExecExpiration::Timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                ),
+                None => crate::exec::ExecExpiration::Cancellation(
+                    tokio_util::sync::CancellationToken::new(),
+                ),
+            })
+        } else {
+            None
+        };
         let exec_params = Self::to_exec_params(
             &params,
             session.as_ref(),
@@ -198,7 +212,7 @@ impl ShellCommandHandler {
             turn.config.permissions.allow_login_shell,
         )?;
         let shell_type = Some(session.user_shell().shell_type);
-        run_exec_like(RunExecLikeArgs {
+        let args = super::RunExecLikeArgs {
             tool_name,
             exec_params,
             cancellation_token,
@@ -211,9 +225,11 @@ impl ShellCommandHandler {
             tracker,
             call_id,
             shell_runtime_backend: self.shell_runtime_backend(),
-        })
-        .await
-        .map(boxed_tool_output)
+            expiration_override,
+        };
+        super::run_shell_exec(args, background)
+            .await
+            .map(boxed_tool_output)
     }
 }
 
